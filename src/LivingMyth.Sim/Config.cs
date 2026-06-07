@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -49,12 +48,10 @@ public static class DataLoader
         PropertyNameCaseInsensitive = true,
     };
 
-    /// <summary>Locate the data folder shipped next to the Sim assembly.</summary>
-    public static string DataDir()
-    {
-        var asmDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
-        return Path.Combine(asmDir, "data");
-    }
+    /// <summary>Locate the data folder shipped next to the running app. Uses
+    /// AppContext.BaseDirectory (reliable under both the console host and Godot's dynamic
+    /// assembly loading, where Assembly.Location is empty).</summary>
+    public static string DataDir() => Path.Combine(AppContext.BaseDirectory, "data");
 
     public static (ConfigData config, NamesData names) Load(string? dataDir = null)
     {
