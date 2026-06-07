@@ -36,6 +36,26 @@ public static class Scoring
         return rev;
     }
 
+    /// <summary>A cheaper importance for live streaming: skips the causal-trace-depth term
+    /// (which rebuilds an index per call and is O(events)). Keeps type/tag/leader/consequence
+    /// weight, so headlines still rank sensibly without the per-event trace cost.</summary>
+    public static int ImportanceFast(Event ev, World world, Dictionary<int, List<int>> reverse)
+    {
+        int score = TypeWeight.GetValueOrDefault(ev.Type, 10);
+        foreach (var t in ev.Tags) score += TagBonus.GetValueOrDefault(t, 0);
+
+        var factionsTouched = new HashSet<string>();
+        foreach (var pid in ev.Participants)
+        {
+            if (!world.People.TryGetValue(pid, out var p)) continue;
+            factionsTouched.Add(p.FactionId);
+            if (p.EverLeader) score += 18;
+        }
+        if (factionsTouched.Count > 1) score += 10;
+        score += Math.Min((reverse.GetValueOrDefault(ev.Id)?.Count ?? 0) * 4, 40);
+        return score;
+    }
+
     public static int Importance(Event ev, World world, Dictionary<int, List<int>> reverse)
     {
         int score = TypeWeight.GetValueOrDefault(ev.Type, 10);
