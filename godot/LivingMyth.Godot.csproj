@@ -1,0 +1,19 @@
+<Project Sdk="Godot.NET.Sdk/4.6.0">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\src\LivingMyth.Sim\LivingMyth.Sim.csproj" />
+  </ItemGroup>
+
+  <!-- Ship the authored content next to the Godot build output so DataLoader finds it. -->
+  <ItemGroup>
+    <None Include="..\src\LivingMyth.Sim\data\*.json" Link="data\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

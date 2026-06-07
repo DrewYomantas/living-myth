@@ -1,0 +1,26 @@
+{
+  "island_names": ["Korthal", "Ysmere", "Veldros", "Hethen", "Aurun", "Skarn"],
+  "religions": {
+    "highland": { "name": "the Stone Covenant", "deity": "the Mountain Father" },
+    "shore":    { "name": "the Tide Faith",     "deity": "the Deep Mother" },
+    "wood":     { "name": "the Green Rite",     "deity": "the Antlered One" }
+  },
+  "faith_fragments": {
+    "prefix": ["the Order of", "the Cult of", "the Children of", "the Way of", "the Church of", "the Flame of", "the Disciples of"],
+    "concept": ["the Pale Star", "the Drowned King", "the First Ash", "the Hollow Sun", "the Weeping Stone", "the Seven Names", "the Unborn God", "the Broken Wheel", "the Last Light", "the Serpent Below", "the Silent Saint", "the Burning Word"]
+  },
+  "given_names": {
+    "highland": {
+      "m": ["Bram", "Doran", "Kael", "Torv", "Halmir", "Ewan", "Garr", "Roduin", "Sten", "Voll", "Aldric", "Hraun", "Edrin", "Maelor", "Gorm"],
+      "f": ["Mara", "Sela", "Bryn", "Eira", "Hilda", "Roesia", "Tava", "Vela", "Astrid", "Greta", "Maeve", "Sif", "Edda", "Wren", "Hala"]
+    },
+    "shore": {
+      "m": ["Coren", "Faro", "Nilo", "Dax", "Tarus", "Vey", "Oren", "Lios", "Calder", "Mero", "Pell", "Soral", "Ander", "Quill", "Marek"],
+      "f": ["Lira", "Nessa", "Cala", "Mira", "Sorin", "Tide", "Vesna", "Oma", "Pell", "Sela", "Nira", "Cove", "Asha", "Merin", "Yara"]
+    },
+    "wood": {
+      "m": ["Fenn", "Ash", "Rowan", "Bram", "Corwin", "Eldas", "Thorn", "Wud", "Niall", "Sorrel", "Brackin", "Holt", "Vesk", "Dern", "Oka"],
+      "f": ["Ivy", "Fern", "Mossa", "Wila", "Brae", "Thessa", "Linden", "Saola", "Reia", "Holla", "Nyx", "Sage", "Wenna", "Briar", "Orla"]
+    }
+  }
+}

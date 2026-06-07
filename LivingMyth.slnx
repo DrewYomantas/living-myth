@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LivingMyth.Console/LivingMyth.Console.csproj" />
+    <Project Path="src/LivingMyth.Sim/LivingMyth.Sim.csproj" />
+  </Folder>
+</Solution>

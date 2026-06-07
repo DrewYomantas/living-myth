@@ -1,0 +1,25 @@
+{
+  "start_year": 0,
+  "factions": [
+    { "id": "highland", "name": "the Highland Clans", "culture": "highland", "homeland": "the northern crags", "start_pop": 18 },
+    { "id": "shore",    "name": "the Shorefolk",     "culture": "shore",    "homeland": "the eastern bays",   "start_pop": 16 },
+    { "id": "wood",     "name": "the Wood Tribes",    "culture": "wood",     "homeland": "the deep forest",    "start_pop": 17 }
+  ],
+  "params": {
+    "marriage_chance_per_year": 0.18,
+    "birth_chance_per_couple_per_year": 0.24,
+    "max_children": 6,
+    "ambition_murder_chance_per_year": 0.022,
+    "revenge_chance_per_year": 0.18,
+    "murder_discovery_chance": 0.55,
+    "forbidden_romance_chance_per_year": 0.10,
+    "war_tension_threshold": 7.0,
+    "tension_decay_per_year": 0.45,
+    "curse_death_multiplier": 2.5,
+    "prophet_chance_per_year": 0.03,
+    "schism_chance_per_year": 0.02,
+    "conversion_chance_per_year": 0.04,
+    "persecution_chance_per_year": 0.03,
+    "religious_friction_chance_per_year": 0.05
+  }
+}

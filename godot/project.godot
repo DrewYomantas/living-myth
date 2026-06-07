@@ -1,0 +1,15 @@
+; Engine configuration file.
+; Living Myth Sandbox — M1 viewer scaffold (.NET / C#).
+; Open this folder with the Godot 4.6 .NET (mono) editor.
+
+config_version=5
+
+[application]
+
+config/name="Living Myth"
+run/main_scene="res://Main.tscn"
+config/features=PackedStringArray("4.6", "C#", "Forward Plus")
+
+[dotnet]
+
+project/assembly_name="LivingMyth.Godot"

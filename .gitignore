@@ -1,0 +1,12 @@
+# .NET build output
+bin/
+obj/
+*.user
+
+# Godot .NET cache / generated
+.godot/
+.mono/
+godot/data/
+
+# Console run artifact
+chronicle.txt
