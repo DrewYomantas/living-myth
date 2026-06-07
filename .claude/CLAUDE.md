@@ -35,8 +35,10 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
   runtime is installed, so the console sets `<RollForward>Major</RollForward>`.
 - **Godot needs the .NET/mono build** (`Godot_v4.6.3-stable_mono_win64`), NOT the standard
   build — C# won't load otherwise.
-- ⚠️ **No git remote yet** (the wrong Benson-Stone remote was removed). This repo has NO
-  GitHub backup. Create a `DrewYomantas` remote before relying on push.
+- **Git:** this folder is its own repo (nested `.git`), remote
+  `DrewYomantas/living-myth` (private). ⚠️ Note `C:\Users\beyon` is *also* an accidental
+  git repo — always confirm `git rev-parse --show-toplevel` is the LIVING MYTH folder
+  before any `git add`/commit, or you'll stage the whole home dir.
 
 <!-- TOKENOMICS:START -->
 ## Token Optimization Insights
