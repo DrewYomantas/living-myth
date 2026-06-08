@@ -9,23 +9,24 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
 - [x] M1 — viewer: map, time controls (play/pause, 1–8×), live rising feed, click-to-inspect.
 - [x] M2 — god hand (curse tool) + catch-up (clickable feed → causal thread, Quick/Full depth).
 - [x] Longevity — logistic carrying_capacity (300) + O(living) hot paths; stable ~450 living over 5000 yrs.
-- [ ] M3 — marking + the three channels (Yours / Loud / Rising). ← NEXT
-- [ ] Later — visual/UX pass; more pressure engines (economy, culture) + echo packs; gossip distortion layer.
+- [x] M3 — marking + the Yours channel: Follow a bloodline/people, YOURS rows surface in the feed.
+- [ ] Later — visual/UX pass; more pressure engines (economy, culture) + echo packs; gossip distortion layer. ← NEXT
 
 ## Session log
 - [2026-06-07] Session: built M0→M2 + longevity pass (carrying capacity + perf refactor, proven
   identity-preserving). 6 commits pushed to DrewYomantas/living-myth. Set up isolated nested git repo
-  (home dir was an accidental repo). Next: M3 Yours channel.
+  (home dir was an accidental repo).
+- [2026-06-07] Session: M3 Yours channel. Follow button on the person + faction inspectors; YOURS rows
+  gold-tagged + weight-boosted in the feed; followed dots ringed cyan in MapView. Marked-set check is
+  inline + O(living) in `StreamNewHeadlines`; the bloodline grows virally at birth (mirrors the curse),
+  so no per-tick `Feed.BuildFeed`. Build clean, `verify` green.
 
 ## Next session starts with
-**M3 — the "Yours" channel.** Let the player mark a person / bloodline / people to follow, and blend a
-YOURS source into the live feed alongside LOUD/RISING.
-- The sim already supports it: `Feed.BuildFeed(world, markedPeople, markedFactions, echoes, limit)`
-  expands a marked person to their whole bloodline and tags rows YOURS.
-- Wire in the viewer (`godot/Main.cs`): add a "Follow" button to the person + faction inspectors that
-  records the mark; surface YOURS-tagged rows in the feed (distinct color/tag), and mark followed dots
-  on the map (e.g. a ring/outline in MapView).
-- Note: the current live feed uses `Scoring.ImportanceFast` + incremental consequence counts and does
-  NOT compute the YOURS term — add a marked-set check in `StreamNewHeadlines` (touches a marked person
-  or their bloodline / a marked faction → boost + YOURS tag) rather than calling the heavier
-  `Feed.BuildFeed` per tick. Keep it O(living).
+**Visual/UX pass, then more pressure engines.** The three core loops (watch → mark → trace) are done.
+- Visual/UX: the map is deliberate placeholder art (three columns of dots). Consider real island
+  geography, faction territory shapes, settlement clustering, and a cleaner feed/inspector skin.
+- More pressure engines: economy and culture systems in `World.cs` (alongside the existing religion/war
+  engines) to generate richer event types — keep all randomness through `Rng` and every result-feeding
+  iteration explicitly ordered, or `verify` will break.
+- Echo packs: more archetypes in `Echoes.cs` beyond the current 8.
+- Gossip distortion layer: a stretch goal — events get retold/mutated as they spread.

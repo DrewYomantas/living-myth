@@ -11,6 +11,7 @@ using LivingMyth.Sim;
 public partial class MapView : Control
 {
     public World? World;
+    public HashSet<int>? Marked;            // followed bloodline — ringed cyan
     public Action<int>? PersonPicked;
     public Action<string>? FactionPicked;
 
@@ -69,6 +70,8 @@ public partial class MapView : Control
                 var dot = p.Cursed ? new Color("d24a64") : (p.Sex == "f" ? col.Lightened(0.28f) : col);
                 DrawCircle(pos, r, dot);
                 if (p.IsLeader) DrawArc(pos, r + 2.5f, 0, Mathf.Tau, 20, new Color("ffd54a"), 1.6f);
+                if (Marked is not null && Marked.Contains(p.Id))
+                    DrawArc(pos, r + 4.5f, 0, Mathf.Tau, 24, new Color("5fd8ff"), 2f);
                 _dots.Add((pos, Mathf.Max(r, 6f), p.Id));
             }
         }

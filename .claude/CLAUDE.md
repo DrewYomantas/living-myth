@@ -14,8 +14,9 @@ separate from logic. Never let simulation logic leak into Godot nodes.
 - `src/LivingMyth.Sim/` — the sim (Rng, Models, Chronicle, World, Scoring, Echoes, Feed). net8.0.
 - `src/LivingMyth.Console/` — proof runner (run | divergence | surface | verify).
 - `godot/` — the viewer (.NET build): `MapView.cs` (map render + click) and `Main.cs`
-  (tick loop, live feed, inspectors, curse tool, catch-up). References the Sim; open the
-  folder with the Godot mono editor and press F5. M0–M2 + longevity done; M3 (Yours channel) next.
+  (tick loop, live feed, inspectors, curse tool, catch-up, Follow/Yours channel). References the
+  Sim; open the folder with the Godot mono editor and press F5. M0–M3 + longevity done; next is the
+  visual/UX pass + more pressure engines.
 
 ## Commands
 ```bash
@@ -56,17 +57,17 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 <!-- TOKENOMICS:START -->
 ## Token Optimization Insights
 
-_Last updated: 2026-06-07_
+_Last updated: 2026-06-08_
 
 ### Context Management
-- Your context snowballs at **turn 18** on average (39% of sessions). Use `/compact` proactively after turn 16-18 on long sessions to prevent unbounded growth.
+- Your context snowballs at **turn 18** on average (41% of sessions). Use `/compact` proactively after turn 16-18 on long sessions to prevent unbounded growth.
 - Some sessions use significantly more tokens than others. Consider shorter, more focused sessions with clear goals.
 - You could benefit from subagents for parallel tasks. Consider splitting multi-file operations into parallel agent tasks.
 - You read files you don't end up using. Use `Grep` first to locate relevant files before reading them — reduces unnecessary context by ~0%.
 - You receive verbose command output. Prefer `Grep`/`Read` tools over bash commands when searching files to reduce output tokens.
 
 ### Model Usage
-- You use Opus/Claude for **14%** of simple tasks. Prefer **Sonnet** for editing, small fixes, and exploration tasks to reduce token usage by ~5x on those sessions.
+- You use Opus/Claude for **12%** of simple tasks. Prefer **Sonnet** for editing, small fixes, and exploration tasks to reduce token usage by ~5x on those sessions.
 - MCP server(s) **unity-mcp** are loaded but never used. Consider removing them to reduce per-session overhead.
 
 ### Prompt Quality

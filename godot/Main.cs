@@ -1,7 +1,8 @@
-// NEXT (M3 — Yours channel): add a "Follow" action to the person + faction inspectors that
-// records a marked set; in StreamNewHeadlines, tag rows that touch a marked person/bloodline/
-// faction as YOURS (boost + distinct color) and ring followed dots in MapView. Keep it O(living)
-// — do the marked-set check inline, don't call the heavier Feed.BuildFeed per tick. See PROJECT_STATE.md.
+// M3 (Yours channel) DONE: Follow button on both inspectors marks a bloodline/people; YOURS rows
+// are gold-tagged + weight-boosted in the feed and followed dots are ringed cyan in MapView. The
+// marked-set check is inline + O(living), and the bloodline grows virally at birth (not via a
+// per-tick Feed.BuildFeed). NEXT: visual/UX pass, then more pressure engines + echo packs.
+// See PROJECT_STATE.md.
 using Godot;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,7 +26,13 @@ public partial class Main : Node
     private RichTextLabel _inspector = null!;
     private Panel _inspectorPanel = null!;
     private Button _curseBtn = null!;
+    private Button _followBtn = null!;
     private int? _selectedPersonId;
+    private string? _selectedFactionId;
+    private readonly HashSet<int> _seedPeople = new();      // the people the player explicitly marked
+    private readonly HashSet<int> _marked = new();          // their full bloodline, expanded
+    private readonly HashSet<string> _markedFactions = new();
+    private const int YoursBoost = 70;                      // weight added to a marked-bloodline event
     private Panel _catchupPanel = null!;
     private RichTextLabel _catchup = null!;
     private int? _catchupEventId;
@@ -52,6 +59,7 @@ public partial class Main : Node
 
         BuildUi();
         _map.World = _world;
+        _map.Marked = _marked;       // same HashSet, mutated in place — map sees follows live
         StreamNewHeadlines();
         RefreshTimeBar();
         _map.QueueRedraw();
@@ -211,6 +219,12 @@ public partial class Main : Node
         _curseBtn.Pressed += OnCursePressed;
         vb.AddChild(_curseBtn);
 
+        // The Yours channel: follow a bloodline / a people and their moments rise into the feed.
+        _followBtn = new Button { Text = "☆ Follow", Visible = false };
+        _followBtn.Modulate = new Color("ffe08a");
+        _followBtn.Pressed += OnFollowPressed;
+        vb.AddChild(_followBtn);
+
         var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
         vb.AddChild(scroll);
         _inspector = new RichTextLabel
@@ -287,13 +301,33 @@ public partial class Main : Node
         for (int i = _lastEventCount; i < events.Count; i++)
         {
             var e = events[i];
+            // Grow a followed bloodline as its descendants are born — O(new events), the same
+            // viral-at-birth trick the curse uses. Avoids re-expanding the whole pedigree per tick.
+            if (_marked.Count > 0 && e.Type == "birth" && e.Participants.Any(_marked.Contains))
+                foreach (var pid in e.Participants) _marked.Add(pid);
+
+            bool yours = IsYours(e);
             int imp = Scoring.ImportanceFast(e, _world, _consCount);
-            if (imp >= threshold) AddFeedRow(e, imp);
+            if (yours) imp += YoursBoost;
+            if (imp >= threshold) AddFeedRow(e, imp, yours);
         }
         _lastEventCount = events.Count;
     }
 
-    private void AddFeedRow(Event e, int imp)
+    // Does this event touch a marked bloodline or a marked people? Inline + O(participants),
+    // so it stays off the heavier Feed.BuildFeed path while keeping the live feed O(living).
+    private bool IsYours(Event e)
+    {
+        foreach (var pid in e.Participants)
+        {
+            if (_marked.Contains(pid)) return true;
+            if (_markedFactions.Count > 0 && _world.People.TryGetValue(pid, out var p)
+                && _markedFactions.Contains(p.FactionId)) return true;
+        }
+        return false;
+    }
+
+    private void AddFeedRow(Event e, int imp, bool yours)
     {
         var lbl = new RichTextLabel
         {
@@ -304,7 +338,9 @@ public partial class Main : Node
             CustomMinimumSize = new Vector2(FeedWidth - 40, 0),
         };
         // Whole row is a link; clicking it opens the catch-up trace for this event.
-        lbl.Text = $"[url={e.Id}][color=#7fd0a0]Yr {e.Year}[/color]  {e.Text}  [color=#7e8a96](w{imp})[/color][/url]";
+        string tag = yours ? "[color=#ffd54a]★ YOURS[/color]  " : "";
+        string yearCol = yours ? "#ffd54a" : "#7fd0a0";
+        lbl.Text = $"[url={e.Id}]{tag}[color={yearCol}]Yr {e.Year}[/color]  {e.Text}  [color=#7e8a96](w{imp})[/color][/url]";
         lbl.MetaClicked += OnFeedMetaClicked;
         _feedList.AddChild(lbl);
         _feedList.MoveChild(lbl, 0);   // newest on top
@@ -363,11 +399,41 @@ public partial class Main : Node
         OnPersonPicked(id);          // re-render with CURSED state
     }
 
+    private void OnFollowPressed()
+    {
+        if (_selectedPersonId is int pid)
+        {
+            if (!_seedPeople.Remove(pid)) _seedPeople.Add(pid);   // toggle
+            RecomputeMarked();
+            OnPersonPicked(pid);     // refresh the button label
+        }
+        else if (_selectedFactionId is string fid)
+        {
+            if (!_markedFactions.Remove(fid)) _markedFactions.Add(fid);
+            RecomputeMarked();
+            OnFactionPicked(fid);
+        }
+    }
+
+    // Rebuild the followed bloodline from the explicit marks. The pedigree graph is permanent,
+    // so re-expanding the seeds always yields every descendant born so far; future births then
+    // extend it incrementally in StreamNewHeadlines. Only runs on a follow/unfollow press.
+    private void RecomputeMarked()
+    {
+        var (people, _) = Feed.ExpandMarked(_world, _seedPeople, _markedFactions);
+        _marked.Clear();
+        _marked.UnionWith(people);
+        _map.QueueRedraw();
+    }
+
     private void OnPersonPicked(int id)
     {
         if (!_world.People.TryGetValue(id, out var p)) return;
         _selectedPersonId = id;
+        _selectedFactionId = null;
         _curseBtn.Visible = p.Alive && !p.Cursed;
+        _followBtn.Visible = true;
+        _followBtn.Text = _seedPeople.Contains(id) ? "★ Following bloodline — unfollow" : "☆ Follow this bloodline";
         var fac = _world.Factions[p.FactionId];
         string faith = p.ReligionId is int r && _world.Religions.TryGetValue(r, out var rr) ? rr.Name : "—";
         string spouse = p.SpouseId is int s && _world.People.TryGetValue(s, out var sp) ? $"{sp.Name} (#{s})" : "—";
@@ -395,7 +461,10 @@ public partial class Main : Node
     private void OnFactionPicked(string fid)
     {
         _selectedPersonId = null;
+        _selectedFactionId = fid;
         _curseBtn.Visible = false;
+        _followBtn.Visible = true;
+        _followBtn.Text = _markedFactions.Contains(fid) ? "★ Following — unfollow" : "☆ Follow this people";
         var fac = _world.Factions[fid];
         var members = _world.FactionMembers(fid);
         string leader = fac.LeaderId is int lid ? $"{_world.People[lid].Name} (#{lid})" : "(none)";
