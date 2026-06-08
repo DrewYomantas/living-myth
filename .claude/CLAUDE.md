@@ -45,6 +45,10 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 - **Perf changes must stay identity-preserving:** set `carrying_capacity` to 0 and `verify`
   must reproduce baseline counts 1309/450/628/800 (seeds 1/18/42/7 @ 120 yrs).
 - **Solution file is `LivingMyth.slnx`** (new SDK-10 XML format), not `.sln`.
+- **Data loads at runtime from next to the binary.** `DataLoader` reads
+  `AppContext.BaseDirectory/data/{config,names}.json` (copied to output, reliable under both
+  the console host and Godot's dynamic load). Editing a `data/*.json` only takes effect after a
+  rebuild re-copies it; a new data file must be set to copy-to-output.
 - **Runtime rollforward:** projects target net8.0 (Godot 4.6 compat) but only the net10
   runtime is installed, so the console sets `<RollForward>Major</RollForward>`.
 - **Godot needs the .NET/mono build** (`Godot_v4.6.3-stable_mono_win64`), NOT the standard
