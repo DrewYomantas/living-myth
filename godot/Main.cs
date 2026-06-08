@@ -105,7 +105,7 @@ public partial class Main : Node
 
         var root = _root;
 
-        _map = new MapView { PersonPicked = OnPersonPicked, FactionPicked = OnFactionPicked };
+        _map = new MapView { PersonPicked = OnPersonPicked, FactionPicked = OnFactionPicked, RegionPicked = OnRegionPicked };
         root.AddChild(_map);
         _map.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         _map.OffsetRight = -FeedWidth;
@@ -477,7 +477,9 @@ public partial class Main : Node
             bool isTarget = e.Id == id;
             string year = $"[color=#7fd0a0]Yr {e.Year}[/color]";
             string body = isTarget ? $"[b]{e.Text}[/b]" : e.Text;
-            sb.AppendLine($"{year}  [color=#9aa6b2][{e.Type}][/color]  {body}");
+            string where = e.RegionId is int rid && _world.RegionName(rid) is string rn
+                ? $"  [color=#7e8a96]· in {rn}[/color]" : "";
+            sb.AppendLine($"{year}  [color=#9aa6b2][{e.Type}][/color]  {body}{where}");
         }
         _catchup.Text = sb.ToString();
     }
@@ -547,6 +549,26 @@ public partial class Main : Node
         foreach (var e in theirs)
             sb.AppendLine($"[color=#7fd0a0]Yr {e.Year}[/color] — {e.Text}");
 
+        _inspector.Text = sb.ToString();
+        _inspectorPanel.Visible = true;
+    }
+
+    // Clicking a territory: hand off to the faction inspector if it's held, else show the
+    // wilderness itself (terrain + that no one holds it).
+    private void OnRegionPicked(int regionId)
+    {
+        if (regionId < 0 || regionId >= _world.Regions.Count) return;
+        var region = _world.Regions[regionId];
+        if (region.ControllingFactionId is string fid) { OnFactionPicked(fid); return; }
+
+        _selectedPersonId = null;
+        _selectedFactionId = null;
+        _curseBtn.Visible = false;
+        _followBtn.Visible = false;
+        var sb = new StringBuilder();
+        sb.AppendLine($"[b]{region.Name}[/b]");
+        sb.AppendLine($"terrain: {region.TerrainType}");
+        sb.AppendLine("[color=#7e8a96]unclaimed wilderness — no people hold this land[/color]");
         _inspector.Text = sb.ToString();
         _inspectorPanel.Visible = true;
     }

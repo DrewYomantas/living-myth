@@ -38,6 +38,11 @@ public sealed class World
     private readonly List<Religion> _religionOrder = new();
     private int _nextRid;
 
+    /// <summary>The island's regions, in id order (id == list index). Generated once in
+    /// SeedWorld; control changes hands through war.</summary>
+    public List<Region> Regions { get; } = new();
+    public string? RegionName(int id) => id >= 0 && id < Regions.Count ? Regions[id].Name : null;
+
     private sealed class War
     {
         public (string, string) Pair;
@@ -199,7 +204,140 @@ public sealed class World
                 $"{leader.Name} of {fac.Name}, eldest of their people, leads them from {fac.Homeland}.",
                 participants: new() { leader.Id }, tags: new() { "leadership" });
         }
+        GenerateMap();
         SeedReligions();
+    }
+
+    // ---------- the island map ----------
+
+    private static readonly Dictionary<string, string> CultureTerrain = new()
+    {
+        ["highland"] = "highland",   // the Highland Clans take the high crags
+        ["shore"] = "coast",         // the Shorefolk take the coast
+        ["wood"] = "forest",         // the Wood Tribes take the forest
+    };
+
+    /// <summary>A deterministic float in [0,1) drawn from Rng (Rng exposes only int/bool draws).</summary>
+    private float Frac01() => Rng.RandInt(0, 99999) / 100000f;
+
+    private static double Dist2(Region a, Region b)
+    {
+        double dx = a.X - b.X, dy = a.Y - b.Y;
+        return dx * dx + dy * dy;
+    }
+
+    private static string Roman(int n) => n switch
+    {
+        2 => "II", 3 => "III", 4 => "IV", 5 => "V", 6 => "VI", 7 => "VII", 8 => "VIII", _ => n.ToString()
+    };
+
+    /// <summary>Procedurally lay out the island: 20–28 terrain-typed regions placed in rough
+    /// bands (highland inland, coast on the rim), wired into a nearest-neighbour adjacency graph,
+    /// then handed to the peoples whose culture matches the terrain. Every draw is from Rng, so
+    /// the same seed always yields the same map.</summary>
+    private void GenerateMap()
+    {
+        int count = Rng.RandInt(20, 28);
+
+        // Target mix ~35/25/25/15 (forest/highland/coast/plains), jittered a little per seed.
+        double wForest = 0.35 + (Frac01() - 0.5) * 0.10;
+        double wHigh = 0.25 + (Frac01() - 0.5) * 0.08;
+        double wCoast = 0.25 + (Frac01() - 0.5) * 0.08;
+        double wPlains = 0.15 + (Frac01() - 0.5) * 0.06;
+        double wSum = wForest + wHigh + wCoast + wPlains;
+
+        // Per-terrain name bags: shuffled, drawn without replacement; if a terrain outgrows its
+        // pool the bag refills and later names get a numeral suffix so every region stays unique.
+        var bag = new Dictionary<string, List<string>>();
+        var cycle = new Dictionary<string, int>();
+        foreach (var t in new[] { "forest", "highland", "coast", "plains" })
+        {
+            var pool = new List<string>(Names.RegionNames.GetValueOrDefault(t) ?? new List<string> { t });
+            Rng.Shuffle(pool);
+            bag[t] = pool;
+            cycle[t] = 0;
+        }
+        string NextName(string terrain)
+        {
+            var q = bag[terrain];
+            if (q.Count == 0)
+            {
+                var pool = new List<string>(Names.RegionNames.GetValueOrDefault(terrain) ?? new List<string> { terrain });
+                Rng.Shuffle(pool);
+                q.AddRange(pool);
+                cycle[terrain]++;
+            }
+            string name = q[0];
+            q.RemoveAt(0);
+            return cycle[terrain] > 0 ? $"{name} {Roman(cycle[terrain] + 1)}" : name;
+        }
+
+        for (int i = 0; i < count; i++)
+        {
+            double roll = Frac01() * wSum;
+            string terrain = roll < wForest ? "forest"
+                : roll < wForest + wHigh ? "highland"
+                : roll < wForest + wHigh + wCoast ? "coast" : "plains";
+
+            // Place by terrain band within a disk so the island reads as a place, not noise.
+            (float lo, float hi) = terrain switch
+            {
+                "highland" => (0.00f, 0.42f),
+                "coast" => (0.62f, 1.00f),
+                "plains" => (0.20f, 0.72f),
+                _ => (0.18f, 0.78f),       // forest
+            };
+            const float maxR = 0.40f;
+            float rr = (lo + (hi - lo) * Frac01()) * maxR;
+            float ang = Frac01() * MathF.Tau;
+            float x = 0.5f + MathF.Cos(ang) * rr;
+            float y = 0.5f + MathF.Sin(ang) * rr;
+            Regions.Add(new Region(Regions.Count, NextName(terrain), terrain, x, y));
+        }
+
+        // Adjacency: each region links to its 3 nearest neighbours, made symmetric.
+        foreach (var a in Regions)
+            foreach (var b in Regions.Where(r => r.Id != a.Id)
+                                     .OrderBy(r => Dist2(a, r)).ThenBy(r => r.Id).Take(3))
+            {
+                if (!a.AdjacentRegionIds.Contains(b.Id)) a.AdjacentRegionIds.Add(b.Id);
+                if (!b.AdjacentRegionIds.Contains(a.Id)) b.AdjacentRegionIds.Add(a.Id);
+            }
+        foreach (var r in Regions) r.AdjacentRegionIds.Sort();
+
+        // Hand each region to the people whose culture matches its terrain; plains stay wilderness.
+        foreach (var region in Regions)
+        {
+            var owner = Config.Factions.FirstOrDefault(f =>
+                CultureTerrain.GetValueOrDefault(f.Culture) == region.TerrainType);
+            if (owner is not null) Claim(region, Factions[owner.Id]);
+        }
+
+        // Floor: no founding people starts landless — grant a wilderness region if shut out.
+        foreach (var f in Config.Factions)
+        {
+            if (!CultureTerrain.ContainsKey(f.Culture) || Factions[f.Id].ControlledRegions.Count > 0) continue;
+            var free = Regions.FirstOrDefault(r => r.ControllingFactionId is null);
+            if (free is not null) Claim(free, Factions[f.Id]);
+        }
+
+        // Record each people's founding territory into the chronicle.
+        foreach (var f in Config.Factions)
+        {
+            var fac = Factions[f.Id];
+            if (fac.ControlledRegions.Count == 0) continue;
+            var owned = fac.ControlledRegions.Select(s => Regions[int.Parse(s)]).OrderBy(r => r.Id).ToList();
+            Chronicle.Record(Year, "territory",
+                $"{fac.Name} hold the lands of {string.Join(", ", owned.Select(r => r.Name))}.",
+                participants: fac.LeaderId is int lid ? new() { lid } : null,
+                tags: new() { "territory", "founding" }, regionId: owned[0].Id);
+        }
+    }
+
+    private static void Claim(Region region, Faction fac)
+    {
+        region.ControllingFactionId = fac.Id;
+        fac.ControlledRegions.Add(region.Id.ToString());
     }
 
     // ---------- the god's hand ----------
@@ -847,11 +985,40 @@ public sealed class World
             if (war.YearsLeft <= 0)
             {
                 _activeWars.Remove(war);
-                Chronicle.Record(Year, "peace",
+                var peace = Chronicle.Record(Year, "peace",
                     $"{Factions[fa].Name} and {Factions[fb].Name} make peace, though the grudge lingers.",
                     causes: new() { decl.Id }, tags: new() { "war", "peace" });
+                TransferTerritory(Factions[fa], Factions[fb], peace.Id);
                 Tension[war.Pair] = 2.0;
             }
+        }
+    }
+
+    /// <summary>The end of a war redraws the map: the stronger side (more living members; a coin
+    /// flip on a tie) takes 1–2 of the loser's regions, preferring those bordering its own land.
+    /// A people never loses its last region — that floor keeps every faction on the map.</summary>
+    private void TransferTerritory(Faction a, Faction b, int peaceEventId)
+    {
+        int popA = a.Members.Count, popB = b.Members.Count;
+        var (winner, loser) = popA != popB
+            ? (popA > popB ? (a, b) : (b, a))
+            : (Rng.Chance(0.5) ? (a, b) : (b, a));
+
+        int available = loser.ControlledRegions.Count - 1;   // never take the last region
+        if (available <= 0) return;
+        int take = Math.Min(Rng.RandInt(1, 2), available);
+
+        bool BordersWinner(Region r) => r.AdjacentRegionIds.Any(id => Regions[id].ControllingFactionId == winner.Id);
+        var seized = loser.ControlledRegions.Select(s => Regions[int.Parse(s)])
+            .OrderByDescending(BordersWinner).ThenBy(r => r.Id).Take(take).ToList();
+
+        foreach (var region in seized)
+        {
+            loser.ControlledRegions.Remove(region.Id.ToString());
+            Claim(region, winner);
+            Chronicle.Record(Year, "territory",
+                $"{winner.Name} seize {region.Name} from {loser.Name}.",
+                causes: new() { peaceEventId }, tags: new() { "territory", "war" }, regionId: region.Id);
         }
     }
 

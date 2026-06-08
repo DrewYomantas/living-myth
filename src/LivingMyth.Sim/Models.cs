@@ -72,6 +72,7 @@ public sealed class Faction
     public string Homeland { get; }
     public int? LeaderId { get; set; }
     public HashSet<int> Members { get; } = new();   // living member ids
+    public HashSet<string> ControlledRegions { get; } = new();   // region ids (as strings) this people holds
     public int FoundedYear { get; set; }
 
     // economy (M4): per-faction prosperity drives famine/boom/trade and modulates births/deaths
@@ -87,5 +88,31 @@ public sealed class Faction
         Name = name;
         Culture = culture;
         Homeland = homeland;
+    }
+}
+
+/// <summary>
+/// A named patch of the island. The sim's spatial foundation: terrain shapes who settles it,
+/// control changes hands in war, and X,Y (normalized 0–1 within the island bounds) give the
+/// viewer a place to draw it. Adjacency is the connectivity graph wars and (later) culture
+/// spread will travel along. Generated deterministically from the world seed.
+/// </summary>
+public sealed class Region
+{
+    public int Id { get; }
+    public string Name { get; }
+    public string TerrainType { get; }                 // "forest" | "highland" | "coast" | "plains"
+    public string? ControllingFactionId { get; set; }  // null = unclaimed wilderness
+    public List<int> AdjacentRegionIds { get; } = new();
+    public float X { get; }
+    public float Y { get; }
+
+    public Region(int id, string name, string terrainType, float x, float y)
+    {
+        Id = id;
+        Name = name;
+        TerrainType = terrainType;
+        X = x;
+        Y = y;
     }
 }

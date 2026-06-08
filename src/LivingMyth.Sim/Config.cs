@@ -38,6 +38,7 @@ public sealed class NamesData
     public Dictionary<string, ReligionDef> Religions { get; set; } = new();
     public Dictionary<string, List<string>> FaithFragments { get; set; } = new();
     public Dictionary<string, Dictionary<string, List<string>>> GivenNames { get; set; } = new();
+    public Dictionary<string, List<string>> RegionNames { get; set; } = new();
 }
 
 public static class DataLoader

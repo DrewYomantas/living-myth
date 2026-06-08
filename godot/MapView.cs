@@ -4,20 +4,29 @@ using System.Collections.Generic;
 using System.Linq;
 using LivingMyth.Sim;
 
-// The map: island + three peoples as readable colored regions, each living person a dot
-// (leaders ringed gold, cursed tinted red). Placeholder art on purpose. Click a dot to
-// inspect that person; click empty region to inspect the people. Pure rendering — it reads
-// the sim, never mutates it.
+// The map: a procedural island with named, terrain-typed regions. Each region is a colored
+// territory owned by the people who hold it (neutral grey = wilderness); each living person is
+// a dot scattered within one of their faction's regions. Pure rendering — it reads the sim's
+// spatial data (World.Regions, Faction control), never mutates it. Click a dot to inspect that
+// person; click a territory to inspect who holds it (or that it's unclaimed); hover for its name.
 public partial class MapView : Control
 {
     public World? World;
     public HashSet<int>? Marked;            // followed bloodline — ringed cyan
     public Action<int>? PersonPicked;
     public Action<string>? FactionPicked;
+    public Action<int>? RegionPicked;       // region id — Main decides faction vs. unclaimed
 
     private readonly List<(Vector2 pos, float r, int id)> _dots = new();
+    private readonly List<(Vector2 pos, float r, int id)> _regionHits = new();
+    private List<Vector2>? _islandNorm;     // island outline in normalized [0,1] space, built once
+    private int _hoverRegion = -1;
+
+    private const float RegionRadiusNorm = 0.072f;
 
     private static readonly Color Sea = new("0e2230");
+    private static readonly Color Land = new("23302a");
+    private static readonly Color Neutral = new("55665b");          // unclaimed wilderness
     private static readonly Dictionary<string, Color> FactionColors = new()
     {
         ["highland"] = new Color("6b7a99"),
@@ -29,56 +38,145 @@ public partial class MapView : Control
 
     private static float Frac(float v) => v - Mathf.Floor(v);
 
+    private Color RegionColor(Region r)
+        => r.ControllingFactionId is string fid ? FactionColors.GetValueOrDefault(fid, Neutral) : Neutral;
+
     public override void _Draw()
     {
         _dots.Clear();
-        var size = Size;
-        DrawRect(new Rect2(Vector2.Zero, size), Sea);
+        _regionHits.Clear();
+        DrawRect(new Rect2(Vector2.Zero, Size), Sea);
         var font = GetThemeDefaultFont();
         if (World is null || font is null) return;
 
-        var facs = World.Config.Factions;
-        int n = facs.Count;
-        const float pad = 14f;
-        float colW = (size.X - pad * (n + 1)) / n;
+        // Normalized [0,1] -> screen, fitting a centered square so the island never distorts.
+        const float pad = 18f;
+        float side = Mathf.Min(Size.X, Size.Y) - pad * 2f;
+        var origin = new Vector2((Size.X - side) / 2f, (Size.Y - side) / 2f);
+        Vector2 P(float nx, float ny) => origin + new Vector2(nx, ny) * side;
+        float regionR = RegionRadiusNorm * side;
 
-        for (int i = 0; i < n; i++)
+        BuildIsland();
+        if (_islandNorm is not null)
         {
-            var f = facs[i];
-            var fac = World.Factions[f.Id];
-            var col = FactionColors.GetValueOrDefault(f.Id, new Color("888888"));
-            float x0 = pad + i * (colW + pad);
-            var rect = new Rect2(x0, 44, colW, size.Y - 84);
-            DrawRect(rect, col with { A = 0.16f });
-            DrawRect(rect, col with { A = 0.55f }, false, 2f);
-
-            var members = World.FactionMembers(f.Id);
-            int pop = members.Count;
-            string leader = fac.LeaderId is int lid ? World.People[lid].Name : "(none)";
-            DrawString(font, new Vector2(x0 + 6, 30), $"{fac.Name}",
-                HorizontalAlignment.Left, -1, 15, modulate: Colors.White);
-            DrawString(font, new Vector2(x0 + 6, size.Y - 24), $"pop {pop}  ·  led by {leader}",
-                HorizontalAlignment.Left, colW - 12, 12, modulate: new Color("c8d2dc"));
-
-            foreach (var p in members)
-            {
-                float fx = Frac(p.Id * 0.61803398875f);
-                float fy = Frac(p.Id * 0.75487766624f);
-                var pos = new Vector2(rect.Position.X + 12 + fx * (rect.Size.X - 24),
-                                      rect.Position.Y + 16 + fy * (rect.Size.Y - 36));
-                float r = p.IsLeader ? 7f : 4f;
-                var dot = p.Cursed ? new Color("d24a64") : (p.Sex == "f" ? col.Lightened(0.28f) : col);
-                DrawCircle(pos, r, dot);
-                if (p.IsLeader) DrawArc(pos, r + 2.5f, 0, Mathf.Tau, 20, new Color("ffd54a"), 1.6f);
-                if (Marked is not null && Marked.Contains(p.Id))
-                    DrawArc(pos, r + 4.5f, 0, Mathf.Tau, 24, new Color("5fd8ff"), 2f);
-                _dots.Add((pos, Mathf.Max(r, 6f), p.Id));
-            }
+            var poly = _islandNorm.Select(p => P(p.X, p.Y)).ToArray();
+            DrawColoredPolygon(poly, Land);
+            DrawPolyline(poly.Append(poly[0]).ToArray(), new Color("33463c"), 2f, true);
         }
+
+        // Faint adjacency graph beneath the territories — the connective tissue of the island.
+        foreach (var a in World.Regions)
+            foreach (var bid in a.AdjacentRegionIds)
+                if (bid > a.Id)
+                    DrawLine(P(a.X, a.Y), P(World.Regions[bid].X, World.Regions[bid].Y),
+                             new Color(1, 1, 1, 0.07f), 1f);
+
+        // Territories.
+        foreach (var r in World.Regions)
+        {
+            var c = P(r.X, r.Y);
+            var col = RegionColor(r);
+            DrawCircle(c, regionR, col with { A = r.ControllingFactionId is null ? 0.30f : 0.48f });
+            DrawArc(c, regionR, 0, Mathf.Tau, 40, col with { A = 0.8f }, _hoverRegion == r.Id ? 3f : 1.5f);
+            _regionHits.Add((c, regionR, r.Id));
+        }
+
+        DrawPeople(P, regionR, font);
+        DrawFactionLabels(P, font);
+
+        // Hover tooltip: region name + who holds it.
+        if (_hoverRegion >= 0 && _hoverRegion < World.Regions.Count)
+        {
+            var r = World.Regions[_hoverRegion];
+            var c = P(r.X, r.Y);
+            string holder = r.ControllingFactionId is string fid ? World.Factions[fid].Name : "unclaimed";
+            DrawString(font, c + new Vector2(0, -regionR - 8), $"{r.Name}",
+                HorizontalAlignment.Center, -1, 14, modulate: Colors.White);
+            DrawString(font, c + new Vector2(0, -regionR + 8), $"{r.TerrainType} · {holder}",
+                HorizontalAlignment.Center, -1, 11, modulate: new Color("b7c3cb"));
+        }
+    }
+
+    private void DrawPeople(Func<float, float, Vector2> P, float regionR, Font font)
+    {
+        // Each faction's regions, in id order, so person-to-region placement is deterministic.
+        var facRegions = new Dictionary<string, List<Region>>();
+        foreach (var r in World!.Regions)
+            if (r.ControllingFactionId is string fid)
+            {
+                if (!facRegions.TryGetValue(fid, out var list)) { list = new(); facRegions[fid] = list; }
+                list.Add(r);
+            }
+
+        foreach (var p in World.Living())
+        {
+            var col = FactionColors.GetValueOrDefault(p.FactionId, Neutral);
+            Vector2 center;
+            if (facRegions.TryGetValue(p.FactionId, out var regs) && regs.Count > 0)
+            {
+                var rg = regs[p.Id % regs.Count];   // stable region per person
+                center = P(rg.X, rg.Y);
+            }
+            else center = P(0.5f, 0.5f);            // landless fallback (extinct/ghost faction)
+
+            var off = new Vector2(Frac(p.Id * 0.61803398875f) * 2f - 1f,
+                                  Frac(p.Id * 0.75487766624f) * 2f - 1f) * (regionR * 0.62f);
+            if (off.Length() > regionR * 0.72f) off = off.Normalized() * regionR * 0.72f;
+            var pos = center + off;
+
+            float r = p.IsLeader ? 6.5f : 3.8f;
+            var dot = p.Cursed ? new Color("d24a64") : (p.Sex == "f" ? col.Lightened(0.28f) : col);
+            DrawCircle(pos, r, dot);
+            if (p.IsLeader) DrawArc(pos, r + 2.5f, 0, Mathf.Tau, 20, new Color("ffd54a"), 1.6f);
+            if (Marked is not null && Marked.Contains(p.Id))
+                DrawArc(pos, r + 4.5f, 0, Mathf.Tau, 24, new Color("5fd8ff"), 2f);
+            _dots.Add((pos, Mathf.Max(r, 6f), p.Id));
+        }
+    }
+
+    private void DrawFactionLabels(Func<float, float, Vector2> P, Font font)
+    {
+        foreach (var f in World!.Config.Factions)
+        {
+            var fac = World.Factions[f.Id];
+            var held = World.Regions.Where(r => r.ControllingFactionId == f.Id).ToList();
+            if (held.Count == 0) continue;
+
+            var centroid = P(held.Average(r => r.X), held.Average(r => r.Y));
+            int pop = fac.Members.Count;
+            string leader = fac.LeaderId is int lid ? World.People[lid].Name : "(none)";
+            var col = FactionColors.GetValueOrDefault(f.Id, Neutral);
+            DrawString(font, centroid + new Vector2(-60, -2), fac.Name,
+                HorizontalAlignment.Center, 120, 14, modulate: Colors.White);
+            DrawString(font, centroid + new Vector2(-60, 15), $"pop {pop} · {leader}",
+                HorizontalAlignment.Center, 120, 11, modulate: col.Lightened(0.35f));
+        }
+    }
+
+    private void BuildIsland()
+    {
+        if (_islandNorm is not null || World is null) return;
+        var rng = new Rng(World.Seed);          // own stream — never touches the sim's Rng
+        int pts = rng.RandInt(16, 24);
+        var list = new List<Vector2>(pts);
+        for (int i = 0; i < pts; i++)
+        {
+            float ang = i / (float)pts * Mathf.Tau;
+            float noise = 1f + (rng.RandInt(0, 100) / 100f - 0.5f) * 0.36f;   // ±18%
+            float rad = 0.47f * noise;
+            list.Add(new Vector2(0.5f + Mathf.Cos(ang) * rad, 0.5f + Mathf.Sin(ang) * rad));
+        }
+        _islandNorm = list;
     }
 
     public override void _GuiInput(InputEvent @event)
     {
+        if (@event is InputEventMouseMotion mm)
+        {
+            int hover = NearestRegion(mm.Position);
+            if (hover != _hoverRegion) { _hoverRegion = hover; QueueRedraw(); }
+            return;
+        }
         if (@event is not InputEventMouseButton mb || !mb.Pressed || mb.ButtonIndex != MouseButton.Left)
             return;
         var pos = mb.Position;
@@ -92,15 +190,19 @@ public partial class MapView : Control
         }
         if (bestId >= 0) { PersonPicked?.Invoke(bestId); return; }
 
-        if (World is null) return;
-        var facs = World.Config.Factions;
-        int n = facs.Count;
-        const float pad = 14f;
-        float colW = (Size.X - pad * (n + 1)) / n;
-        for (int i = 0; i < n; i++)
+        int region = NearestRegion(pos);
+        if (region >= 0) RegionPicked?.Invoke(region);
+    }
+
+    private int NearestRegion(Vector2 pos)
+    {
+        int best = -1;
+        float bestD = float.MaxValue;
+        foreach (var h in _regionHits)
         {
-            float x0 = pad + i * (colW + pad);
-            if (pos.X >= x0 && pos.X <= x0 + colW) { FactionPicked?.Invoke(facs[i].Id); return; }
+            float dist = pos.DistanceTo(h.pos);
+            if (dist <= h.r && dist < bestD) { bestD = dist; best = h.id; }
         }
+        return best;
     }
 }

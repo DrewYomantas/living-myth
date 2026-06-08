@@ -18,9 +18,11 @@ public sealed class Event
     public List<int> Participants { get; }   // person ids
     public List<int> Causes { get; }         // ids of earlier events that led to this one
     public List<string> Tags { get; }
+    public int? RegionId { get; }            // where it happened, when the caller knows (null otherwise)
 
     public Event(int id, int year, string etype, string text,
-                 List<int>? participants = null, List<int>? causes = null, List<string>? tags = null)
+                 List<int>? participants = null, List<int>? causes = null, List<string>? tags = null,
+                 int? regionId = null)
     {
         Id = id;
         Year = year;
@@ -29,6 +31,7 @@ public sealed class Event
         Participants = participants ?? new();
         Causes = causes ?? new();
         Tags = tags ?? new();
+        RegionId = regionId;
     }
 }
 
@@ -40,9 +43,10 @@ public sealed class Chronicle
     /// <summary>Write one event into history and hand it back, so the caller can use this
     /// event's id as the cause of a follow-up event.</summary>
     public Event Record(int year, string etype, string text,
-                        List<int>? participants = null, List<int>? causes = null, List<string>? tags = null)
+                        List<int>? participants = null, List<int>? causes = null, List<string>? tags = null,
+                        int? regionId = null)
     {
-        var ev = new Event(_nextId, year, etype, text, participants, causes, tags);
+        var ev = new Event(_nextId, year, etype, text, participants, causes, tags, regionId);
         _nextId++;
         Events.Add(ev);
         return ev;

@@ -22,5 +22,15 @@
       "m": ["Fenn", "Ash", "Rowan", "Bram", "Corwin", "Eldas", "Thorn", "Wud", "Niall", "Sorrel", "Brackin", "Holt", "Vesk", "Dern", "Oka"],
       "f": ["Ivy", "Fern", "Mossa", "Wila", "Brae", "Thessa", "Linden", "Saola", "Reia", "Holla", "Nyx", "Sage", "Wenna", "Briar", "Orla"]
     }
+  },
+  "region_names": {
+    "forest": ["the Thornwood", "the Deep Green", "the Tangled Wood", "Ashgrove",
+               "the Old Forest", "Fernhollow", "the Dark Boughs"],
+    "highland": ["Iron Pass", "the Stone Crown", "Greyspire", "the High Crags",
+                 "Coldpeak", "the Broken Ridge", "Stormwall"],
+    "coast": ["Storm Bay", "the Salt Shore", "Tidecrag", "the Grey Shallows",
+              "Whitecap Reach", "the Sunken Bay", "Driftmouth"],
+    "plains": ["the Open Vale", "Greenfield", "the Long Meadow", "Dustplain",
+               "the Flats", "Windgrass", "the Wide Common"]
   }
 }
