@@ -9,6 +9,7 @@
     "marriage_chance_per_year": 0.18,
     "birth_chance_per_couple_per_year": 0.24,
     "max_children": 6,
+    "carrying_capacity": 300,
     "ambition_murder_chance_per_year": 0.022,
     "revenge_chance_per_year": 0.18,
     "murder_discovery_chance": 0.55,

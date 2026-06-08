@@ -39,6 +39,8 @@ string Who(World w, int pid) => $"{w.People[pid].Name} (#{pid})";
 void RunCmd(int seed, int years, int trace)
 {
     var (config, names) = Load();
+    int cap = GetInt("--cap", -1);
+    if (cap >= 0) config.Params["carrying_capacity"] = cap;
     var world = new World(seed, config, names);
     world.Run(years);
 

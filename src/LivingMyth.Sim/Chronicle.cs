@@ -49,6 +49,10 @@ public sealed class Chronicle
     }
 
     /// <summary>Turn the record into a readable yearly history.</summary>
+    /// <summary>Event ids are assigned sequentially and never removed, so id == list index.
+    /// This O(1) lookup avoids rebuilding an id->event dictionary in hot per-tick paths.</summary>
+    public Event Get(int id) => Events[id];
+
     public string Render()
     {
         var sb = new StringBuilder();

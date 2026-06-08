@@ -37,7 +37,6 @@ public partial class MapView : Control
         if (World is null || font is null) return;
 
         var facs = World.Config.Factions;
-        var living = World.Living();
         int n = facs.Count;
         const float pad = 14f;
         float colW = (size.X - pad * (n + 1)) / n;
@@ -52,14 +51,15 @@ public partial class MapView : Control
             DrawRect(rect, col with { A = 0.16f });
             DrawRect(rect, col with { A = 0.55f }, false, 2f);
 
-            int pop = living.Count(p => p.FactionId == f.Id);
+            var members = World.FactionMembers(f.Id);
+            int pop = members.Count;
             string leader = fac.LeaderId is int lid ? World.People[lid].Name : "(none)";
             DrawString(font, new Vector2(x0 + 6, 30), $"{fac.Name}",
                 HorizontalAlignment.Left, -1, 15, modulate: Colors.White);
             DrawString(font, new Vector2(x0 + 6, size.Y - 24), $"pop {pop}  ·  led by {leader}",
                 HorizontalAlignment.Left, colW - 12, 12, modulate: new Color("c8d2dc"));
 
-            foreach (var p in living.Where(p => p.FactionId == f.Id))
+            foreach (var p in members)
             {
                 float fx = Frac(p.Id * 0.61803398875f);
                 float fy = Frac(p.Id * 0.75487766624f);

@@ -31,6 +31,7 @@ public sealed class World
     public Dictionary<(string, string), double> Tension { get; } = new();
     public Dictionary<(string, string), List<int>> Grievances { get; } = new();
     private readonly List<War> _activeWars = new();
+    private readonly HashSet<int> _unavengedVictimIds = new();   // bounds the revenge scan (distinct victims)
     public Event? CurseEvent { get; private set; }
 
     public Dictionary<int, Religion> Religions { get; } = new();
@@ -94,7 +95,29 @@ public sealed class World
         return p;
     }
 
-    public List<Person> Living() => _peopleOrder.Where(p => p.Alive).ToList();
+    /// <summary>Living people in ascending-id order. Built from the per-faction living-member
+    /// sets, so it costs O(living) — not O(everyone who ever lived). Identical ordering to a
+    /// filter over all people, which keeps the simulation deterministic.</summary>
+    public List<Person> Living()
+    {
+        var ids = new List<int>();
+        foreach (var f in Factions.Values) ids.AddRange(f.Members);
+        ids.Sort();
+        var outp = new List<Person>(ids.Count);
+        foreach (var id in ids) outp.Add(People[id]);
+        return outp;
+    }
+
+    /// <summary>O(factions) living headcount — cheap to call every frame.</summary>
+    public int LivingCount
+    {
+        get
+        {
+            int n = 0;
+            foreach (var f in Factions.Values) n += f.Members.Count;
+            return n;
+        }
+    }
 
     /// <summary>Living members, sorted by id so random picks stay deterministic.</summary>
     public List<Person> FactionMembers(string fid)
@@ -359,9 +382,8 @@ public sealed class World
 
     private void Deaths()
     {
-        foreach (var p in _peopleOrder.ToList())
+        foreach (var p in Living())   // living in id order — same set/order as before, O(living)
         {
-            if (!p.Alive) continue;
             double dc = DeathChance(p.Age(Year));
             if (p.Cursed) dc = Math.Min(0.95, dc * Params["curse_death_multiplier"]);
             if (Rng.Chance(dc))
@@ -438,6 +460,7 @@ public sealed class World
         victim.KillerId = killer.Id;
         victim.Murdered = true;
         victim.MurderEventId = ev.Id;
+        _unavengedVictimIds.Add(victim.Id);
         if (killer.FactionId != victim.FactionId)
             AddTension(killer.FactionId, victim.FactionId, 3.0, ev);
         if (victim.IsProphet && victim.ReligionId is int vrid && Religions.TryGetValue(vrid, out var rel))
@@ -495,10 +518,15 @@ public sealed class World
 
     private void RevengeKillings()
     {
-        var victims = _peopleOrder
-            .Where(p => p.Murdered && !p.Avenged && p.KillerId is int k
-                        && People.TryGetValue(k, out var killer) && killer.Alive)
-            .OrderBy(p => p.Id).ToList();
+        // Drop victims who are avenged or whose killer is gone (they can never trigger and
+        // would be skipped anyway), so the scan stays bounded over very long runs.
+        _unavengedVictimIds.RemoveWhere(id =>
+        {
+            var v = People[id];
+            return v.Avenged || v.KillerId is not int k
+                   || !People.TryGetValue(k, out var killer) || !killer.Alive;
+        });
+        var victims = _unavengedVictimIds.OrderBy(id => id).Select(id => People[id]).ToList();
         foreach (var victim in victims)
         {
             var killer = People[victim.KillerId!.Value];
@@ -616,6 +644,14 @@ public sealed class World
 
     private void Births()
     {
+        // Logistic carrying capacity: a people's birth rate falls toward zero as it nears
+        // its capacity, so population rises then plateaus instead of exploding. Set
+        // carrying_capacity to 0 (or omit it) to disable and get raw exponential growth.
+        double cap = Params.GetValueOrDefault("carrying_capacity", 0.0);
+        var facPop = new Dictionary<string, int>();
+        if (cap > 0)
+            foreach (var fid in _factionOrder) facPop[fid] = Factions[fid].Members.Count;
+
         var couples = new SortedSet<(int, int)>();
         foreach (var p in Living())
             if (p.SpouseId is int sp && People.TryGetValue(sp, out var spouse) && spouse.Alive)
@@ -629,7 +665,11 @@ public sealed class World
             if (mother.Sex != "f" || father.Sex != "m") continue;
             if (!(mother.Age(Year) >= 18 && mother.Age(Year) <= 44)) continue;
             if (mother.Children.Count >= (int)Params["max_children"]) continue;
-            if (Rng.Chance(Params["birth_chance_per_couple_per_year"]))
+
+            double chance = Params["birth_chance_per_couple_per_year"];
+            if (cap > 0)
+                chance *= Math.Max(0.0, 1.0 - facPop[father.FactionId] / cap);
+            if (Rng.Chance(chance))
                 Birth(mother, father);
         }
     }
@@ -655,7 +695,6 @@ public sealed class World
     private void MaybeDeclareWars()
     {
         var atWar = _activeWars.Select(w => w.Pair).ToHashSet();
-        var byId = Chronicle.Events.ToDictionary(e => e.Id);
         foreach (var (key, level) in Tension.OrderBy(kv => kv.Key.Item1, StringComparer.Ordinal)
                                             .ThenBy(kv => kv.Key.Item2, StringComparer.Ordinal)
                                             .Select(kv => (kv.Key, kv.Value)).ToList())
@@ -664,8 +703,8 @@ public sealed class World
             string fa = key.Item1, fb = key.Item2;
             if (FactionMembers(fa).Count < 8 || FactionMembers(fb).Count < 8) continue;
             var grievanceIds = Grievances.GetValueOrDefault(key) ?? new();
-            bool holy = grievanceIds.Any(g => byId.TryGetValue(g, out var ge)
-                && ge.Tags.Intersect(new[] { "religion", "heresy", "friction" }).Any());
+            bool holy = grievanceIds.Any(g =>
+                Chronicle.Get(g).Tags.Intersect(new[] { "religion", "heresy", "friction" }).Any());
             string text;
             List<string> tags;
             if (holy)

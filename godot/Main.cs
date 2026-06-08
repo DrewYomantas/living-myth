@@ -1,4 +1,5 @@
 using Godot;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using LivingMyth.Sim;
@@ -36,6 +37,7 @@ public partial class Main : Node
     private float _accum;
     private int _lastEventCount;
     private int _feedRows;
+    private readonly System.Collections.Generic.Dictionary<int, int> _consCount = new();
 
     public override void _Ready()
     {
@@ -271,11 +273,17 @@ public partial class Main : Node
         var events = _world.Chronicle.Events;
         if (_lastEventCount >= events.Count) return;
         int threshold = (int)_chatSlider.Value;
-        var reverse = Scoring.BuildReverse(_world);
+
+        // Maintain consequence counts incrementally so we never rebuild a reverse index over
+        // the whole (ever-growing) chronicle. Update first, then score the new slice.
+        for (int i = _lastEventCount; i < events.Count; i++)
+            foreach (var c in events[i].Causes)
+                _consCount[c] = _consCount.GetValueOrDefault(c) + 1;
+
         for (int i = _lastEventCount; i < events.Count; i++)
         {
             var e = events[i];
-            int imp = Scoring.ImportanceFast(e, _world, reverse);
+            int imp = Scoring.ImportanceFast(e, _world, _consCount);
             if (imp >= threshold) AddFeedRow(e, imp);
         }
         _lastEventCount = events.Count;
@@ -385,7 +393,7 @@ public partial class Main : Node
         _selectedPersonId = null;
         _curseBtn.Visible = false;
         var fac = _world.Factions[fid];
-        var members = _world.Living().Where(p => p.FactionId == fid).ToList();
+        var members = _world.FactionMembers(fid);
         string leader = fac.LeaderId is int lid ? $"{_world.People[lid].Name} (#{lid})" : "(none)";
         var dom = _world.DominantReligion(fid);
 
@@ -417,7 +425,7 @@ public partial class Main : Node
 
     private void RefreshTimeBar()
     {
-        _yearLabel.Text = $"Year {_world.Year}     {_world.Living().Count} living     {_world.Chronicle.Events.Count} events";
+        _yearLabel.Text = $"Year {_world.Year}     {_world.LivingCount} living     {_world.Chronicle.Events.Count} events";
         _playBtn.Text = _running ? "⏸ Pause" : "▶ Play";
         _speedLabel.Text = $"{_speed:0}×";
         _chatLabel.Text = $"chattiness ≥ {(int)_chatSlider.Value}";
