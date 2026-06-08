@@ -1,3 +1,7 @@
+// NEXT (M3 — Yours channel): add a "Follow" action to the person + faction inspectors that
+// records a marked set; in StreamNewHeadlines, tag rows that touch a marked person/bloodline/
+// faction as YOURS (boost + distinct color) and ring followed dots in MapView. Keep it O(living)
+// — do the marked-set check inline, don't call the heavier Feed.BuildFeed per tick. See PROJECT_STATE.md.
 using Godot;
 using System.Collections.Generic;
 using System.Linq;

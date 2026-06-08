@@ -13,7 +13,9 @@ separate from logic. Never let simulation logic leak into Godot nodes.
 ## Layout
 - `src/LivingMyth.Sim/` — the sim (Rng, Models, Chronicle, World, Scoring, Echoes, Feed). net8.0.
 - `src/LivingMyth.Console/` — proof runner (run | divergence | surface | verify).
-- `godot/` — M1 viewer scaffold (.NET build). References the Sim; open with the Godot mono editor.
+- `godot/` — the viewer (.NET build): `MapView.cs` (map render + click) and `Main.cs`
+  (tick loop, live feed, inspectors, curse tool, catch-up). References the Sim; open the
+  folder with the Godot mono editor and press F5. M0–M2 + longevity done; M3 (Yours channel) next.
 
 ## Commands
 ```bash
@@ -22,6 +24,7 @@ dotnet run --project src/LivingMyth.Console -- verify          # determinism gat
 dotnet run --project src/LivingMyth.Console -- run --seed 42
 dotnet run --project src/LivingMyth.Console -- divergence --seed 18
 dotnet run --project src/LivingMyth.Console -- surface --seed 1
+dotnet run --project src/LivingMyth.Console -- run --seed 7 --years 3000 --cap 300  # --cap overrides carrying_capacity for balance tuning
 dotnet build godot/LivingMyth.Godot.csproj                     # build Godot project headlessly
 ```
 
@@ -30,6 +33,16 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
   order-stable like Python's — every iteration that feeds RNG or results MUST be explicitly
   ordered (people/religions by id, factions in config order, member sets sorted). `verify`
   guards this. Intra-C# only: NOT bit-compatible with the Python seeds.
+- **Hot paths must stay O(living), not O(history).** People and the chronicle grow forever;
+  per-tick/per-frame work must NOT scan them. Iterate the living set (`Living()`/faction
+  members), use `Chronicle.Get(id)` (id == list index) over rebuilding id maps, and stream
+  the feed with incremental consequence counts. Reintroducing an all-history scan is the
+  classic regression here.
+- **Population balance is the `carrying_capacity` param** (config.json, currently 300):
+  logistic births → plateau. Too low (~120) drifts to extinction; verified stable ~450
+  living over 5000 yrs at 300. `curse_death_multiplier` (2.5) tunes how apocalyptic curses are.
+- **Perf changes must stay identity-preserving:** set `carrying_capacity` to 0 and `verify`
+  must reproduce baseline counts 1309/450/628/800 (seeds 1/18/42/7 @ 120 yrs).
 - **Solution file is `LivingMyth.slnx`** (new SDK-10 XML format), not `.sln`.
 - **Runtime rollforward:** projects target net8.0 (Godot 4.6 compat) but only the net10
   runtime is installed, so the console sets `<RollForward>Major</RollForward>`.
