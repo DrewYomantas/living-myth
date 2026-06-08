@@ -73,6 +73,7 @@ public sealed class Faction
     public int? LeaderId { get; set; }
     public HashSet<int> Members { get; } = new();   // living member ids
     public HashSet<string> ControlledRegions { get; } = new();   // region ids (as strings) this people holds
+    public int? LastDeathEventId { get; set; }      // most recent death/murder of a member — cause for abandonment
     public int FoundedYear { get; set; }
 
     // economy (M4): per-faction prosperity drives famine/boom/trade and modulates births/deaths

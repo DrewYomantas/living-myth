@@ -598,6 +598,28 @@ public sealed class World
         DoReligion();
         MaybeDeclareWars();
         DecayTension();
+        ReleaseExtinctLands();
+    }
+
+    /// <summary>When a people dies out (no war needed — internal collapse counts), their land
+    /// returns to wilderness so the map never shows holds owned by the dead. Runs after every
+    /// death source for the year. Self-limiting: releasing empties ControlledRegions, so the
+    /// Count guard never lets a faction fire this twice. Deterministic — no Rng, off an already-
+    /// deterministic death.</summary>
+    private void ReleaseExtinctLands()
+    {
+        foreach (var fid in _factionOrder)
+        {
+            var fac = Factions[fid];
+            if (fac.Members.Count != 0 || fac.ControlledRegions.Count == 0) continue;
+            var freed = fac.ControlledRegions.Select(s => Regions[int.Parse(s)]).OrderBy(r => r.Id).ToList();
+            foreach (var region in freed) region.ControllingFactionId = null;
+            fac.ControlledRegions.Clear();
+            Chronicle.Record(Year, "territory",
+                $"{fac.Name} are gone; their holds fall silent and the wild creeps back over {string.Join(", ", freed.Select(r => r.Name))}.",
+                causes: fac.LastDeathEventId is int d ? new() { d } : null,
+                tags: new() { "territory", "abandonment" }, regionId: freed[0].Id);
+        }
     }
 
     // ---------- death (natural and violent) ----------
@@ -643,6 +665,7 @@ public sealed class World
         string text = $"{p.Name} of {fac.Name} dies {reason ?? DeathReason(age)} at {age}.";
         var ev = Chronicle.Record(Year, "death", text, participants: new() { p.Id },
             causes: cause is null ? null : new() { cause.Id }, tags: new() { "death" });
+        fac.LastDeathEventId = ev.Id;
         if (wasLeader) Succeed(fac, p, ev);
         return ev;
     }
@@ -695,6 +718,7 @@ public sealed class World
         allTags.AddRange(tags);
         var ev = Chronicle.Record(Year, "murder", text,
             participants: new() { victim.Id, killer.Id }, causes: causes, tags: allTags);
+        fac.LastDeathEventId = ev.Id;
         victim.KillerId = killer.Id;
         victim.Murdered = true;
         victim.MurderEventId = ev.Id;

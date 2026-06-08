@@ -47,7 +47,7 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
   population suppressor (famine adds deaths, booms only help births), so raising the multiplier
   drifts the low seeds toward extinction.
 - **The verify baseline moved with M4** (it adds famine/boom/trade events + famine deaths). Current
-  `verify` counts (120 yr, cap 300): 720/452/527/667 (seeds 1/18/42/7). The determinism gate is
+  `verify` counts (120 yr, cap 300): 678/363/383/558 (seeds 1/18/42/7, M5.1 map+extinction baseline). The determinism gate is
   self-consistency (same seed → byte-identical run), so it stays green regardless of feature work;
   these numbers are just the recorded expectation.
 - **Identity-preservation mechanism (not the numbers) is the invariant:** `carrying_capacity` = 0
