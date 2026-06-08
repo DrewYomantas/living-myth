@@ -19,6 +19,12 @@ public partial class Main : Node
     private VBoxContainer _feedList = null!;
     private RichTextLabel _inspector = null!;
     private Panel _inspectorPanel = null!;
+    private Button _curseBtn = null!;
+    private int? _selectedPersonId;
+    private Panel _catchupPanel = null!;
+    private RichTextLabel _catchup = null!;
+    private int? _catchupEventId;
+    private bool _catchupQuick = true;
     private Label _yearLabel = null!;
     private Button _playBtn = null!;
     private Label _speedLabel = null!;
@@ -85,6 +91,7 @@ public partial class Main : Node
         BuildFeed(root);
         BuildBottomBar(root);
         BuildInspector(root);
+        BuildCatchup(root);
     }
 
     private void UpdateRootSize()
@@ -192,6 +199,12 @@ public partial class Main : Node
         close.Pressed += () => _inspectorPanel.Visible = false;
         hb.AddChild(close);
 
+        // God hand: the curse tool. Only shown for a living, not-yet-cursed person.
+        _curseBtn = new Button { Text = "⚡ Lay Curse on this bloodline", Visible = false };
+        _curseBtn.Modulate = new Color("ff9aa8");
+        _curseBtn.Pressed += OnCursePressed;
+        vb.AddChild(_curseBtn);
+
         var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
         vb.AddChild(scroll);
         _inspector = new RichTextLabel
@@ -203,6 +216,52 @@ public partial class Main : Node
             CustomMinimumSize = new Vector2(300, 0),
         };
         scroll.AddChild(_inspector);
+    }
+
+    private void BuildCatchup(Control root)
+    {
+        _catchupPanel = new Panel { Visible = false };
+        root.AddChild(_catchupPanel);
+        _catchupPanel.AnchorLeft = 0.5f; _catchupPanel.AnchorRight = 0.5f;
+        _catchupPanel.AnchorTop = 0.5f; _catchupPanel.AnchorBottom = 0.5f;
+        _catchupPanel.OffsetLeft = -290; _catchupPanel.OffsetRight = 290;
+        _catchupPanel.OffsetTop = -240; _catchupPanel.OffsetBottom = 240;
+
+        var margin = new MarginContainer();
+        margin.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        foreach (var s in new[] { "left", "right", "top", "bottom" })
+            margin.AddThemeConstantOverride($"margin_{s}", 12);
+        _catchupPanel.AddChild(margin);
+
+        var vb = new VBoxContainer();
+        margin.AddChild(vb);
+
+        var hb = new HBoxContainer();
+        vb.AddChild(hb);
+        var title = new Label { Text = "HOW WE GOT HERE", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        title.AddThemeFontSizeOverride("font_size", 16);
+        hb.AddChild(title);
+        var quick = new Button { Text = "Quick beats" };
+        quick.Pressed += () => { _catchupQuick = true; RenderCatchup(); };
+        hb.AddChild(quick);
+        var full = new Button { Text = "Full thread" };
+        full.Pressed += () => { _catchupQuick = false; RenderCatchup(); };
+        hb.AddChild(full);
+        var close = new Button { Text = "✕" };
+        close.Pressed += () => _catchupPanel.Visible = false;
+        hb.AddChild(close);
+
+        var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
+        vb.AddChild(scroll);
+        _catchup = new RichTextLabel
+        {
+            BbcodeEnabled = true,
+            FitContent = true,
+            ScrollActive = false,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(540, 0),
+        };
+        scroll.AddChild(_catchup);
     }
 
     // -------------------------------------------------------------- live feed
@@ -229,9 +288,12 @@ public partial class Main : Node
             BbcodeEnabled = true,
             FitContent = true,
             ScrollActive = false,
+            MetaUnderlined = false,
             CustomMinimumSize = new Vector2(FeedWidth - 40, 0),
         };
-        lbl.Text = $"[color=#7fd0a0]Yr {e.Year}[/color]  {e.Text}  [color=#7e8a96](w{imp})[/color]";
+        // Whole row is a link; clicking it opens the catch-up trace for this event.
+        lbl.Text = $"[url={e.Id}][color=#7fd0a0]Yr {e.Year}[/color]  {e.Text}  [color=#7e8a96](w{imp})[/color][/url]";
+        lbl.MetaClicked += OnFeedMetaClicked;
         _feedList.AddChild(lbl);
         _feedList.MoveChild(lbl, 0);   // newest on top
         _feedRows++;
@@ -244,9 +306,56 @@ public partial class Main : Node
 
     // -------------------------------------------------------------- inspectors
 
+    private void OnFeedMetaClicked(Variant meta)
+    {
+        if (!int.TryParse(meta.AsString(), out int id)) return;
+        _catchupEventId = id;
+        _catchupQuick = true;
+        _catchupPanel.Visible = true;
+        RenderCatchup();
+    }
+
+    private void RenderCatchup()
+    {
+        if (_catchupEventId is not int id) return;
+        var chain = _world.Chronicle.Trace(id);   // event + all its causes, in year order
+        var target = chain.FirstOrDefault(e => e.Id == id);
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"[b]{(target is null ? "" : target.Text)}[/b]");
+        sb.AppendLine($"[color=#7e8a96]{(_catchupQuick ? "turning points" : "the full thread")} that led here[/color]");
+        sb.AppendLine();
+
+        var shown = _catchupQuick
+            ? chain.Where(e => e.Id == id || e.Type is not ("birth" or "death" or "marriage")).ToList()
+            : chain;
+        if (shown.Count <= 1)
+            sb.AppendLine("[color=#7e8a96](this one stands alone — no deeper causes recorded)[/color]");
+        foreach (var e in shown)
+        {
+            bool isTarget = e.Id == id;
+            string year = $"[color=#7fd0a0]Yr {e.Year}[/color]";
+            string body = isTarget ? $"[b]{e.Text}[/b]" : e.Text;
+            sb.AppendLine($"{year}  [color=#9aa6b2][{e.Type}][/color]  {body}");
+        }
+        _catchup.Text = sb.ToString();
+    }
+
+    private void OnCursePressed()
+    {
+        if (_selectedPersonId is not int id || !_world.People.TryGetValue(id, out var p)) return;
+        if (!p.Alive || p.Cursed) return;
+        _world.PlantCurse(p);
+        StreamNewHeadlines();        // surface the divine act immediately
+        _curseBtn.Visible = false;
+        OnPersonPicked(id);          // re-render with CURSED state
+    }
+
     private void OnPersonPicked(int id)
     {
         if (!_world.People.TryGetValue(id, out var p)) return;
+        _selectedPersonId = id;
+        _curseBtn.Visible = p.Alive && !p.Cursed;
         var fac = _world.Factions[p.FactionId];
         string faith = p.ReligionId is int r && _world.Religions.TryGetValue(r, out var rr) ? rr.Name : "—";
         string spouse = p.SpouseId is int s && _world.People.TryGetValue(s, out var sp) ? $"{sp.Name} (#{s})" : "—";
@@ -273,6 +382,8 @@ public partial class Main : Node
 
     private void OnFactionPicked(string fid)
     {
+        _selectedPersonId = null;
+        _curseBtn.Visible = false;
         var fac = _world.Factions[fid];
         var members = _world.Living().Where(p => p.FactionId == fid).ToList();
         string leader = fac.LeaderId is int lid ? $"{_world.People[lid].Name} (#{lid})" : "(none)";
