@@ -11,14 +11,30 @@ public readonly record struct FeedRow(int Total, Event Ev, List<string> Labels);
 /// </summary>
 public static class Feed
 {
+    /// <summary>A directed lineage from one seed: the seed, its immediate parents (one level
+    /// up, for context only), and all of its descendants (Children, transitively). Never walks
+    /// sideways into siblings/cousins, never recurses past the seed's own parents. Read-only
+    /// over the finished chronicle — no Rng, no history mutation.</summary>
     private static HashSet<int> Bloodline(World world, int pid, HashSet<int>? seen = null)
     {
         seen ??= new();
-        if (seen.Contains(pid) || !world.People.ContainsKey(pid)) return seen;
+        if (!world.People.ContainsKey(pid)) return seen;
+
         seen.Add(pid);
-        var p = world.People[pid];
-        foreach (var rel in p.Parents.Concat(p.Children).ToList())
-            Bloodline(world, rel, seen);
+        foreach (var parent in world.People[pid].Parents)
+            if (world.People.ContainsKey(parent)) seen.Add(parent);
+
+        var stack = new Stack<int>();
+        stack.Push(pid);
+        while (stack.Count > 0)
+        {
+            var cur = stack.Pop();
+            foreach (var child in world.People[cur].Children)
+            {
+                if (!world.People.ContainsKey(child) || !seen.Add(child)) continue;
+                stack.Push(child);
+            }
+        }
         return seen;
     }
 

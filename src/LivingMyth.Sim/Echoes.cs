@@ -215,6 +215,51 @@ public static class Echoes
         return echoes;
     }
 
+    /// <summary>A run of famines close in time — the island remembers it as one long hunger.</summary>
+    public static List<Echo> DetectLongFamine(World world)
+    {
+        var famines = world.Chronicle.Events.Where(e => e.Type == "famine").OrderBy(e => e.Year).ToList();
+        var echoes = new List<Echo>();
+        List<Event>? group = null;
+        var groups = new List<List<Event>>();
+        foreach (var fe in famines)
+        {
+            if (group is null || fe.Year - group[^1].Year > 6) { group = new(); groups.Add(group); }
+            group.Add(fe);
+        }
+        foreach (var g in groups.Where(g => g.Count >= 3))
+        {
+            var span = (g[0].Year, g[^1].Year);
+            string label = $"A long famine of {g.Count} hungers ran {SpanPhrase(span.Item1, span.Item2)}.";
+            echoes.Add(new Echo("The Long Famine", label, g.Select(e => e.Id).ToList(), span));
+        }
+        return echoes;
+    }
+
+    /// <summary>Sustained plenty — many booms packed into a short span become a golden age.</summary>
+    public static List<Echo> DetectGoldenAge(World world)
+    {
+        var booms = world.Chronicle.Events.Where(e => e.Type == "boom").OrderBy(e => e.Year).ToList();
+        var echoes = new List<Echo>();
+        int i = 0;
+        while (i < booms.Count)
+        {
+            int startYear = booms[i].Year;
+            var window = new List<Event>();
+            int j = i;
+            while (j < booms.Count && booms[j].Year - startYear < 25) { window.Add(booms[j]); j++; }
+            if (window.Count >= 2)
+            {
+                var span = (window[0].Year, window[^1].Year);
+                string label = $"A golden age of {window.Count} bountiful seasons blessed the island {SpanPhrase(span.Item1, span.Item2)}.";
+                echoes.Add(new Echo("The Golden Age", label, window.Select(e => e.Id).ToList(), span));
+                i = j;   // don't overlap the next golden age onto this one's booms
+            }
+            else i++;
+        }
+        return echoes;
+    }
+
     public static List<Echo> DetectAll(World world)
     {
         var echoes = new List<Echo>();
@@ -226,6 +271,8 @@ public static class Echoes
         echoes.AddRange(DetectHolyWar(world));
         echoes.AddRange(DetectSchisms(world));
         echoes.AddRange(DetectPeopleErased(world));
+        echoes.AddRange(DetectLongFamine(world));
+        echoes.AddRange(DetectGoldenAge(world));
 
         var seen = new HashSet<(string, string)>();
         var unique = new List<Echo>();

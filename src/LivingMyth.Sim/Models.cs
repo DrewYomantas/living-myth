@@ -74,6 +74,13 @@ public sealed class Faction
     public HashSet<int> Members { get; } = new();   // living member ids
     public int FoundedYear { get; set; }
 
+    // economy (M4): per-faction prosperity drives famine/boom/trade and modulates births/deaths
+    public double Prosperity { get; set; } = 1.0;   // 0.0 starving … 1.0 neutral … 2.0 thriving
+    public bool InFamine { get; set; }              // below famine_threshold — death pressure + event dedup
+    public bool InBoom { get; set; }                // above boom_threshold — event dedup
+    public int LastBoomYear { get; set; }           // last "plenty continues" beat, so sustained booms re-emit
+    public Event? FamineEvent { get; set; }         // current famine's onset event, for death cause-chains
+
     public Faction(string id, string name, string culture, string homeland)
     {
         Id = id;

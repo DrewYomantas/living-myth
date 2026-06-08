@@ -10,8 +10,9 @@ public static class Scoring
     public static readonly Dictionary<string, int> TypeWeight = new()
     {
         ["founding"] = 60, ["divine"] = 80, ["war"] = 70, ["peace"] = 45,
-        ["martyr"] = 50, ["murder"] = 40, ["prophet"] = 38, ["schism"] = 36,
-        ["justice"] = 30, ["succession"] = 30, ["leadership"] = 25, ["scandal"] = 20,
+        ["famine"] = 55, ["boom"] = 50, ["martyr"] = 50, ["murder"] = 40,
+        ["prophet"] = 38, ["schism"] = 36, ["trade"] = 30, ["justice"] = 30,
+        ["succession"] = 30, ["leadership"] = 25, ["scandal"] = 20,
         ["romance"] = 16, ["friction"] = 12, ["marriage"] = 8, ["death"] = 5, ["birth"] = 3,
     };
 
@@ -20,7 +21,7 @@ public static class Scoring
         ["regicide"] = 35, ["curse"] = 40, ["martyr"] = 30, ["holy"] = 25,
         ["tragedy"] = 22, ["schism"] = 20, ["heresy"] = 18, ["forbidden"] = 16,
         ["revenge"] = 15, ["prophet"] = 14, ["persecution"] = 12, ["cross-faction"] = 10,
-        ["peace"] = 8, ["religion"] = 5,
+        ["peace"] = 8, ["religion"] = 5, ["scarcity"] = 15,
     };
 
     /// <summary>event id -> ids of events that name it as a cause (its consequences).</summary>

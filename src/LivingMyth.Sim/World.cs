@@ -87,12 +87,25 @@ public sealed class World
     {
         sex ??= Rng.Pick(new[] { "m", "f" });
         string culture = Factions[factionId].Culture;
-        string name = Rng.Pick(Names.GivenNames[culture][sex]);
+        string name = Disambiguate(Rng.Pick(Names.GivenNames[culture][sex]), factionId);
         var p = new Person(NewPid(), name, factionId, birthYear: Year - age, sex: sex);
         People[p.Id] = p;
         _peopleOrder.Add(p);
         Factions[factionId].Members.Add(p.Id);
         return p;
+    }
+
+    /// <summary>Keep names unique among the living of one people: a clash becomes "[Name] the
+    /// younger", then "[Name] of [homeland]". Runtime-only — the names pool is untouched, and the
+    /// check is a boolean over the (order-independent) living member set, so it draws no RNG.</summary>
+    private string Disambiguate(string name, string factionId)
+    {
+        var fac = Factions[factionId];
+        bool Taken(string n) => fac.Members.Any(id => People[id].Name == n);
+        if (!Taken(name)) return name;
+        string younger = $"{name} the younger";
+        if (!Taken(younger)) return younger;
+        return $"{name} of {fac.Homeland}";
     }
 
     /// <summary>Living people in ascending-id order. Built from the per-faction living-member
@@ -350,11 +363,94 @@ public sealed class World
             }
     }
 
+    // ---------- economy (prosperity → famine / boom / trade) ----------
+
+    private void Economy()
+    {
+        // Per-faction prosperity random-walks around a neutral 1.0 (mean-reverting). Threshold
+        // crossings emit one famine/boom event per episode (the InFamine/InBoom flags are the
+        // hysteresis). All draws happen in FactionsSorted() order to stay deterministic.
+        foreach (var fid in FactionsSorted())
+        {
+            var f = Factions[fid];
+            int step = Rng.RandInt(-1, 1);
+            f.Prosperity += step * Params["economy_prosperity_step"];
+            f.Prosperity += (1.0 - f.Prosperity) * Params["economy_prosperity_revert"];
+            f.Prosperity = Math.Clamp(f.Prosperity, 0.0, 2.0);
+
+            if (!f.InFamine && f.Prosperity < Params["famine_threshold"])
+            {
+                f.InFamine = true;
+                f.FamineEvent = Chronicle.Record(Year, "famine",
+                    $"Famine grips {f.Name}.",
+                    participants: f.LeaderId is int fl ? new() { fl } : null,
+                    tags: new() { "economy", "scarcity" });
+                // A starving people leans on its neighbours: each famine onset pushes aggression
+                // outward once, toward every other people that still has living members.
+                foreach (var otherId in FactionsSorted())
+                    if (otherId != fid && Factions[otherId].Members.Count > 0)
+                        AddTension(fid, otherId, 1.5, f.FamineEvent);
+            }
+            else if (f.InFamine && f.Prosperity >= Params["famine_threshold"])
+            {
+                f.InFamine = false;
+                f.FamineEvent = null;
+            }
+
+            // A boom is one sustained high-prosperity spell, so (unlike famine, which flickers near
+            // its floor) it re-emits a "plenty continues" beat every boom_beat_years — that lets a
+            // long golden age accumulate enough events for DetectGoldenAge to recognise it.
+            if (f.Prosperity > Params["boom_threshold"])
+            {
+                if (!f.InBoom || Year - f.LastBoomYear >= (int)Params["boom_beat_years"])
+                {
+                    bool onset = !f.InBoom;
+                    f.InBoom = true;
+                    f.LastBoomYear = Year;
+                    Chronicle.Record(Year, "boom",
+                        onset ? $"A season of plenty blesses {f.Name}." : $"Plenty still blesses {f.Name}.",
+                        participants: f.LeaderId is int bl ? new() { bl } : null,
+                        tags: new() { "economy", "boom" });
+                }
+            }
+            else if (f.InBoom && f.Prosperity <= Params["boom_threshold"])
+            {
+                f.InBoom = false;
+            }
+        }
+
+        // Trade: prospering neighbours exchange goods, which lifts both and eases tension between
+        // them (couples to the war system). Sorted-pair loop mirrors ReligiousFriction.
+        var fids = FactionsSorted().ToList();
+        for (int i = 0; i < fids.Count; i++)
+            for (int j = i + 1; j < fids.Count; j++)
+            {
+                var fa = Factions[fids[i]];
+                var fb = Factions[fids[j]];
+                if (fa.Prosperity <= 1.0 || fb.Prosperity <= 1.0) continue;
+                if (!Rng.Chance(Params["trade_chance_per_year"])) continue;
+
+                var participants = new List<int>();
+                if (fa.LeaderId is int la) participants.Add(la);
+                if (fb.LeaderId is int lb) participants.Add(lb);
+                Chronicle.Record(Year, "trade",
+                    $"{fa.Name} and {fb.Name} grow rich on trade between them.",
+                    participants: participants.Count > 0 ? participants : null,
+                    tags: new() { "economy", "trade" });
+
+                fa.Prosperity = Math.Min(2.0, fa.Prosperity + Params["economy_prosperity_step"]);
+                fb.Prosperity = Math.Min(2.0, fb.Prosperity + Params["economy_prosperity_step"]);
+                var key = PairKey(fa.Id, fb.Id);
+                Tension[key] = Math.Max(0.0, Tension.GetValueOrDefault(key) - Params["trade_tension_reduction"]);
+            }
+    }
+
     // ---------- the yearly tick ----------
 
     public void Tick()
     {
         Year += 1;
+        Economy();
         ProcessWars();
         Deaths();
         Crime();
@@ -386,10 +482,14 @@ public sealed class World
         {
             double dc = DeathChance(p.Age(Year));
             if (p.Cursed) dc = Math.Min(0.95, dc * Params["curse_death_multiplier"]);
+            var fac = Factions[p.FactionId];
+            if (fac.InFamine) dc = Math.Min(0.95, dc * Params["famine_death_multiplier"]);
             if (Rng.Chance(dc))
             {
                 if (p.Cursed && CurseEvent is not null)
                     Kill(p, reason: "as the old curse takes them", cause: CurseEvent);
+                else if (fac.InFamine && fac.FamineEvent is not null)
+                    Kill(p, reason: "in the famine", cause: fac.FamineEvent);
                 else
                     Kill(p);
             }
@@ -669,6 +769,7 @@ public sealed class World
             double chance = Params["birth_chance_per_couple_per_year"];
             if (cap > 0)
                 chance *= Math.Max(0.0, 1.0 - facPop[father.FactionId] / cap);
+            chance *= 0.7 + 0.3 * Factions[father.FactionId].Prosperity;   // 0.7 famine … 1.0 neutral … 1.3 boom
             if (Rng.Chance(chance))
                 Birth(mother, father);
         }

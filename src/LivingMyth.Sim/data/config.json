@@ -21,6 +21,14 @@
     "schism_chance_per_year": 0.02,
     "conversion_chance_per_year": 0.04,
     "persecution_chance_per_year": 0.03,
-    "religious_friction_chance_per_year": 0.05
+    "religious_friction_chance_per_year": 0.05,
+    "economy_prosperity_step": 0.15,
+    "economy_prosperity_revert": 0.1,
+    "famine_threshold": 0.45,
+    "boom_threshold": 1.5,
+    "famine_death_multiplier": 1.4,
+    "boom_beat_years": 10,
+    "trade_chance_per_year": 0.06,
+    "trade_tension_reduction": 1.0
   }
 }

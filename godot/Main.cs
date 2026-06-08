@@ -33,6 +33,8 @@ public partial class Main : Node
     private readonly HashSet<int> _marked = new();          // their full bloodline, expanded
     private readonly HashSet<string> _markedFactions = new();
     private const int YoursBoost = 70;                      // weight added to a marked-bloodline event
+    private const int FeedWindow = 60;                      // rolling feed holds this many rows
+    private const float YoursCapFraction = 0.6f;            // YOURS may fill at most this share of the window
     private Panel _catchupPanel = null!;
     private RichTextLabel _catchup = null!;
     private int? _catchupEventId;
@@ -47,8 +49,13 @@ public partial class Main : Node
     private float _speed = 1f;
     private float _accum;
     private int _lastEventCount;
-    private int _feedRows;
+    private readonly List<FeedVisRow> _feedVis = new();     // (node, yours, weight) per visible row, newest first
     private readonly System.Collections.Generic.Dictionary<int, int> _consCount = new();
+    private const int EchoCadence = 8;                      // sim-years between echo scans (slow path, not per-tick)
+    private int _lastEchoYear;
+    private readonly System.Collections.Generic.Dictionary<string, int> _echoSeen = new();  // archetype -> latest carded start year
+
+    private sealed class FeedVisRow { public Node Node = null!; public bool Yours; public int Weight; }
 
     public override void _Ready()
     {
@@ -56,6 +63,7 @@ public partial class Main : Node
         _world = new World(Seed, config, names);
         _world.SeedWorld();
         _lastEventCount = 0;
+        _lastEchoYear = _world.Year;
 
         BuildUi();
         _map.World = _world;
@@ -79,6 +87,7 @@ public partial class Main : Node
                 StreamNewHeadlines();
             }
             if (_accum > interval * 6) _accum = 0f;   // drop any backlog
+            MaybeDetectEchoes();
         }
         _map.QueueRedraw();
         RefreshTimeBar();
@@ -329,6 +338,29 @@ public partial class Main : Node
 
     private void AddFeedRow(Event e, int imp, bool yours)
     {
+        // YOURS cap: a +70-boosted bloodline can otherwise flood the window. Non-YOURS rows
+        // always get in (they already cleared the threshold). A YOURS row past the cap displaces
+        // the weakest currently-visible YOURS row — and if it's itself the weakest, it's skipped.
+        // O(visible rows), no history scan.
+        if (yours)
+        {
+            int yoursCap = (int)(FeedWindow * YoursCapFraction);
+            int visibleYours = 0;
+            FeedVisRow? weakest = null;
+            foreach (var r in _feedVis)
+            {
+                if (!r.Yours) continue;
+                visibleYours++;
+                if (weakest is null || r.Weight < weakest.Weight) weakest = r;
+            }
+            if (visibleYours >= yoursCap)
+            {
+                if (weakest is null || imp <= weakest.Weight) return;   // new row is the weakest YOURS
+                weakest.Node.QueueFree();
+                _feedVis.Remove(weakest);
+            }
+        }
+
         var lbl = new RichTextLabel
         {
             BbcodeEnabled = true,
@@ -344,11 +376,72 @@ public partial class Main : Node
         lbl.MetaClicked += OnFeedMetaClicked;
         _feedList.AddChild(lbl);
         _feedList.MoveChild(lbl, 0);   // newest on top
-        _feedRows++;
-        while (_feedRows > 60 && _feedList.GetChildCount() > 0)
+        _feedVis.Insert(0, new FeedVisRow { Node = lbl, Yours = yours, Weight = imp });
+        while (_feedVis.Count > FeedWindow)
         {
-            _feedList.GetChild(_feedList.GetChildCount() - 1).QueueFree();
-            _feedRows--;
+            var oldest = _feedVis[_feedVis.Count - 1];
+            oldest.Node.QueueFree();
+            _feedVis.RemoveAt(_feedVis.Count - 1);
+        }
+    }
+
+    // ------------------------------------------------------------- myth echoes
+
+    // Read pass over the finished chronicle, on a slow cadence (never per-tick). Any NEW echo —
+    // an archetype seen for the first time, or a fresh instance of a known archetype that starts
+    // later than the last one we carded — drops a distinctive gold card into the feed.
+    private void MaybeDetectEchoes()
+    {
+        if (_world.Year - _lastEchoYear < EchoCadence) return;
+        _lastEchoYear = _world.Year;
+
+        var echoes = Echoes.DetectAll(_world);   // already de-duped + sorted by start year
+        System.Collections.Generic.Dictionary<int, List<int>>? reverse = null;
+        foreach (var echo in echoes)
+        {
+            int prev = _echoSeen.GetValueOrDefault(echo.Archetype, int.MinValue);
+            if (echo.YearSpan.First <= prev) continue;   // already carded this (or an equal/older) instance
+            _echoSeen[echo.Archetype] = echo.YearSpan.First;
+            reverse ??= Scoring.BuildReverse(_world);
+            AddEchoCard(echo, AnchorEvent(echo, reverse));
+        }
+    }
+
+    // The single most important event in the echo, so clicking the card opens the catch-up on the
+    // heart of the story rather than an arbitrary beat. -1 if the echo names no events.
+    private int AnchorEvent(Echo echo, System.Collections.Generic.Dictionary<int, List<int>> reverse)
+    {
+        int best = -1, bestScore = int.MinValue;
+        foreach (var id in echo.EventIds)
+        {
+            int s = Scoring.Importance(_world.Chronicle.Get(id), _world, reverse);
+            if (s > bestScore) { bestScore = s; best = id; }
+        }
+        return best;
+    }
+
+    private void AddEchoCard(Echo echo, int anchorEventId)
+    {
+        var lbl = new RichTextLabel
+        {
+            BbcodeEnabled = true,
+            FitContent = true,
+            ScrollActive = false,
+            MetaUnderlined = false,
+            CustomMinimumSize = new Vector2(FeedWidth - 40, 0),
+        };
+        string body = $"[bgcolor=#3a2c0a]  [color=#ffcf3a]◆ MYTH ECHO[/color]  [color=#f3e3a8]{echo.Archetype}[/color]\n"
+                    + $"  [color=#e8d79a]{echo.Label}[/color]  [/bgcolor]";
+        lbl.Text = anchorEventId >= 0 ? $"[url={anchorEventId}]{body}[/url]" : body;
+        lbl.MetaClicked += OnFeedMetaClicked;   // anchor is a real event id — reuses the catch-up trace
+        _feedList.AddChild(lbl);
+        _feedList.MoveChild(lbl, 0);
+        _feedVis.Insert(0, new FeedVisRow { Node = lbl, Yours = false, Weight = int.MaxValue });
+        while (_feedVis.Count > FeedWindow)
+        {
+            var oldest = _feedVis[_feedVis.Count - 1];
+            oldest.Node.QueueFree();
+            _feedVis.RemoveAt(_feedVis.Count - 1);
         }
     }
 

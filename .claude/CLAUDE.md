@@ -15,8 +15,8 @@ separate from logic. Never let simulation logic leak into Godot nodes.
 - `src/LivingMyth.Console/` — proof runner (run | divergence | surface | verify).
 - `godot/` — the viewer (.NET build): `MapView.cs` (map render + click) and `Main.cs`
   (tick loop, live feed, inspectors, curse tool, catch-up, Follow/Yours channel). References the
-  Sim; open the folder with the Godot mono editor and press F5. M0–M3 + longevity done; next is the
-  visual/UX pass + more pressure engines.
+  Sim; open the folder with the Godot mono editor and press F5. M0–M4 + longevity done; next is the
+  visual/UX pass + more pressure engines (culture) + gossip layer.
 
 ## Commands
 ```bash
@@ -40,10 +40,19 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
   the feed with incremental consequence counts. Reintroducing an all-history scan is the
   classic regression here.
 - **Population balance is the `carrying_capacity` param** (config.json, currently 300):
-  logistic births → plateau. Too low (~120) drifts to extinction; verified stable ~450
-  living over 5000 yrs at 300. `curse_death_multiplier` (2.5) tunes how apocalyptic curses are.
-- **Perf changes must stay identity-preserving:** set `carrying_capacity` to 0 and `verify`
-  must reproduce baseline counts 1309/450/628/800 (seeds 1/18/42/7 @ 120 yrs).
+  logistic births → plateau. Too low (~120) drifts to extinction. With the M4 economy on,
+  verified stable ~165–490 living over 5000 yrs at 300 across seeds 18/42/1/7.
+  `curse_death_multiplier` (2.5) tunes how apocalyptic curses are; `famine_death_multiplier`
+  (1.4) + `famine_threshold` (0.45) tune how deadly economic collapse is — the economy is a net
+  population suppressor (famine adds deaths, booms only help births), so raising the multiplier
+  drifts the low seeds toward extinction.
+- **The verify baseline moved with M4** (it adds famine/boom/trade events + famine deaths). Current
+  `verify` counts (120 yr, cap 300): 720/452/527/667 (seeds 1/18/42/7). The determinism gate is
+  self-consistency (same seed → byte-identical run), so it stays green regardless of feature work;
+  these numbers are just the recorded expectation.
+- **Identity-preservation mechanism (not the numbers) is the invariant:** `carrying_capacity` = 0
+  cleanly disables the logistic birth damping (economy still runs). Recorded cap=0 baseline counts
+  are now 807/523/452/987 (seeds 1/18/42/7 @ 120 yrs); re-baseline these when sim behavior changes.
 - **Solution file is `LivingMyth.slnx`** (new SDK-10 XML format), not `.sln`.
 - **Data loads at runtime from next to the binary.** `DataLoader` reads
   `AppContext.BaseDirectory/data/{config,names}.json` (copied to output, reliable under both
@@ -64,16 +73,16 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 _Last updated: 2026-06-08_
 
 ### Context Management
-- Your context snowballs at **turn 18** on average (41% of sessions). Use `/compact` proactively after turn 16-18 on long sessions to prevent unbounded growth.
+- Your context snowballs at **turn 19** on average (41% of sessions). Use `/compact` proactively after turn 17-19 on long sessions to prevent unbounded growth.
 - Some sessions use significantly more tokens than others. Consider shorter, more focused sessions with clear goals.
 - You could benefit from subagents for parallel tasks. Consider splitting multi-file operations into parallel agent tasks.
 - You read files you don't end up using. Use `Grep` first to locate relevant files before reading them — reduces unnecessary context by ~0%.
 - You receive verbose command output. Prefer `Grep`/`Read` tools over bash commands when searching files to reduce output tokens.
 
 ### Model Usage
-- You use Opus/Claude for **12%** of simple tasks. Prefer **Sonnet** for editing, small fixes, and exploration tasks to reduce token usage by ~5x on those sessions.
+- You use Opus/Claude for **10%** of simple tasks. Prefer **Sonnet** for editing, small fixes, and exploration tasks to reduce token usage by ~5x on those sessions.
 - MCP server(s) **unity-mcp** are loaded but never used. Consider removing them to reduce per-session overhead.
 
 ### Prompt Quality
-- **7%** of your prompts are under 10 words. Include specific file paths, function names, and expected outcomes to reduce clarification rounds.
+- **8%** of your prompts are under 10 words. Include specific file paths, function names, and expected outcomes to reduce clarification rounds.
 <!-- TOKENOMICS:END -->
