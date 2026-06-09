@@ -80,7 +80,7 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 _Last updated: 2026-06-09_
 
 ### Context Management
-- Your context snowballs at **turn 19** on average (40% of sessions). Use `/compact` proactively after turn 17-19 on long sessions to prevent unbounded growth.
+- Your context snowballs at **turn 20** on average (41% of sessions). Use `/compact` proactively after turn 18-20 on long sessions to prevent unbounded growth.
 - Some sessions use significantly more tokens than others. Consider shorter, more focused sessions with clear goals.
 - You could benefit from subagents for parallel tasks. Consider splitting multi-file operations into parallel agent tasks.
 - You read files you don't end up using. Use `Grep` first to locate relevant files before reading them — reduces unnecessary context by ~0%.
@@ -91,5 +91,5 @@ _Last updated: 2026-06-09_
 - MCP server(s) **unity-mcp** are loaded but never used. Consider removing them to reduce per-session overhead.
 
 ### Prompt Quality
-- **8%** of your prompts are under 10 words. Include specific file paths, function names, and expected outcomes to reduce clarification rounds.
+- **7%** of your prompts are under 10 words. Include specific file paths, function names, and expected outcomes to reduce clarification rounds.
 <!-- TOKENOMICS:END -->
