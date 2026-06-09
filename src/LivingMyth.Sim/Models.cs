@@ -84,6 +84,11 @@ public sealed class Faction
     public int LastBoomYear { get; set; }           // last "plenty continues" beat, so sustained booms re-emit
     public Event? FamineEvent { get; set; }         // current famine's onset event, for death cause-chains
 
+    // culture (M7): per-faction value axes (valor/piety/cunning/harmony) drift over time and
+    // harden into named customs at threshold; customs drive clash (tension) and diffusion (peace).
+    public Dictionary<string, double> Values { get; } = new();          // axis -> 0..1, seeded from culture baseline
+    public Dictionary<string, int> CustomOriginEvent { get; } = new();  // held custom -> event that birthed it (cause-link + Vanished Way span)
+
     public Faction(string id, string name, string culture, string homeland)
     {
         Id = id;

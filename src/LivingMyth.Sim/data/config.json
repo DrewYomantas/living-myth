@@ -30,6 +30,14 @@
     "famine_death_multiplier": 1.4,
     "boom_beat_years": 10,
     "trade_chance_per_year": 0.06,
-    "trade_tension_reduction": 1.0
+    "trade_tension_reduction": 1.0,
+    "culture_drift_step": 0.04,
+    "culture_revert": 0.08,
+    "culture_identity_threshold": 0.72,
+    "culture_identity_drop": 0.55,
+    "culture_clash_chance_per_year": 0.06,
+    "culture_clash_tension": 2.5,
+    "culture_diffusion_chance_per_year": 0.04,
+    "culture_diffusion_tension_reduction": 1.0
   }
 }

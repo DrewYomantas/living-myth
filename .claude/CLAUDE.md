@@ -16,9 +16,10 @@ separate from logic. Never let simulation logic leak into Godot nodes.
 - `godot/` — the viewer (.NET build): `MapView.cs` (map render + click + region pulse) and `Main.cs`
   (tick loop, pacing/speed ladder + dramatic auto-slow, live feed, inspectors, curse tool, catch-up,
   Follow/Yours channel). References the Sim; open the folder with the Godot mono editor and press F5.
-  M0–M5.1 + longevity done (spatial island/regions/territory + extinction land-release in M5). The
-  visual/UX pass is underway — Phase A pass 1 (pacing + legibility-at-speed) done; next: timeline
-  scrubbing + era recap (Phase A pass 2), then more pressure engines (culture) + gossip layer.
+  M0–M5.1 + longevity done (spatial island/regions/territory + extinction land-release in M5). M7 added
+  the culture pressure engine (per-faction value axes → named customs → clash/diffusion + The Vanished
+  Way echo). The visual/UX pass is underway — Phase A passes 1+2 done; next: the gossip layer (rumor /
+  reputation riding on existing events), then surface culture in the viewer.
 
 ## Commands
 ```bash
@@ -49,13 +50,14 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
   population suppressor (famine adds deaths, booms only help births), so raising the multiplier
   drifts the low seeds toward extinction.
 - **The verify baseline moves whenever sim RNG consumption changes.** Current
-  `verify` counts (120 yr, cap 300): 934/704/292/621 (seeds 1/18/42/7, Phase A pass 2 baseline —
-  schism rate cut: `schism_chance_per_year` 0.02→0.006, `schism_min_members` 8→14). Prior M5.1
-  baseline was 678/363/383/558. The determinism gate is self-consistency (same seed → byte-identical
-  run), so it stays green regardless of feature work; these numbers are just the recorded expectation.
+  `verify` counts (120 yr, cap 300): 814/594/525/652 (seeds 1/18/42/7, M7 culture-engine baseline —
+  added `Culture()` to the tick: value-axis drift + custom adopt/fade + clash/diffusion RNG draws).
+  Prior Phase A pass 2 baseline was 934/704/292/621. The determinism gate is self-consistency (same
+  seed → byte-identical run), so it stays green regardless of feature work; these numbers are just the
+  recorded expectation.
 - **Identity-preservation mechanism (not the numbers) is the invariant:** `carrying_capacity` = 0
   cleanly disables the logistic birth damping (economy still runs). Recorded cap=0 baseline counts
-  are now 807/523/452/987 (seeds 1/18/42/7 @ 120 yrs); re-baseline these when sim behavior changes.
+  are now 1814/646/811/950 (seeds 1/18/42/7 @ 120 yrs); re-baseline these when sim behavior changes.
 - **The viewer is presentation-only over the sim.** Pacing (`BaseInterval`, `SpeedLadder`, the
   dramatic auto-slow) only changes the *wall-clock rate* at which existing ticks are shown — `Tick()`
   must still be called the same number of times in the same order. So viewer-only work can never move

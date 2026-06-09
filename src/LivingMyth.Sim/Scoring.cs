@@ -13,7 +13,7 @@ public static class Scoring
         ["famine"] = 55, ["boom"] = 50, ["martyr"] = 50, ["murder"] = 40,
         ["prophet"] = 38, ["schism"] = 36, ["trade"] = 30, ["justice"] = 30,
         ["succession"] = 30, ["leadership"] = 25, ["scandal"] = 20,
-        ["romance"] = 16, ["friction"] = 12, ["marriage"] = 8, ["death"] = 5, ["birth"] = 3,
+        ["custom"] = 28, ["romance"] = 16, ["friction"] = 12, ["marriage"] = 8, ["death"] = 5, ["birth"] = 3,
     };
 
     public static readonly Dictionary<string, int> TagBonus = new()
@@ -22,6 +22,7 @@ public static class Scoring
         ["tragedy"] = 22, ["schism"] = 20, ["heresy"] = 18, ["forbidden"] = 16,
         ["revenge"] = 15, ["prophet"] = 14, ["persecution"] = 12, ["cross-faction"] = 10,
         ["peace"] = 8, ["religion"] = 5, ["scarcity"] = 15,
+        ["clash"] = 14, ["fade"] = 8, ["culture"] = 6, ["diffusion"] = 6,
     };
 
     /// <summary>event id -> ids of events that name it as a cause (its consequences).</summary>

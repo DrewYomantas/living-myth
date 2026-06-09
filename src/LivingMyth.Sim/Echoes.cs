@@ -260,6 +260,28 @@ public static class Echoes
         return echoes;
     }
 
+    private static readonly HashSet<string> CustomWords = new() { "warlike", "devout", "scheming", "peaceable" };
+
+    /// <summary>A custom a people held for a long span, then shed — the island remembers the people
+    /// they used to be. Each fade event cause-links back to the custom's origin; the gap is the span.</summary>
+    public static List<Echo> DetectVanishedWay(World world)
+    {
+        var byid = ById(world);
+        var echoes = new List<Echo>();
+        foreach (var fade in world.Chronicle.Events.Where(e => e.Type == "custom" && e.Tags.Contains("fade")))
+        {
+            if (fade.Causes.Count == 0 || !byid.TryGetValue(fade.Causes[0], out var origin)) continue;
+            int years = fade.Year - origin.Year;
+            if (years < 30) continue;
+            string custom = fade.Tags.FirstOrDefault(t => CustomWords.Contains(t)) ?? "old";
+            string people = fade.Participants.Count > 0 && world.People.TryGetValue(fade.Participants[0], out var p)
+                ? world.Factions[p.FactionId].Name : "A people";
+            string label = $"{people} were a {custom} people for {years} years, then the old ways faded.";
+            echoes.Add(new Echo("The Vanished Way", label, new() { origin.Id, fade.Id }, (origin.Year, fade.Year)));
+        }
+        return echoes;
+    }
+
     public static List<Echo> DetectAll(World world)
     {
         var echoes = new List<Echo>();
@@ -273,6 +295,7 @@ public static class Echoes
         echoes.AddRange(DetectPeopleErased(world));
         echoes.AddRange(DetectLongFamine(world));
         echoes.AddRange(DetectGoldenAge(world));
+        echoes.AddRange(DetectVanishedWay(world));
 
         var seen = new HashSet<(string, string)>();
         var unique = new List<Echo>();

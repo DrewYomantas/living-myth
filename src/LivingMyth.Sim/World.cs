@@ -204,8 +204,22 @@ public sealed class World
                 $"{leader.Name} of {fac.Name}, eldest of their people, leads them from {fac.Homeland}.",
                 participants: new() { leader.Id }, tags: new() { "leadership" });
         }
+        SeedCulture();
         GenerateMap();
         SeedReligions(founding.Id);
+    }
+
+    /// <summary>Copy each people's culture baseline into its live value vector. No RNG — a
+    /// deterministic init, so its placement among seeding steps can't shift the verify counts.</summary>
+    private void SeedCulture()
+    {
+        foreach (var fid in _factionOrder)
+        {
+            var f = Factions[fid];
+            var bsl = CultureValueBaseline.GetValueOrDefault(f.Culture);
+            foreach (var axis in ValueAxes)
+                f.Values[axis] = bsl?.GetValueOrDefault(axis, 0.5) ?? 0.5;
+        }
     }
 
     // ---------- the island map ----------
@@ -215,6 +229,46 @@ public sealed class World
         ["highland"] = "highland",   // the Highland Clans take the high crags
         ["shore"] = "coast",         // the Shorefolk take the coast
         ["wood"] = "forest",         // the Wood Tribes take the forest
+    };
+
+    // ---------- culture catalog (M7) ----------
+
+    private static readonly string[] ValueAxes = { "valor", "piety", "cunning", "harmony" };
+
+    /// <summary>Where each people's values sit by default; drift mean-reverts toward this.</summary>
+    private static readonly Dictionary<string, Dictionary<string, double>> CultureValueBaseline = new()
+    {
+        ["highland"] = new() { ["valor"] = 0.62, ["piety"] = 0.50, ["cunning"] = 0.38, ["harmony"] = 0.40 },
+        ["shore"] = new() { ["valor"] = 0.40, ["piety"] = 0.42, ["cunning"] = 0.58, ["harmony"] = 0.60 },
+        ["wood"] = new() { ["valor"] = 0.45, ["piety"] = 0.60, ["cunning"] = 0.40, ["harmony"] = 0.55 },
+    };
+
+    private static readonly Dictionary<string, string> AxisCustom = new()
+    { ["valor"] = "warlike", ["piety"] = "devout", ["cunning"] = "scheming", ["harmony"] = "peaceable" };
+
+    private static readonly Dictionary<string, string> CustomAxis = new()
+    { ["warlike"] = "valor", ["devout"] = "piety", ["scheming"] = "cunning", ["peaceable"] = "harmony" };
+
+    /// <summary>Opposing axes — a people clashes culturally when it holds the custom of one and a
+    /// neighbour holds the custom of the other. Only the canonical halves (valor, piety) are
+    /// iterated so each pair is considered once.</summary>
+    private static readonly Dictionary<string, string> AxisOpposite = new()
+    { ["valor"] = "harmony", ["piety"] = "cunning" };
+
+    private static readonly Dictionary<string, string> CustomBecome = new()
+    {
+        ["warlike"] = "a warlike people, quick to the spear",
+        ["devout"] = "a devout people, bound to their gods",
+        ["scheming"] = "a scheming people, schooled in intrigue",
+        ["peaceable"] = "a peaceable people, slow to anger",
+    };
+
+    private static readonly Dictionary<string, string> CustomFade = new()
+    {
+        ["warlike"] = "lay down the warlike ways of their forebears",
+        ["devout"] = "let the old devotions lapse",
+        ["scheming"] = "turn from the politics of the knife",
+        ["peaceable"] = "lose their gentle temper",
     };
 
     /// <summary>A deterministic float in [0,1) drawn from Rng (Rng exposes only int/bool draws).</summary>
@@ -589,6 +643,124 @@ public sealed class World
             }
     }
 
+    // ---------- culture (values → customs → clash / diffusion) ----------
+
+    private int? PrimaryRegion(Faction f)
+        => f.ControlledRegions.Count == 0 ? null : f.ControlledRegions.Select(int.Parse).Min();
+
+    /// <summary>The cultural pressure engine, shaped like Economy(): each people's four value
+    /// axes random-walk toward a culture baseline (biased by its current condition), harden into
+    /// named customs at threshold and fade below a floor (hysteresis via CustomOriginEvent), then
+    /// neighbours clash over opposing customs (tension, feeds war) or lend customs to each other
+    /// (eases tension, like trade). Bounded O(factions²) over the three peoples; every iteration
+    /// that draws RNG is explicitly ordered, so the same seed yields the same culture.</summary>
+    private void Culture()
+    {
+        foreach (var fid in FactionsSorted())
+        {
+            var f = Factions[fid];
+            if (f.Members.Count == 0) continue;
+            var baseline = CultureValueBaseline.GetValueOrDefault(f.Culture);
+            bool atWar = _activeWars.Any(w => w.Pair.Item1 == fid || w.Pair.Item2 == fid);
+            double step = Params["culture_drift_step"];
+
+            foreach (var axis in ValueAxes)
+            {
+                double v = f.Values.GetValueOrDefault(axis, 0.5);
+                double bsl = baseline?.GetValueOrDefault(axis, 0.5) ?? 0.5;
+                v += Rng.RandInt(-1, 1) * step;
+                v += (bsl - v) * Params["culture_revert"];
+                if (atWar && axis == "valor") v += step;          // war hardens martial temper
+                if (f.InFamine && axis == "cunning") v += step;   // scarcity breeds guile
+                if (f.InBoom && axis == "harmony") v += step;     // plenty breeds goodwill
+                if (f.CustomOriginEvent.ContainsKey(AxisCustom[axis]))
+                    v += step * 0.5;   // tradition hardens: a held custom reinforces its own axis,
+                                       // so identities persist for generations until a real downturn breaks them
+                f.Values[axis] = Math.Clamp(v, 0.0, 1.0);
+            }
+
+            // Threshold crossings: adopt a custom when its axis runs high, shed it when it sinks.
+            foreach (var axis in ValueAxes)
+            {
+                string custom = AxisCustom[axis];
+                double v = f.Values[axis];
+                bool held = f.CustomOriginEvent.ContainsKey(custom);
+                var leader = f.LeaderId is int lid ? new List<int> { lid } : null;
+                if (!held && v >= Params["culture_identity_threshold"])
+                {
+                    var ev = Chronicle.Record(Year, "custom",
+                        $"{f.Name} become {CustomBecome[custom]}.",
+                        participants: leader, tags: new() { "culture", custom },
+                        regionId: PrimaryRegion(f));
+                    f.CustomOriginEvent[custom] = ev.Id;
+                }
+                else if (held && v <= Params["culture_identity_drop"])
+                {
+                    Chronicle.Record(Year, "custom",
+                        $"{f.Name} {CustomFade[custom]}.",
+                        participants: leader, causes: new() { f.CustomOriginEvent[custom] },
+                        tags: new() { "culture", "fade", custom }, regionId: PrimaryRegion(f));
+                    f.CustomOriginEvent.Remove(custom);
+                }
+            }
+        }
+
+        var fids = FactionsSorted().ToList();
+
+        // Cultural clash: neighbours holding opposing customs grate on each other, raising tension.
+        for (int i = 0; i < fids.Count; i++)
+            for (int j = i + 1; j < fids.Count; j++)
+            {
+                var fa = Factions[fids[i]];
+                var fb = Factions[fids[j]];
+                if (fa.Members.Count == 0 || fb.Members.Count == 0) continue;
+                foreach (var axis in new[] { "valor", "piety" })
+                {
+                    string cA = AxisCustom[axis];
+                    string cB = AxisCustom[AxisOpposite[axis]];
+                    bool dir1 = fa.CustomOriginEvent.ContainsKey(cA) && fb.CustomOriginEvent.ContainsKey(cB);
+                    bool dir2 = fa.CustomOriginEvent.ContainsKey(cB) && fb.CustomOriginEvent.ContainsKey(cA);
+                    if (!(dir1 || dir2)) continue;
+                    if (!Rng.Chance(Params["culture_clash_chance_per_year"])) continue;
+                    var (holdA, holdB) = dir1 ? (cA, cB) : (cB, cA);
+                    var ev = Chronicle.Record(Year, "custom",
+                        $"The {holdA} ways of {fa.Name} and the {holdB} ways of {fb.Name} grate against each other.",
+                        causes: new() { fa.CustomOriginEvent[holdA], fb.CustomOriginEvent[holdB] },
+                        tags: new() { "culture", "clash" }, regionId: PrimaryRegion(fa));
+                    AddTension(fa.Id, fb.Id, Params["culture_clash_tension"], ev);
+                    break;   // one clash per pair per year
+                }
+            }
+
+        // Cultural diffusion: the more prosperous neighbour lends a custom it holds to the other,
+        // softening the feeling between them (the cultural twin of trade).
+        for (int i = 0; i < fids.Count; i++)
+            for (int j = i + 1; j < fids.Count; j++)
+            {
+                var fa = Factions[fids[i]];
+                var fb = Factions[fids[j]];
+                if (fa.Members.Count == 0 || fb.Members.Count == 0) continue;
+                if (!Rng.Chance(Params["culture_diffusion_chance_per_year"])) continue;
+                var (donor, recv) = fa.Prosperity >= fb.Prosperity ? (fa, fb) : (fb, fa);
+                var spreadable = donor.CustomOriginEvent.Keys
+                    .Where(c => !recv.CustomOriginEvent.ContainsKey(c))
+                    .OrderBy(c => c, StringComparer.Ordinal).ToList();
+                if (spreadable.Count == 0) continue;
+                string custom = spreadable[0];
+                recv.Values[CustomAxis[custom]] =
+                    Math.Max(recv.Values[CustomAxis[custom]], Params["culture_identity_threshold"]);
+                var ev = Chronicle.Record(Year, "custom",
+                    $"{recv.Name} take up the {custom} ways of {donor.Name}.",
+                    participants: recv.LeaderId is int rl ? new() { rl } : null,
+                    causes: new() { donor.CustomOriginEvent[custom] },
+                    tags: new() { "culture", "diffusion", "cross-faction", custom },
+                    regionId: PrimaryRegion(recv));
+                recv.CustomOriginEvent[custom] = ev.Id;
+                var key = PairKey(fa.Id, fb.Id);
+                Tension[key] = Math.Max(0.0, Tension.GetValueOrDefault(key) - Params["culture_diffusion_tension_reduction"]);
+            }
+    }
+
     // ---------- the yearly tick ----------
 
     public void Tick()
@@ -602,6 +774,7 @@ public sealed class World
         Marriages();
         Births();
         DoReligion();
+        Culture();
         MaybeDeclareWars();
         DecayTension();
         ReleaseExtinctLands();
