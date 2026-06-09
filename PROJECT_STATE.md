@@ -30,8 +30,29 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
   Population stable ~165–490 over 5000 yrs after softening famine_death_multiplier 1.8→1.4. Determinism
   green. NOT yet committed.
 
+- [2026-06-09] Session: Visual/UX pass — Phase A. Pass 1 (viewer-only): readable 1× (BaseInterval
+  0.5→1.2 s/yr), speed ladder 0.25×–16×, dramatic auto-slow on notable ticks, feed-row flash +
+  map region pulse (`e166623`). Pass 2: (1, sim) schism rate cut — `schism_chance_per_year`
+  0.02→0.006 + new `schism_min_members` 8→14; **re-baselined verify 934/704/292/621** (seeds
+  1/18/42/7), prior was 678/363/383/558; schisms 80yr 4/5/4/9→2/0/2/0, ~13–20 per 600yr. (2, sim
+  metadata) `Religion.OriginEventId` set at every faith creation; persecution now causes-links to the
+  faith's founding so catch-up walks back to the heresy origin — counts unchanged. (3, viewer) echo
+  rationing: per-archetype 60yr cooldown + significance bar (≥80) + window cap (2/40yr). (4, viewer)
+  MapView camera: cursor-anchored wheel/button zoom + drag pan (clamped), hit-test correct via shared
+  P() transform, drama-follow eases toward pulses unless player took manual control (`7adfd67`).
+  Both commits pushed. Determinism green. NOT yet feel-tested in the Godot viewer.
+
 ## Next session starts with
-**Visual/UX pass, then more pressure engines.** The three core loops (watch → mark → trace) are done.
+**Open the Godot viewer (F5, mono build) and feel-test Phase A passes 1+2, tuning the named consts.**
+None of the by-feel viewer work has been seen running yet. Watch a run and judge: is 1× readable and
+the dramatic auto-slow the right depth/length (`BaseInterval`, `SlowdownWindow`/`SlowdownFactor` in
+`Main.cs`); do echoes now feel like punctuation (`EchoArchetypeCooldown`/`EchoSignificanceBar`/
+`EchoWindowCap`); does zoom/pan feel right and does the drama-camera lean in without yanking
+(`FollowZoom`, `ManualCamCooldownSecs` in `MapView.cs`). Adjust consts by feel, rebuild, commit.
+Then — the remaining Phase A item — **timeline scrubbing + era recap** (explicitly deferred from pass 1).
+
+### Backlog (after Phase A)
+**More pressure engines, then richer surfacing.** The three core loops (watch → mark → trace) are done.
 - Visual/UX: the map is deliberate placeholder art (three columns of dots). Consider real island
   geography, faction territory shapes, settlement clustering, and a cleaner feed/inspector skin.
 - More pressure engines: a culture system in `World.cs` (alongside religion/war/economy) for richer
