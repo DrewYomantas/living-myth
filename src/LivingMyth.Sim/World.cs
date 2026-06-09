@@ -38,6 +38,13 @@ public sealed class World
     private readonly List<Religion> _religionOrder = new();
     private int _nextRid;
 
+    /// <summary>Cursor into the chronicle: Gossip() only looks at events recorded since the last
+    /// year, never the whole history — keeps the gossip pass O(this year's events).</summary>
+    private int _lastGossipEventCount;
+    private static readonly Dictionary<int, int> NoConsequences = new();   // fresh events have none yet
+    private static readonly HashSet<string> GossipTypes = new()
+    { "murder", "scandal", "romance", "prophet", "martyr", "trade", "boom", "custom" };
+
     /// <summary>The island's regions, in id order (id == list index). Generated once in
     /// SeedWorld; control changes hands through war.</summary>
     public List<Region> Regions { get; } = new();
@@ -481,7 +488,9 @@ public sealed class World
             SetReligion(prophet, rel);
             var followers = adults.Where(p => p.Id != prophet.Id).ToList();
             Rng.Shuffle(followers);
-            foreach (var p in followers.Take(Rng.RandInt(1, 4)))
+            int taken = Rng.RandInt(1, 4);
+            if (prophet.Reputation > 0) taken += 1;   // a respected voice wins one more early follower
+            foreach (var p in followers.Take(taken))
                 SetReligion(p, rel);
             var prophetEv = Chronicle.Record(Year, "prophet",
                 $"{prophet.Name} of {Factions[fid].Name} proclaims a new faith, {rel.Name}, and is hailed as its first prophet.",
@@ -761,6 +770,122 @@ public sealed class World
             }
     }
 
+    // ---------- gossip / reputation (social ripples over real events) ----------
+
+    /// <summary>Who a rumor is about. The actor of a killing (last participant), otherwise the
+    /// first living participant by id (or the first participant if none survive). Deterministic —
+    /// no Rng.</summary>
+    private int? RumorSubject(Event e)
+    {
+        if (e.Participants.Count == 0) return null;
+        if (e.Type == "murder") return e.Participants[^1];   // the one who did the killing
+        foreach (var id in e.Participants.OrderBy(i => i))
+            if (People.TryGetValue(id, out var p) && p.Alive) return id;
+        return e.Participants[0];
+    }
+
+    /// <summary>Classify a source event into a rumor: reputation delta (±1/0), tension direction
+    /// (+1 harm, −1 ease, 0 none), and the line the chronicle remembers. Returns null for events
+    /// that don't carry socially. Pure flavor/polarity — draws no Rng.</summary>
+    private static (int rep, int tens, string text)? RumorOf(Event e, Person s, Faction fac)
+    {
+        switch (e.Type)
+        {
+            case "murder":
+                if (e.Tags.Contains("persecution"))
+                    return (-1, +1, $"Talk of {s.Name}'s cruelty against unbelievers spreads through {fac.Name}.");
+                if (e.Tags.Contains("regicide") || e.Tags.Contains("ambition"))
+                    return (-1, +1, $"Dark whispers trail {s.Name} after a leader's killing.");
+                return (-1, +1, $"Stories of the killing stain {s.Name}'s name.");
+            case "scandal":
+                return (-1, 0, $"Whispers spread that {s.Name} cannot be trusted.");
+            case "romance":
+                return e.Tags.Contains("forbidden")
+                    ? (-1, +1, $"Gossip of {s.Name}'s forbidden love runs between the peoples.")
+                    : ((int, int, string)?)null;
+            case "prophet":
+                return (+1, 0, $"Word of {s.Name}'s revelation spreads among {fac.Name}.");
+            case "martyr":
+                return (+1, 0, $"{s.Name}'s martyrdom passes into the songs of {fac.Name}.");
+            case "trade":
+                return (+1, -1, $"Word of {fac.Name}'s generous trade softens old suspicion.");
+            case "boom":
+                return (+1, 0, $"Songs of plenty lift the name of {fac.Name}.");
+            case "custom":
+                return e.Tags.Contains("diffusion")
+                    ? (+1, -1, $"Tales of {fac.Name} taking up new ways travel between the peoples.")
+                    : ((int, int, string)?)null;
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>The gossip layer: real events leave social ripples. Reads only this year's new
+    /// chronicle events (bounded cursor — no all-history scan), and for the notable few rolls a
+    /// rumor that shifts a person's reputation and, across factions, nudges tension. Every rumor
+    /// cause-links to the real event, so catch-up always walks back to the thing that happened —
+    /// gossip never invents truth. Capped at 2 rumors/year, one per source, per-person cooldown,
+    /// and rumor events are never themselves gossiped (no recursion). All Rng draws are in event-
+    /// index order, so the same seed yields the same talk.</summary>
+    private void Gossip()
+    {
+        int upto = Chronicle.Events.Count;   // snapshot: ignore the rumors this pass appends
+        int rumorsThisYear = 0;
+        for (int i = _lastGossipEventCount; i < upto && rumorsThisYear < 2; i++)
+        {
+            var e = Chronicle.Events[i];
+            if (!GossipTypes.Contains(e.Type)) continue;
+            if (RumorSubject(e) is not int subjId) continue;
+            var s = People[subjId];
+            var fac = Factions[s.FactionId];
+            if (RumorOf(e, s, fac) is not (int rep, int tens, string text) cat) continue;
+
+            if (Scoring.ImportanceFast(e, this, NoConsequences) < Params["gossip_min_importance"]) continue;
+            // Cooldown — guard the int.MinValue sentinel so the first rumor isn't lost to overflow.
+            if (s.LastRumorYear != int.MinValue && Year - s.LastRumorYear < (int)Params["gossip_cooldown_years"]) continue;
+
+            // Culture tilts the odds: a scheming people spreads slander more readily; a peaceable
+            // one spreads the talk that mends fences.
+            double chance = Params["gossip_chance_per_event"];
+            if (rep < 0 && fac.CustomOriginEvent.ContainsKey("scheming")) chance += 0.10;
+            if (tens < 0 && fac.CustomOriginEvent.ContainsKey("peaceable")) chance += 0.10;
+            if (!Rng.Chance(chance)) continue;
+
+            var rumorEv = Chronicle.Record(Year, "rumor", text,
+                participants: new() { s.Id }, causes: new() { e.Id },
+                tags: new() { "rumor", "reputation", rep < 0 ? "negative" : "positive" },
+                regionId: PrimaryRegion(fac));
+            if (s.Alive)
+                s.Reputation = Math.Clamp(s.Reputation + rep * (int)Params["gossip_reputation_step"], -5, 5);
+            s.LastRumorYear = Year;
+            rumorsThisYear++;
+
+            // Cross-faction fallout: the factions named in the source event grow more (or less)
+            // suspicious of each other. The rumor id lands in their grievance memory, so a war it
+            // helps cause traces back through the whisper to the real deed.
+            var facs = new List<string>();
+            foreach (var id in e.Participants)
+                if (People.TryGetValue(id, out var p) && !facs.Contains(p.FactionId)) facs.Add(p.FactionId);
+            facs.Sort(StringComparer.Ordinal);
+            double step = Params["gossip_tension_step"];
+            if (tens > 0)
+            {
+                if (facs.Count >= 2) AddTension(facs[0], facs[1], step, rumorEv);
+                else if (facs.Count == 1 && Rng.Chance(Params["gossip_cross_faction_chance"]))
+                {
+                    string? other = FactionsSorted().FirstOrDefault(f => f != facs[0] && Factions[f].Members.Count > 0);
+                    if (other is not null) AddTension(facs[0], other, step, rumorEv);
+                }
+            }
+            else if (tens < 0 && facs.Count >= 2)
+            {
+                var key = PairKey(facs[0], facs[1]);
+                Tension[key] = Math.Max(0.0, Tension.GetValueOrDefault(key) - step);
+            }
+        }
+        _lastGossipEventCount = Chronicle.Events.Count;
+    }
+
     // ---------- the yearly tick ----------
 
     public void Tick()
@@ -775,6 +900,7 @@ public sealed class World
         Births();
         DoReligion();
         Culture();
+        Gossip();
         MaybeDeclareWars();
         DecayTension();
         ReleaseExtinctLands();
@@ -938,6 +1064,8 @@ public sealed class World
             var (ev, succ) = Murder(killer, leader, text, null, new() { "ambition", "regicide" });
             bool tookThrone = succ is not null && succ.Value.heir.Id == killer.Id;
             double discovery = Params["murder_discovery_chance"] * (tookThrone ? 0.4 : 1.0);
+            // A name already blackened by gossip is watched more closely; a trusted one, less so.
+            discovery *= Math.Clamp(1.0 + (-killer.Reputation * 0.08), 0.7, 1.5);
             if (killer.Alive && Rng.Chance(discovery))
             {
                 if (Rng.Chance(0.5) && killer.Alive)

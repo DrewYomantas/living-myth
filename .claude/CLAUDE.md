@@ -18,8 +18,10 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   Follow/Yours channel). References the Sim; open the folder with the Godot mono editor and press F5.
   M0–M5.1 + longevity done (spatial island/regions/territory + extinction land-release in M5). M7 added
   the culture pressure engine (per-faction value axes → named customs → clash/diffusion + The Vanished
-  Way echo). The visual/UX pass is underway — Phase A passes 1+2 done; next: the gossip layer (rumor /
-  reputation riding on existing events), then surface culture in the viewer.
+  Way echo); M8 added the gossip/reputation layer (`Gossip()`: rumor events off notable deeds shift
+  Person.Reputation + nudge tension; couples to crime discovery, prophet credibility, and war via
+  grievance memory; The Blackened Name + The War of Whispers echoes). Next: surface culture + gossip in
+  the viewer (reputation on the person inspector, rumor styling in the feed), then timeline scrubbing.
 
 ## Commands
 ```bash
@@ -50,14 +52,21 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
   population suppressor (famine adds deaths, booms only help births), so raising the multiplier
   drifts the low seeds toward extinction.
 - **The verify baseline moves whenever sim RNG consumption changes.** Current
-  `verify` counts (120 yr, cap 300): 814/594/525/652 (seeds 1/18/42/7, M7 culture-engine baseline —
-  added `Culture()` to the tick: value-axis drift + custom adopt/fade + clash/diffusion RNG draws).
-  Prior Phase A pass 2 baseline was 934/704/292/621. The determinism gate is self-consistency (same
-  seed → byte-identical run), so it stays green regardless of feature work; these numbers are just the
-  recorded expectation.
+  `verify` counts (120 yr, cap 300): 884/699/567/706 (seeds 1/18/42/7, M8 gossip-layer baseline —
+  added `Gossip()` to the tick: a bounded per-year chronicle cursor that rolls rumor events off
+  notable deeds, shifting reputation and nudging cross-faction tension). Prior M7 culture baseline
+  was 814/594/525/652. The determinism gate is self-consistency (same seed → byte-identical run), so
+  it stays green regardless of feature work; these numbers are just the recorded expectation.
+- **M8 gossip tuning note.** `Gossip()` watches `[_lastGossipEventCount, count)` each year (no all-
+  history scan), gates on importance (≥`gossip_min_importance` 42, which is why low-key events like
+  plain scandals never reach the mill), and never gossips a `rumor` (no recursion). `The Blackened
+  Name` echo fires at **≥2** negative rumors on one person, not 3: the sim spreads crime across many
+  hands (each murder a different killer; persecution picks a random enforcer), so even at 5000 yrs no
+  single name draws a third rumor — max-per-person is 2. Raising it back to 3 needs a sim that
+  concentrates infamy on individuals, which is out of scope for the gossip layer.
 - **Identity-preservation mechanism (not the numbers) is the invariant:** `carrying_capacity` = 0
   cleanly disables the logistic birth damping (economy still runs). Recorded cap=0 baseline counts
-  are now 1814/646/811/950 (seeds 1/18/42/7 @ 120 yrs); re-baseline these when sim behavior changes.
+  are now 1145/1097/535/893 (seeds 1/18/42/7 @ 120 yrs); re-baseline these when sim behavior changes.
 - **The viewer is presentation-only over the sim.** Pacing (`BaseInterval`, `SpeedLadder`, the
   dramatic auto-slow) only changes the *wall-clock rate* at which existing ticks are shown — `Tick()`
   must still be called the same number of times in the same order. So viewer-only work can never move

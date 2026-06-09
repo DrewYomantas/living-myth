@@ -282,6 +282,51 @@ public static class Echoes
         return echoes;
     }
 
+    /// <summary>A person dogged by negative rumor — two or more dark whispers cause-linked to them,
+    /// years apart (the per-person gossip cooldown guarantees the spread). The chronicle remembers a
+    /// name that curdled. Threshold is 2, not 3: the sim spreads crime across many hands rather than
+    /// concentrating it, so even over 5000 years no single name draws a third rumor — see the M8 note
+    /// in CLAUDE.md.</summary>
+    public static List<Echo> DetectBlackenedName(World world)
+    {
+        var byPerson = new Dictionary<int, List<Event>>();
+        foreach (var r in world.Chronicle.Events.Where(e => e.Type == "rumor" && e.Tags.Contains("negative")))
+            foreach (var pid in r.Participants)
+            {
+                if (!byPerson.TryGetValue(pid, out var list)) { list = new(); byPerson[pid] = list; }
+                list.Add(r);
+            }
+
+        var echoes = new List<Echo>();
+        foreach (var pid in byPerson.Keys.OrderBy(k => k))
+        {
+            var rumors = byPerson[pid].OrderBy(e => e.Year).ToList();
+            if (rumors.Count < 2) continue;
+            int span = rumors[^1].Year - rumors[0].Year;
+            string name = world.People.TryGetValue(pid, out var p) ? p.Name : "A figure";
+            string label = $"{name}'s name darkened under rumor after rumor over {span} years.";
+            echoes.Add(new Echo("The Blackened Name", label, rumors.Select(e => e.Id).ToList(),
+                (rumors[0].Year, rumors[^1].Year)));
+        }
+        return echoes;
+    }
+
+    /// <summary>A war whose causal trace passes through a rumor — whispers, not just grievance,
+    /// helped carry two peoples to blows.</summary>
+    public static List<Echo> DetectRumorWar(World world)
+    {
+        var echoes = new List<Echo>();
+        foreach (var war in world.Chronicle.Events.Where(e => e.Type == "war"))
+        {
+            var chain = world.Chronicle.Trace(war.Id);
+            if (!chain.Any(e => e.Type == "rumor")) continue;
+            var ids = chain.Select(e => e.Id).ToList();
+            var span = (chain.Count > 0 ? chain[0].Year : war.Year, war.Year);
+            echoes.Add(new Echo("The War of Whispers", "Whispers helped carry the island to war: " + war.Text, ids, span));
+        }
+        return echoes;
+    }
+
     public static List<Echo> DetectAll(World world)
     {
         var echoes = new List<Echo>();
@@ -296,6 +341,8 @@ public static class Echoes
         echoes.AddRange(DetectLongFamine(world));
         echoes.AddRange(DetectGoldenAge(world));
         echoes.AddRange(DetectVanishedWay(world));
+        echoes.AddRange(DetectBlackenedName(world));
+        echoes.AddRange(DetectRumorWar(world));
 
         var seen = new HashSet<(string, string)>();
         var unique = new List<Echo>();

@@ -30,6 +30,12 @@ public sealed class Person
     public int? ReligionId { get; set; }
     public bool IsProphet { get; set; }
 
+    // gossip / reputation (M8): social ripples from real events. Reputation is public standing
+    // (-5 infamous … 0 … +5 admired); LastRumorYear is a per-person cooldown so one name can't
+    // spam the rumor mill. Both are bounded, deterministic, and ride on the chronicle.
+    public int Reputation { get; set; }
+    public int LastRumorYear { get; set; } = int.MinValue;
+
     public Person(int id, string name, string factionId, int birthYear, string sex)
     {
         Id = id;

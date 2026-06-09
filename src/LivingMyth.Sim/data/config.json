@@ -38,6 +38,12 @@
     "culture_clash_chance_per_year": 0.06,
     "culture_clash_tension": 2.5,
     "culture_diffusion_chance_per_year": 0.04,
-    "culture_diffusion_tension_reduction": 1.0
+    "culture_diffusion_tension_reduction": 1.0,
+    "gossip_chance_per_event": 0.22,
+    "gossip_min_importance": 42,
+    "gossip_reputation_step": 1,
+    "gossip_tension_step": 0.8,
+    "gossip_cooldown_years": 8,
+    "gossip_cross_faction_chance": 0.35
   }
 }

@@ -12,7 +12,14 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
 - [x] M3 — marking + the Yours channel: Follow a bloodline/people, YOURS rows surface in the feed.
 - [x] M4 — economy pressure engine: per-faction prosperity → famine/boom/trade events, famine death
       pressure (mirrors curse), prosperity-linked births; "The Long Famine" + "The Golden Age" echoes.
-- [ ] Later — visual/UX pass; culture pressure engine + echo packs; gossip distortion layer. ← NEXT
+- [x] M7 — culture pressure engine: per-faction value axes (valor/piety/cunning/harmony) → named
+      customs (adopt/fade hysteresis + self-reinforcement) → clash (tension) / diffusion (eases
+      tension); "The Vanished Way" echo. verify 814/594/525/652.
+- [x] M8 — gossip/reputation layer: `Gossip()` reads a bounded per-year chronicle cursor and rolls
+      rumor events off notable deeds — shifting `Person.Reputation` (-5..5) and nudging cross-faction
+      tension (rumor ids enter grievance memory). Couples to crime discovery, prophet credibility, and
+      war. "The Blackened Name" + "The War of Whispers" echoes. verify 884/699/567/706.
+- [ ] Later — visual/UX pass (surface culture + gossip in the viewer); echo packs; timeline scrubbing. ← NEXT
 
 ## Session log
 - [2026-06-07] Session: built M0→M2 + longevity pass (carrying capacity + perf refactor, proven
@@ -41,6 +48,17 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
   MapView camera: cursor-anchored wheel/button zoom + drag pan (clamped), hit-test correct via shared
   P() transform, drama-follow eases toward pulses unless player took manual control (`7adfd67`).
   Both commits pushed. Determinism green. NOT yet feel-tested in the Godot viewer.
+
+- [2026-06-09] Session: M7 culture engine, then M8 gossip/reputation layer. M8 — `Gossip()` runs
+  after `Culture()` in the tick, reads only events recorded since last year (`_lastGossipEventCount`
+  cursor, no all-history scan), and for the notable few (importance ≥42, chance-gated, per-person 8yr
+  cooldown, ≤2/yr) records a `rumor` event cause-linked to the real deed. Reputation shifts ±1
+  (clamped -5..5); cross-faction rumors call `AddTension` so the rumor id lands in grievance memory
+  and a war it helps cause traces back through the whisper. Couplings: blackened names are caught more
+  easily (murder discovery scales with -reputation), respected prophets win one extra early follower.
+  Caught a sentinel-overflow bug (`int.MinValue` LastRumorYear made `Year - LastRumorYear` overflow
+  negative → cooldown always tripped → zero rumors; fixed with explicit sentinel guard). Re-baselined
+  verify 884/699/567/706, cap=0 1145/1097/535/893. Determinism green; Godot builds.
 
 ## Next session starts with
 **Open the Godot viewer (F5, mono build) and feel-test Phase A passes 1+2, tuning the named consts.**
