@@ -2,8 +2,8 @@
 
 A no-generative-AI, Steam-first 2D god-sim. The C# port of a proven headless Python
 prototype: a deterministic world that grows traceable emergent history, surfaces the
-important events (importance score → Yours/Loud/Rising feed), and detects 8 Myth Echoes
-after the fact. Design docs + Python reference: `~/Downloads/ClaudeCodeLivingMyth.zip`.
+important events (importance score → Yours/Loud/Rising feed), and detects a growing set of
+Myth Echoes (13 so far) after the fact. Design docs + Python reference: `~/Downloads/ClaudeCodeLivingMyth.zip`.
 
 ## The one architecture rule (non-negotiable)
 `src/LivingMyth.Sim/` is a standalone C# class library with **ZERO Godot dependency**.
@@ -35,6 +35,10 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 ```
 
 ## Gotchas
+- **The yearly tick is a fixed engine order** (`World.Tick`): Economy → ProcessWars → Deaths →
+  Crime → ForbiddenRomance → Marriages → Births → DoReligion → Culture → Gossip → MaybeDeclareWars
+  → DecayTension → ReleaseExtinctLands. New pressure engines slot into this order; where they sit
+  changes RNG consumption (and the verify baseline), so placement is a deliberate choice.
 - **Determinism is sacred.** All randomness routes through `Rng`. C# dicts/sets are not
   order-stable like Python's — every iteration that feeds RNG or results MUST be explicitly
   ordered (people/religions by id, factions in config order, member sets sorted). `verify`
