@@ -187,7 +187,7 @@ public sealed class World
             Factions[f.Id] = new Faction(f.Id, f.Name, f.Culture, f.Homeland);
             _factionOrder.Add(f.Id);
         }
-        Chronicle.Record(Year, "founding",
+        var founding = Chronicle.Record(Year, "founding",
             $"The world begins. Three peoples share the island of {Island}.",
             tags: new() { "founding" });
 
@@ -205,7 +205,7 @@ public sealed class World
                 participants: new() { leader.Id }, tags: new() { "leadership" });
         }
         GenerateMap();
-        SeedReligions();
+        SeedReligions(founding.Id);
     }
 
     // ---------- the island map ----------
@@ -393,12 +393,13 @@ public sealed class World
         return $"{Rng.Pick(frags["prefix"])} {Rng.Pick(frags["concept"])}";
     }
 
-    private void SeedReligions()
+    private void SeedReligions(int foundingEventId)
     {
         foreach (var f in Config.Factions)
         {
             var data = Names.Religions[f.Culture];
             var rel = NewReligion(data.Name, data.Deity);
+            rel.OriginEventId = foundingEventId;   // primordial faiths trace back to the world's founding
             foreach (var p in FactionMembers(f.Id))
                 SetReligion(p, rel);
         }
@@ -428,9 +429,10 @@ public sealed class World
             Rng.Shuffle(followers);
             foreach (var p in followers.Take(Rng.RandInt(1, 4)))
                 SetReligion(p, rel);
-            Chronicle.Record(Year, "prophet",
+            var prophetEv = Chronicle.Record(Year, "prophet",
                 $"{prophet.Name} of {Factions[fid].Name} proclaims a new faith, {rel.Name}, and is hailed as its first prophet.",
                 participants: new() { prophet.Id }, tags: new() { "religion", "prophet" });
+            rel.OriginEventId = prophetEv.Id;
         }
     }
 
@@ -439,14 +441,15 @@ public sealed class World
         foreach (var rel in _religionOrder.ToList())
         {
             var members = rel.Members.OrderBy(id => id).Select(id => People[id]).Where(p => p.Alive).ToList();
-            if (members.Count < 8 || !Rng.Chance(Params["schism_chance_per_year"])) continue;
+            if (members.Count < (int)Params["schism_min_members"] || !Rng.Chance(Params["schism_chance_per_year"])) continue;
             var heretic = NewReligion(FaithName(), rel.Deity, parent: rel);
             Rng.Shuffle(members);
             var breakaway = members.Take(Math.Max(2, members.Count / 3)).ToList();
             foreach (var p in breakaway) SetReligion(p, heretic);
-            Chronicle.Record(Year, "schism",
+            var schismEv = Chronicle.Record(Year, "schism",
                 $"{rel.Name} is torn by schism: {breakaway.Count} break away to found {heretic.Name} over matters of doctrine.",
                 tags: new() { "religion", "schism", "heresy" });
+            heretic.OriginEventId = schismEv.Id;
         }
     }
 
@@ -479,7 +482,10 @@ public sealed class World
             var vrel = victim.ReligionId is int vr ? Religions.GetValueOrDefault(vr) : null;
             string faith = vrel?.Name ?? "a forbidden faith";
             string text = $"{killer.Name} of {Factions[fid].Name} has {victim.Name} put to death for the heresy of {faith}.";
-            Murder(killer, victim, text, null, new() { "religion", "heresy", "persecution" });
+            // Trace the killing back to the founding of the faith it punished, so the catch-up
+            // panel walks to the heresy's origin instead of "stands alone". No RNG touched.
+            var causes = vrel?.OriginEventId is int oid ? new List<int> { oid } : null;
+            Murder(killer, victim, text, causes, new() { "religion", "heresy", "persecution" });
         }
     }
 

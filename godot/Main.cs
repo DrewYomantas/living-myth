@@ -62,6 +62,14 @@ public partial class Main : Node
     private const int EchoCadence = 8;                      // sim-years between echo scans (slow path, not per-tick)
     private int _lastEchoYear;
     private readonly System.Collections.Generic.Dictionary<string, int> _echoSeen = new();  // archetype -> latest carded start year
+    // Echoes are punctuation, not narration. Three gates keep them rare: an archetype can't card
+    // again for a cooldown, an echo must clear a significance bar, and only a few may card per window.
+    private const int EchoArchetypeCooldown = 60;          // sim-years before the same archetype can card again
+    private const int EchoSignificanceBar = 80;            // anchor-event importance an echo must clear
+    private const int EchoWindowYears = 40;                // rolling window for the global cap
+    private const int EchoWindowCap = 2;                   // at most this many echo cards per window
+    private readonly System.Collections.Generic.Dictionary<string, int> _echoCardedAt = new();  // archetype -> sim-year last carded
+    private readonly List<int> _recentEchoYears = new();   // sim-years of recently carded echoes (window-pruned)
 
     private sealed class FeedVisRow { public Node Node = null!; public bool Yours; public int Weight; }
 
@@ -208,6 +216,21 @@ public partial class Main : Node
         var drama = new CheckButton { Text = "Drama", ButtonPressed = true };
         drama.Toggled += on => _dramaticPacing = on;
         hb.AddChild(drama);
+
+        hb.AddChild(new VSeparator());
+
+        var zoomOut = new Button { Text = "－" };
+        zoomOut.Pressed += () => _map.ZoomBy(1f / 1.25f);
+        hb.AddChild(zoomOut);
+        var zoomIn = new Button { Text = "＋" };
+        zoomIn.Pressed += () => _map.ZoomBy(1.25f);
+        hb.AddChild(zoomIn);
+        var camReset = new Button { Text = "⤢" };
+        camReset.Pressed += () => _map.ResetCamera();
+        hb.AddChild(camReset);
+        var camFollow = new CheckButton { Text = "Cam", ButtonPressed = true };
+        camFollow.Toggled += on => _map.CameraFollow = on;
+        hb.AddChild(camFollow);
 
         hb.AddChild(new VSeparator());
 
@@ -450,14 +473,26 @@ public partial class Main : Node
         _lastEchoYear = _world.Year;
 
         var echoes = Echoes.DetectAll(_world);   // already de-duped + sorted by start year
+        _recentEchoYears.RemoveAll(y => _world.Year - y >= EchoWindowYears);
         System.Collections.Generic.Dictionary<int, List<int>>? reverse = null;
         foreach (var echo in echoes)
         {
+            if (_recentEchoYears.Count >= EchoWindowCap) break;   // window full — no more cards this scan
+
             int prev = _echoSeen.GetValueOrDefault(echo.Archetype, int.MinValue);
-            if (echo.YearSpan.First <= prev) continue;   // already carded this (or an equal/older) instance
-            _echoSeen[echo.Archetype] = echo.YearSpan.First;
+            if (echo.YearSpan.First <= prev) continue;            // already carded this (or an older) instance
+            if (_world.Year - _echoCardedAt.GetValueOrDefault(echo.Archetype, int.MinValue) < EchoArchetypeCooldown)
+                continue;                                         // this archetype carded too recently
+
             reverse ??= Scoring.BuildReverse(_world);
-            AddEchoCard(echo, AnchorEvent(echo, reverse));
+            int anchor = AnchorEvent(echo, reverse);
+            if (anchor < 0 || Scoring.Importance(_world.Chronicle.Get(anchor), _world, reverse) < EchoSignificanceBar)
+                continue;                                         // not weighty enough to be punctuation
+
+            _echoSeen[echo.Archetype] = echo.YearSpan.First;
+            _echoCardedAt[echo.Archetype] = _world.Year;
+            _recentEchoYears.Add(_world.Year);
+            AddEchoCard(echo, anchor);
         }
     }
 

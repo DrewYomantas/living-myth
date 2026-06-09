@@ -50,6 +50,7 @@ public sealed class Religion
     public int? FounderId { get; }
     public int FoundedYear { get; }
     public int? ParentId { get; }              // the faith this one split from, if any
+    public int? OriginEventId { get; set; }    // chronicle event that founded this faith — set at creation
     public HashSet<int> Members { get; } = new();
 
     public Religion(int id, string name, string deity, int? founderId = null,

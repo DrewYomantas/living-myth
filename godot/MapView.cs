@@ -27,7 +27,27 @@ public partial class MapView : Control
     private readonly Dictionary<int, float> _regionPulses = new();
     private const float PulseDuration = 1.2f;
 
+    // Camera: zoom (1 = fit-to-view) + pan (screen-space offset), folded into the draw transform
+    // so hit-testing — which records post-transform positions during _Draw — stays correct for free.
+    private float _zoom = 1f;
+    private Vector2 _pan = Vector2.Zero;
+    private bool _leftDown;
+    private bool _dragging;
+    private Vector2 _dragStart;
+    private const float MinZoom = 1f, MaxZoom = 5f;
+    private const float DragThreshold = 4f;
+
+    // Drama camera: gently ease toward a pulsing region, but never fight the player. Any manual
+    // pan/zoom sets a cooldown that suppresses the auto-ease so we don't yank the view away.
+    public bool CameraFollow = true;
+    private int _easeTargetRegion = -1;
+    private float _manualCamCooldown;
+    private const float FollowZoom = 1.9f;
+    private const float ManualCamCooldownSecs = 4f;
+
     private const float RegionRadiusNorm = 0.072f;
+    private const float Pad = 18f;
+    private float MapSide() => Mathf.Min(Size.X, Size.Y) - Pad * 2f;
 
     private static readonly Color Sea = new("0e2230");
     private static readonly Color Land = new("23302a");
@@ -41,19 +61,68 @@ public partial class MapView : Control
 
     public override void _Ready() => MouseFilter = MouseFilterEnum.Stop;
 
-    public void PulseRegion(int regionId) => _regionPulses[regionId] = PulseDuration;
+    public void PulseRegion(int regionId)
+    {
+        _regionPulses[regionId] = PulseDuration;
+        if (CameraFollow && _manualCamCooldown <= 0f) _easeTargetRegion = regionId;
+    }
 
     public override void _Process(double delta)
     {
-        if (_regionPulses.Count == 0) return;
+        float dt = (float)delta;
+        if (_manualCamCooldown > 0f) _manualCamCooldown -= dt;
+
         foreach (var id in _regionPulses.Keys.ToList())
         {
-            float v = _regionPulses[id] - (float)delta;
+            float v = _regionPulses[id] - dt;
             if (v <= 0f) _regionPulses.Remove(id);
             else _regionPulses[id] = v;
         }
+
+        // Drama camera: lean toward the pulsing region while its pulse lives, unless the player
+        // just took manual control. Eases zoom + pan together; clamped to map bounds.
+        if (CameraFollow && _manualCamCooldown <= 0f && _easeTargetRegion >= 0 && World is not null
+            && _easeTargetRegion < World.Regions.Count && _regionPulses.ContainsKey(_easeTargetRegion))
+        {
+            float side = MapSide();
+            var center = Size / 2f;
+            var origin = new Vector2((Size.X - side) / 2f, (Size.Y - side) / 2f);
+            _zoom = Mathf.Lerp(_zoom, Mathf.Max(_zoom, FollowZoom), dt * 2.5f);
+            var r = World.Regions[_easeTargetRegion];
+            var b = origin + new Vector2(r.X, r.Y) * side;
+            _pan = _pan.Lerp(-(b - center) * _zoom, dt * 2.5f);
+            ClampPan();
+        }
+        else _easeTargetRegion = -1;
+
         // Main redraws the map every frame; no QueueRedraw needed here.
     }
+
+    // ----- camera control (called by buttons in Main and by wheel/drag below) -----
+
+    public void ZoomBy(float factor) => ZoomAt(_zoom * factor, Size / 2f);
+
+    public void ResetCamera() { _zoom = 1f; _pan = Vector2.Zero; MarkManual(); QueueRedraw(); }
+
+    private void ZoomAt(float newZoom, Vector2 anchor)
+    {
+        newZoom = Mathf.Clamp(newZoom, MinZoom, MaxZoom);
+        var center = Size / 2f;
+        var b = (anchor - center - _pan) / _zoom + center;   // world-base point under the anchor
+        _zoom = newZoom;
+        _pan = anchor - center - (b - center) * _zoom;        // keep that point under the anchor
+        ClampPan();
+        MarkManual();
+        QueueRedraw();
+    }
+
+    private void ClampPan()
+    {
+        float over = Mathf.Max(0f, MapSide() * (_zoom - 1f) / 2f);   // 0 at fit zoom → forces center
+        _pan = new Vector2(Mathf.Clamp(_pan.X, -over, over), Mathf.Clamp(_pan.Y, -over, over));
+    }
+
+    private void MarkManual() { _manualCamCooldown = ManualCamCooldownSecs; _easeTargetRegion = -1; }
 
     private static float Frac(float v) => v - Mathf.Floor(v);
 
@@ -68,12 +137,14 @@ public partial class MapView : Control
         var font = GetThemeDefaultFont();
         if (World is null || font is null) return;
 
-        // Normalized [0,1] -> screen, fitting a centered square so the island never distorts.
-        const float pad = 18f;
-        float side = Mathf.Min(Size.X, Size.Y) - pad * 2f;
+        // Normalized [0,1] -> screen: fit a centered square so the island never distorts, then
+        // apply the camera (zoom about the viewport centre, then pan). Everything drawn through P
+        // — and every hit-test position recorded below — shares this transform, so clicks map back.
+        float side = MapSide();
         var origin = new Vector2((Size.X - side) / 2f, (Size.Y - side) / 2f);
-        Vector2 P(float nx, float ny) => origin + new Vector2(nx, ny) * side;
-        float regionR = RegionRadiusNorm * side;
+        var camCenter = Size / 2f;
+        Vector2 P(float nx, float ny) => (origin + new Vector2(nx, ny) * side - camCenter) * _zoom + camCenter + _pan;
+        float regionR = RegionRadiusNorm * side * _zoom;
 
         BuildIsland();
         if (_islandNorm is not null)
@@ -149,7 +220,7 @@ public partial class MapView : Control
             if (off.Length() > regionR * 0.72f) off = off.Normalized() * regionR * 0.72f;
             var pos = center + off;
 
-            float r = p.IsLeader ? 6.5f : 3.8f;
+            float r = (p.IsLeader ? 6.5f : 3.8f) * _zoom;
             var dot = p.Cursed ? new Color("d24a64") : (p.Sex == "f" ? col.Lightened(0.28f) : col);
             DrawCircle(pos, r, dot);
             if (p.IsLeader) DrawArc(pos, r + 2.5f, 0, Mathf.Tau, 20, new Color("ffd54a"), 1.6f);
@@ -198,14 +269,33 @@ public partial class MapView : Control
     {
         if (@event is InputEventMouseMotion mm)
         {
+            if (_leftDown)
+            {
+                if (!_dragging && mm.Position.DistanceTo(_dragStart) > DragThreshold) _dragging = true;
+                if (_dragging) { _pan += mm.Relative; ClampPan(); MarkManual(); QueueRedraw(); }
+                return;
+            }
             int hover = NearestRegion(mm.Position);
             if (hover != _hoverRegion) { _hoverRegion = hover; QueueRedraw(); }
             return;
         }
-        if (@event is not InputEventMouseButton mb || !mb.Pressed || mb.ButtonIndex != MouseButton.Left)
-            return;
-        var pos = mb.Position;
+        if (@event is not InputEventMouseButton mb) return;
 
+        // Wheel zooms about the cursor so the point under the mouse stays put.
+        if (mb.Pressed && mb.ButtonIndex == MouseButton.WheelUp) { ZoomAt(_zoom * 1.15f, mb.Position); return; }
+        if (mb.Pressed && mb.ButtonIndex == MouseButton.WheelDown) { ZoomAt(_zoom / 1.15f, mb.Position); return; }
+        if (mb.ButtonIndex != MouseButton.Left) return;
+
+        if (mb.Pressed) { _leftDown = true; _dragging = false; _dragStart = mb.Position; return; }
+
+        // Left released: a drag was a pan; a click (no drag) selects.
+        _leftDown = false;
+        if (_dragging) { _dragging = false; return; }
+        Select(mb.Position);
+    }
+
+    private void Select(Vector2 pos)
+    {
         int bestId = -1;
         float bestD = float.MaxValue;
         foreach (var d in _dots)
