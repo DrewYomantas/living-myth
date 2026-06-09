@@ -15,7 +15,8 @@ using LivingMyth.Sim;
 public partial class Main : Node
 {
     private const int Seed = 7;
-    private const float BaseInterval = 0.5f;   // seconds per year at 1x
+    private const float BaseInterval = 1.2f;   // real seconds per sim-year at 1×
+    private static readonly float[] SpeedLadder = { 0.25f, 0.5f, 1f, 2f, 4f, 8f, 16f };
     private const int FeedWidth = 360;
     private const int BottomH = 100;
 
@@ -48,6 +49,13 @@ public partial class Main : Node
     private bool _running = true;
     private float _speed = 1f;
     private float _accum;
+
+    // Dramatic pacing: a notable tick briefly slows presentation to a crawl, then eases back.
+    private const int NotableBar = 100;          // imp >= this = notable (well above default chattiness 60)
+    private const float SlowdownWindow = 1.6f;   // real seconds a dramatic beat lasts
+    private const float SlowdownFactor = 0.15f;  // effective speed multiplier at the trough (crawl)
+    private bool _dramaticPacing = true;         // toggle, default on
+    private float _slowdownRemaining;            // real seconds left in the current beat
     private int _lastEventCount;
     private readonly List<FeedVisRow> _feedVis = new();     // (node, yours, weight) per visible row, newest first
     private readonly System.Collections.Generic.Dictionary<int, int> _consCount = new();
@@ -77,14 +85,33 @@ public partial class Main : Node
     {
         if (_running)
         {
+            if (_slowdownRemaining > 0f) _slowdownRemaining -= (float)delta;
+
+            // During a dramatic beat, ease from a crawl back up to the user's chosen speed across
+            // the window — deepest right after the notable tick, smoothly recovering. Real-time
+            // driven, so frame-rate independent. Never engages while paused (we're inside _running).
+            float effSpeed = _speed;
+            if (_dramaticPacing && _slowdownRemaining > 0f)
+            {
+                float t = Mathf.Clamp(_slowdownRemaining / SlowdownWindow, 0f, 1f);
+                effSpeed = _speed * Mathf.Lerp(1f, SlowdownFactor, t * t);
+            }
+
             _accum += (float)delta;
-            float interval = BaseInterval / _speed;
+            float interval = BaseInterval / effSpeed;
             int budget = 6;   // cap ticks per frame so we never spiral trying to catch up
             while (_accum >= interval && budget-- > 0)
             {
                 _accum -= interval;
                 _world.Tick();
-                StreamNewHeadlines();
+                bool notable = StreamNewHeadlines();
+                if (notable && _dramaticPacing)
+                {
+                    // Re-arm to the full window (rather than stacking) so a burst holds one
+                    // slowdown instead of stuttering; break so the beat breathes this frame.
+                    _slowdownRemaining = SlowdownWindow;
+                    break;
+                }
             }
             if (_accum > interval * 6) _accum = 0f;   // drop any backlog
             MaybeDetectEchoes();
@@ -169,14 +196,18 @@ public partial class Main : Node
         _playBtn.Pressed += TogglePlay;
         hb.AddChild(_playBtn);
 
-        foreach (var s in new[] { 1f, 2f, 4f, 8f })
+        foreach (var s in SpeedLadder)
         {
-            var b = new Button { Text = $"{s:0}×" };
+            var b = new Button { Text = $"{s:0.##}×" };
             b.Pressed += () => SetSpeed(s);
             hb.AddChild(b);
         }
         _speedLabel = new Label();
         hb.AddChild(_speedLabel);
+
+        var drama = new CheckButton { Text = "Drama", ButtonPressed = true };
+        drama.Toggled += on => _dramaticPacing = on;
+        hb.AddChild(drama);
 
         hb.AddChild(new VSeparator());
 
@@ -295,11 +326,14 @@ public partial class Main : Node
 
     // -------------------------------------------------------------- live feed
 
-    private void StreamNewHeadlines()
+    // Returns true if any *notable* event (high importance, or yours) was surfaced this call —
+    // the trigger for a dramatic-pacing beat.
+    private bool StreamNewHeadlines()
     {
         var events = _world.Chronicle.Events;
-        if (_lastEventCount >= events.Count) return;
+        if (_lastEventCount >= events.Count) return false;
         int threshold = (int)_chatSlider.Value;
+        bool notableSeen = false;
 
         // Maintain consequence counts incrementally so we never rebuild a reverse index over
         // the whole (ever-growing) chronicle. Update first, then score the new slice.
@@ -318,9 +352,28 @@ public partial class Main : Node
             bool yours = IsYours(e);
             int imp = Scoring.ImportanceFast(e, _world, _consCount);
             if (yours) imp += YoursBoost;
-            if (imp >= threshold) AddFeedRow(e, imp, yours);
+            if (imp < threshold) continue;
+
+            var row = AddFeedRow(e, imp, yours);
+            // Yours always gets the spotlight; otherwise a high importance bar (well above
+            // chattiness) catches divine/war/founding and ignores routine births/deaths.
+            if (row is not null && (yours || imp >= NotableBar))
+            {
+                notableSeen = true;
+                PulseFeedRow(row);
+                if (e.RegionId is int rid) _map.PulseRegion(rid);
+            }
         }
         _lastEventCount = events.Count;
+        return notableSeen;
+    }
+
+    private static void PulseFeedRow(RichTextLabel row)
+    {
+        row.Modulate = new Color(1.7f, 1.55f, 0.7f);   // warm flash, fades back to white
+        row.CreateTween()
+           .TweenProperty(row, "modulate", Colors.White, 0.9f)
+           .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.Out);
     }
 
     // Does this event touch a marked bloodline or a marked people? Inline + O(participants),
@@ -336,7 +389,7 @@ public partial class Main : Node
         return false;
     }
 
-    private void AddFeedRow(Event e, int imp, bool yours)
+    private RichTextLabel? AddFeedRow(Event e, int imp, bool yours)
     {
         // YOURS cap: a +70-boosted bloodline can otherwise flood the window. Non-YOURS rows
         // always get in (they already cleared the threshold). A YOURS row past the cap displaces
@@ -355,7 +408,7 @@ public partial class Main : Node
             }
             if (visibleYours >= yoursCap)
             {
-                if (weakest is null || imp <= weakest.Weight) return;   // new row is the weakest YOURS
+                if (weakest is null || imp <= weakest.Weight) return null;   // new row is the weakest YOURS
                 weakest.Node.QueueFree();
                 _feedVis.Remove(weakest);
             }
@@ -383,6 +436,7 @@ public partial class Main : Node
             oldest.Node.QueueFree();
             _feedVis.RemoveAt(_feedVis.Count - 1);
         }
+        return lbl;
     }
 
     // ------------------------------------------------------------- myth echoes
@@ -615,7 +669,7 @@ public partial class Main : Node
     {
         _yearLabel.Text = $"Year {_world.Year}     {_world.LivingCount} living     {_world.Chronicle.Events.Count} events";
         _playBtn.Text = _running ? "⏸ Pause" : "▶ Play";
-        _speedLabel.Text = $"{_speed:0}×";
+        _speedLabel.Text = $"{_speed:0.##}×";
         _chatLabel.Text = $"chattiness ≥ {(int)_chatSlider.Value}";
     }
 }

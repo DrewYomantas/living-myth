@@ -22,6 +22,11 @@ public partial class MapView : Control
     private List<Vector2>? _islandNorm;     // island outline in normalized [0,1] space, built once
     private int _hoverRegion = -1;
 
+    // Transient gold rings on regions where a notable event just landed — pure rendering, aged
+    // off real time. region id -> seconds remaining.
+    private readonly Dictionary<int, float> _regionPulses = new();
+    private const float PulseDuration = 1.2f;
+
     private const float RegionRadiusNorm = 0.072f;
 
     private static readonly Color Sea = new("0e2230");
@@ -35,6 +40,20 @@ public partial class MapView : Control
     };
 
     public override void _Ready() => MouseFilter = MouseFilterEnum.Stop;
+
+    public void PulseRegion(int regionId) => _regionPulses[regionId] = PulseDuration;
+
+    public override void _Process(double delta)
+    {
+        if (_regionPulses.Count == 0) return;
+        foreach (var id in _regionPulses.Keys.ToList())
+        {
+            float v = _regionPulses[id] - (float)delta;
+            if (v <= 0f) _regionPulses.Remove(id);
+            else _regionPulses[id] = v;
+        }
+        // Main redraws the map every frame; no QueueRedraw needed here.
+    }
 
     private static float Frac(float v) => v - Mathf.Floor(v);
 
@@ -78,6 +97,12 @@ public partial class MapView : Control
             var col = RegionColor(r);
             DrawCircle(c, regionR, col with { A = r.ControllingFactionId is null ? 0.30f : 0.48f });
             DrawArc(c, regionR, 0, Mathf.Tau, 40, col with { A = 0.8f }, _hoverRegion == r.Id ? 3f : 1.5f);
+            if (_regionPulses.TryGetValue(r.Id, out var pulse))
+            {
+                float t = pulse / PulseDuration;                   // 1 -> 0 over the pulse's life
+                float ring = regionR * (1f + (1f - t) * 0.8f);     // expands outward as it fades
+                DrawArc(c, ring, 0, Mathf.Tau, 48, new Color(1f, 0.85f, 0.3f, t * 0.9f), 3f);
+            }
             _regionHits.Add((c, regionR, r.Id));
         }
 
