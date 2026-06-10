@@ -1,8 +1,9 @@
 // M3 (Yours channel) DONE: Follow button on both inspectors marks a bloodline/people; YOURS rows
 // are gold-tagged + weight-boosted in the feed and followed dots are ringed cyan in MapView. The
 // marked-set check is inline + O(living), and the bloodline grows virally at birth (not via a
-// per-tick Feed.BuildFeed). NEXT: visual/UX pass, then more pressure engines + echo packs.
-// See PROJECT_STATE.md.
+// per-tick Feed.BuildFeed). This pass applied the V2 mythic-parchment UI handoff (year card,
+// Saga feed v2 with event-class chips, sectioned inspectors, grouped time dock, parchment
+// "How We Got Here") — presentation only, the sim tick path is untouched. See PROJECT_STATE.md.
 using Godot;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,8 +18,8 @@ public partial class Main : Node
     private const int Seed = 7;
     private const float BaseInterval = 1.2f;   // real seconds per sim-year at 1×
     private static readonly float[] SpeedLadder = { 0.25f, 0.5f, 1f, 2f, 4f, 8f, 16f };
-    private const int FeedWidth = 360;
-    private const int BottomH = 100;
+    private const int FeedWidth = 320;
+    private const int BottomH = 96;
 
     private World _world = null!;
     private Control _root = null!;
@@ -26,6 +27,8 @@ public partial class Main : Node
     private VBoxContainer _feedList = null!;
     private RichTextLabel _inspector = null!;
     private Panel _inspectorPanel = null!;
+    private Label _inspectorTitle = null!;
+    private Label _inspectorSub = null!;
     private Button _curseBtn = null!;
     private Button _followBtn = null!;
     private int? _selectedPersonId;
@@ -40,9 +43,14 @@ public partial class Main : Node
     private RichTextLabel _catchup = null!;
     private int? _catchupEventId;
     private bool _catchupQuick = true;
-    private Label _yearLabel = null!;
+    private Button _catchupQuickBtn = null!;
+    private Button _catchupFullBtn = null!;
+    private Label _yearBig = null!;
+    private Label _yearSub = null!;
     private Button _playBtn = null!;
-    private Label _speedLabel = null!;
+    private readonly List<(Button btn, float speed)> _speedBtns = new();
+    private Button _dramaBtn = null!;
+    private Button _camBtn = null!;
     private HSlider _chatSlider = null!;
     private Label _chatLabel = null!;
 
@@ -81,6 +89,7 @@ public partial class Main : Node
         _lastEventCount = 0;
         _lastEchoYear = _world.Year;
 
+        Ui.LoadFonts();
         BuildUi();
         _map.World = _world;
         _map.Marked = _marked;       // same HashSet, mutated in place — map sees follows live
@@ -138,6 +147,9 @@ public partial class Main : Node
         UpdateRootSize();
         GetViewport().SizeChanged += UpdateRootSize;
 
+        // One theme at the root: old-style serif everywhere, ink on parchment.
+        _root.Theme = new Theme { DefaultFont = Ui.Serif, DefaultFontSize = 14 };
+
         var root = _root;
 
         _map = new MapView { PersonPicked = OnPersonPicked, FactionPicked = OnFactionPicked, RegionPicked = OnRegionPicked };
@@ -148,6 +160,7 @@ public partial class Main : Node
 
         BuildFeed(root);
         BuildBottomBar(root);
+        BuildYearCard(root);
         BuildInspector(root);
         BuildCatchup(root);
     }
@@ -158,12 +171,55 @@ public partial class Main : Node
         _root.Size = GetViewport().GetVisibleRect().Size;
     }
 
+    private void BuildYearCard(Control root)
+    {
+        var card = new Panel();
+        root.AddChild(card);
+        card.AnchorLeft = 0; card.AnchorTop = 0; card.AnchorRight = 0; card.AnchorBottom = 0;
+        card.OffsetLeft = 12; card.OffsetTop = 10; card.OffsetRight = 12 + 240; card.OffsetBottom = 10 + 98;
+        card.AddThemeStyleboxOverride("panel", Ui.PanelBox());
+
+        var margin = new MarginContainer();
+        margin.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        margin.AddThemeConstantOverride("margin_left", 14);
+        margin.AddThemeConstantOverride("margin_right", 14);
+        margin.AddThemeConstantOverride("margin_top", 8);
+        margin.AddThemeConstantOverride("margin_bottom", 8);
+        card.AddChild(margin);
+
+        var vb = new VBoxContainer();
+        vb.AddThemeConstantOverride("separation", 0);
+        margin.AddChild(vb);
+
+        var hdr = new HBoxContainer();
+        vb.AddChild(hdr);
+        var title = Ui.SectionLabel("Living Myth", 12);
+        title.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        hdr.AddChild(title);
+        var sigil = new Label { Text = "✺" };
+        sigil.AddThemeColorOverride("font_color", Ui.Gold);
+        sigil.AddThemeFontSizeOverride("font_size", 15);
+        hdr.AddChild(sigil);
+
+        _yearBig = new Label { Text = "Year 0" };
+        _yearBig.AddThemeFontOverride("font", Ui.SerifBold);
+        _yearBig.AddThemeFontSizeOverride("font_size", 30);
+        _yearBig.AddThemeColorOverride("font_color", Ui.InkDeep);
+        vb.AddChild(_yearBig);
+
+        _yearSub = new Label { Text = "" };
+        _yearSub.AddThemeFontSizeOverride("font_size", 12);
+        _yearSub.AddThemeColorOverride("font_color", Ui.FadedSub);
+        vb.AddChild(_yearSub);
+    }
+
     private void BuildFeed(Control root)
     {
         var panel = new PanelContainer();
         root.AddChild(panel);
         panel.AnchorLeft = 1; panel.AnchorRight = 1; panel.AnchorTop = 0; panel.AnchorBottom = 1;
-        panel.OffsetLeft = -FeedWidth; panel.OffsetRight = 0; panel.OffsetTop = 0; panel.OffsetBottom = -BottomH;
+        panel.OffsetLeft = -FeedWidth; panel.OffsetRight = -8; panel.OffsetTop = 10; panel.OffsetBottom = -BottomH - 6;
+        panel.AddThemeStyleboxOverride("panel", Ui.PanelBox());
 
         var margin = new MarginContainer();
         foreach (var s in new[] { "left", "right", "top", "bottom" })
@@ -171,17 +227,52 @@ public partial class Main : Node
         panel.AddChild(margin);
 
         var vb = new VBoxContainer();
+        vb.AddThemeConstantOverride("separation", 6);
         margin.AddChild(vb);
 
-        var hdr = new Label { Text = "THE FEED — what's rising" };
-        hdr.AddThemeFontSizeOverride("font_size", 16);
-        vb.AddChild(hdr);
+        var hdrRow = new HBoxContainer();
+        vb.AddChild(hdrRow);
+        var hdr = new Label { Text = "The Saga" };
+        hdr.AddThemeFontOverride("font", Ui.SerifBold);
+        hdr.AddThemeFontSizeOverride("font_size", 19);
+        hdr.AddThemeColorOverride("font_color", Ui.InkDeep);
+        hdr.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        hdrRow.AddChild(hdr);
+        var scope = Ui.SectionLabel("what's rising");
+        scope.SizeFlagsVertical = Control.SizeFlags.ShrinkEnd;
+        hdrRow.AddChild(scope);
+
+        var rule = new HSeparator();
+        rule.AddThemeStyleboxOverride("separator", new StyleBoxFlat { BgColor = Ui.RowBorder, ContentMarginTop = 1 });
+        vb.AddChild(rule);
 
         var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
         vb.AddChild(scroll);
 
         _feedList = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _feedList.AddThemeConstantOverride("separation", 6);
         scroll.AddChild(_feedList);
+
+        var hint = new Label { Text = "click a tale to see how it happened", HorizontalAlignment = HorizontalAlignment.Center };
+        hint.AddThemeFontSizeOverride("font_size", 11);
+        hint.AddThemeColorOverride("font_color", Ui.Faded);
+        vb.AddChild(hint);
+    }
+
+    private VBoxContainer DockGroup(HBoxContainer bar, string caption)
+    {
+        var vb = new VBoxContainer();
+        vb.AddThemeConstantOverride("separation", 4);
+        vb.Alignment = BoxContainer.AlignmentMode.Center;
+        bar.AddChild(vb);
+        var cap = Ui.SectionLabel($"— {caption} —");
+        cap.HorizontalAlignment = HorizontalAlignment.Center;
+        vb.AddChild(cap);
+        var hb = new HBoxContainer();
+        hb.AddThemeConstantOverride("separation", 6);
+        hb.Alignment = BoxContainer.AlignmentMode.Center;
+        vb.AddChild(hb);
+        return vb;
     }
 
     private void BuildBottomBar(Control root)
@@ -189,64 +280,97 @@ public partial class Main : Node
         var bar = new PanelContainer();
         root.AddChild(bar);
         bar.AnchorLeft = 0; bar.AnchorRight = 1; bar.AnchorTop = 1; bar.AnchorBottom = 1;
-        bar.OffsetLeft = 0; bar.OffsetRight = 0; bar.OffsetTop = -BottomH; bar.OffsetBottom = 0;
+        bar.OffsetLeft = 8; bar.OffsetRight = -8; bar.OffsetTop = -BottomH; bar.OffsetBottom = -6;
+        bar.AddThemeStyleboxOverride("panel", Ui.PanelBox(12));
 
         var margin = new MarginContainer();
         foreach (var s in new[] { "left", "right", "top", "bottom" })
-            margin.AddThemeConstantOverride($"margin_{s}", 12);
+            margin.AddThemeConstantOverride($"margin_{s}", 10);
         bar.AddChild(margin);
 
         var hb = new HBoxContainer();
-        hb.AddThemeConstantOverride("separation", 10);
+        hb.AddThemeConstantOverride("separation", 14);
         margin.AddChild(hb);
 
-        _playBtn = new Button { Text = "⏸ Pause", CustomMinimumSize = new Vector2(96, 0) };
+        // --- Time group: play, speed ladder, drama ---
+        var timeGroup = DockGroup(hb, "Time");
+        var timeRow = (HBoxContainer)timeGroup.GetChild(1);
+
+        _playBtn = new Button { Text = "❚❚ Pause", CustomMinimumSize = new Vector2(86, 0) };
+        Ui.StyleButton(_playBtn);
         _playBtn.Pressed += TogglePlay;
-        hb.AddChild(_playBtn);
+        timeRow.AddChild(_playBtn);
 
         foreach (var s in SpeedLadder)
         {
-            var b = new Button { Text = $"{s:0.##}×" };
-            b.Pressed += () => SetSpeed(s);
-            hb.AddChild(b);
+            var b = new Button { Text = $"{s:0.##}×", CustomMinimumSize = new Vector2(40, 0) };
+            float sp = s;
+            b.Pressed += () => SetSpeed(sp);
+            timeRow.AddChild(b);
+            _speedBtns.Add((b, sp));
         }
-        _speedLabel = new Label();
-        hb.AddChild(_speedLabel);
 
-        var drama = new CheckButton { Text = "Drama", ButtonPressed = true };
-        drama.Toggled += on => _dramaticPacing = on;
-        hb.AddChild(drama);
+        _dramaBtn = new Button { Text = "✦ drama", TooltipText = "Notable moments briefly slow time" };
+        _dramaBtn.Pressed += () => { _dramaticPacing = !_dramaticPacing; RestyleToggles(); };
+        timeRow.AddChild(_dramaBtn);
 
         hb.AddChild(new VSeparator());
 
-        var zoomOut = new Button { Text = "－" };
+        // --- Lens group: zoom + camera ---
+        var lensGroup = DockGroup(hb, "Lens");
+        var lensRow = (HBoxContainer)lensGroup.GetChild(1);
+
+        var zoomOut = new Button { Text = "－", CustomMinimumSize = new Vector2(36, 0) };
+        Ui.StyleButton(zoomOut);
         zoomOut.Pressed += () => _map.ZoomBy(1f / 1.25f);
-        hb.AddChild(zoomOut);
-        var zoomIn = new Button { Text = "＋" };
+        lensRow.AddChild(zoomOut);
+        var zoomIn = new Button { Text = "＋", CustomMinimumSize = new Vector2(36, 0) };
+        Ui.StyleButton(zoomIn);
         zoomIn.Pressed += () => _map.ZoomBy(1.25f);
-        hb.AddChild(zoomIn);
-        var camReset = new Button { Text = "⤢" };
+        lensRow.AddChild(zoomIn);
+        var camReset = new Button { Text = "⤢", TooltipText = "Reset the lens", CustomMinimumSize = new Vector2(36, 0) };
+        Ui.StyleButton(camReset);
         camReset.Pressed += () => _map.ResetCamera();
-        hb.AddChild(camReset);
-        var camFollow = new CheckButton { Text = "Cam", ButtonPressed = true };
-        camFollow.Toggled += on => _map.CameraFollow = on;
-        hb.AddChild(camFollow);
+        lensRow.AddChild(camReset);
+        _camBtn = new Button { Text = "✦ follow drama", TooltipText = "The lens leans toward notable events" };
+        _camBtn.Pressed += () => { _map.CameraFollow = !_map.CameraFollow; RestyleToggles(); };
+        lensRow.AddChild(_camBtn);
 
         hb.AddChild(new VSeparator());
 
-        _yearLabel = new Label { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        hb.AddChild(_yearLabel);
-
+        // --- Chronicle group: chattiness threshold ---
+        var chronGroup = DockGroup(hb, "Chronicle");
+        var chronRow = (HBoxContainer)chronGroup.GetChild(1);
         _chatLabel = new Label();
-        hb.AddChild(_chatLabel);
+        _chatLabel.AddThemeFontSizeOverride("font_size", 12);
+        _chatLabel.AddThemeColorOverride("font_color", Ui.FadedSub);
+        chronRow.AddChild(_chatLabel);
         _chatSlider = new HSlider
         {
             MinValue = 30, MaxValue = 140, Value = 60, Step = 5,
-            CustomMinimumSize = new Vector2(150, 0),
+            CustomMinimumSize = new Vector2(140, 0),
             SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
         };
         _chatSlider.ValueChanged += _ => RefreshTimeBar();
-        hb.AddChild(_chatSlider);
+        chronRow.AddChild(_chatSlider);
+
+        var spacer = new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        hb.AddChild(spacer);
+
+        RestyleToggles();
+        RestyleSpeedButtons();
+    }
+
+    private void RestyleToggles()
+    {
+        Ui.StyleButton(_dramaBtn, _dramaticPacing);
+        Ui.StyleButton(_camBtn, _map.CameraFollow);
+    }
+
+    private void RestyleSpeedButtons()
+    {
+        foreach (var (btn, sp) in _speedBtns)
+            Ui.StyleButton(btn, Mathf.IsEqualApprox(sp, _speed));
     }
 
     private void BuildInspector(Control root)
@@ -255,38 +379,38 @@ public partial class Main : Node
         root.AddChild(_inspectorPanel);
         _inspectorPanel.AnchorLeft = 0; _inspectorPanel.AnchorTop = 0;
         _inspectorPanel.AnchorRight = 0; _inspectorPanel.AnchorBottom = 0;
-        _inspectorPanel.OffsetLeft = 16; _inspectorPanel.OffsetTop = 56;
-        _inspectorPanel.OffsetRight = 16 + 330; _inspectorPanel.OffsetBottom = 56 + 340;
+        _inspectorPanel.OffsetLeft = 12; _inspectorPanel.OffsetTop = 118;
+        _inspectorPanel.OffsetRight = 12 + 330; _inspectorPanel.OffsetBottom = 118 + 400;
+        _inspectorPanel.AddThemeStyleboxOverride("panel", Ui.PanelBox());
 
         var margin = new MarginContainer();
         margin.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         foreach (var s in new[] { "left", "right", "top", "bottom" })
-            margin.AddThemeConstantOverride($"margin_{s}", 10);
+            margin.AddThemeConstantOverride($"margin_{s}", 12);
         _inspectorPanel.AddChild(margin);
 
         var vb = new VBoxContainer();
+        vb.AddThemeConstantOverride("separation", 6);
         margin.AddChild(vb);
 
         var hb = new HBoxContainer();
         vb.AddChild(hb);
-        var title = new Label { Text = "INSPECT", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        title.AddThemeFontSizeOverride("font_size", 15);
-        hb.AddChild(title);
-        var close = new Button { Text = "✕" };
+        var titles = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        titles.AddThemeConstantOverride("separation", 0);
+        hb.AddChild(titles);
+        _inspectorTitle = new Label { Text = "" };
+        _inspectorTitle.AddThemeFontOverride("font", Ui.SerifBold);
+        _inspectorTitle.AddThemeFontSizeOverride("font_size", 20);
+        _inspectorTitle.AddThemeColorOverride("font_color", Ui.InkDeep);
+        titles.AddChild(_inspectorTitle);
+        _inspectorSub = new Label { Text = "" };
+        _inspectorSub.AddThemeFontSizeOverride("font_size", 12);
+        _inspectorSub.AddThemeColorOverride("font_color", Ui.FadedSub);
+        titles.AddChild(_inspectorSub);
+        var close = new Button { Text = "✕", CustomMinimumSize = new Vector2(28, 28) };
+        Ui.StyleButton(close);
         close.Pressed += () => _inspectorPanel.Visible = false;
         hb.AddChild(close);
-
-        // God hand: the curse tool. Only shown for a living, not-yet-cursed person.
-        _curseBtn = new Button { Text = "⚡ Lay Curse on this bloodline", Visible = false };
-        _curseBtn.Modulate = new Color("ff9aa8");
-        _curseBtn.Pressed += OnCursePressed;
-        vb.AddChild(_curseBtn);
-
-        // The Yours channel: follow a bloodline / a people and their moments rise into the feed.
-        _followBtn = new Button { Text = "☆ Follow", Visible = false };
-        _followBtn.Modulate = new Color("ffe08a");
-        _followBtn.Pressed += OnFollowPressed;
-        vb.AddChild(_followBtn);
 
         var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
         vb.AddChild(scroll);
@@ -296,9 +420,26 @@ public partial class Main : Node
             FitContent = true,
             ScrollActive = false,
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(300, 0),
+            CustomMinimumSize = new Vector2(296, 0),
         };
+        _inspector.AddThemeColorOverride("default_color", Ui.Ink);
+        _inspector.AddThemeFontOverride("bold_font", Ui.SerifBold);
         scroll.AddChild(_inspector);
+
+        // Fate verbs pinned at the bottom: the curse tool (a living, not-yet-cursed person only)
+        // and the Yours channel (follow a bloodline / a people).
+        _followBtn = new Button { Text = "☆ Follow", Visible = false };
+        Ui.StyleButton(_followBtn);
+        _followBtn.Pressed += OnFollowPressed;
+        vb.AddChild(_followBtn);
+
+        _curseBtn = new Button { Text = "✳ Lay Curse on this bloodline", Visible = false };
+        Ui.StyleButton(_curseBtn, active: true, activeBg: Ui.Ember);
+        _curseBtn.AddThemeColorOverride("font_color", new Color("f2e9d2"));
+        _curseBtn.AddThemeColorOverride("font_hover_color", new Color("f2e9d2"));
+        _curseBtn.AddThemeColorOverride("font_pressed_color", new Color("f2e9d2"));
+        _curseBtn.Pressed += OnCursePressed;
+        vb.AddChild(_curseBtn);
     }
 
     private void BuildCatchup(Control root)
@@ -307,32 +448,42 @@ public partial class Main : Node
         root.AddChild(_catchupPanel);
         _catchupPanel.AnchorLeft = 0.5f; _catchupPanel.AnchorRight = 0.5f;
         _catchupPanel.AnchorTop = 0.5f; _catchupPanel.AnchorBottom = 0.5f;
-        _catchupPanel.OffsetLeft = -290; _catchupPanel.OffsetRight = 290;
-        _catchupPanel.OffsetTop = -240; _catchupPanel.OffsetBottom = 240;
+        _catchupPanel.OffsetLeft = -300; _catchupPanel.OffsetRight = 300;
+        _catchupPanel.OffsetTop = -250; _catchupPanel.OffsetBottom = 250;
+        _catchupPanel.AddThemeStyleboxOverride("panel", Ui.PanelBox());
 
         var margin = new MarginContainer();
         margin.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         foreach (var s in new[] { "left", "right", "top", "bottom" })
-            margin.AddThemeConstantOverride($"margin_{s}", 12);
+            margin.AddThemeConstantOverride($"margin_{s}", 14);
         _catchupPanel.AddChild(margin);
 
         var vb = new VBoxContainer();
+        vb.AddThemeConstantOverride("separation", 8);
         margin.AddChild(vb);
 
         var hb = new HBoxContainer();
+        hb.AddThemeConstantOverride("separation", 8);
         vb.AddChild(hb);
-        var title = new Label { Text = "HOW WE GOT HERE", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        title.AddThemeFontSizeOverride("font_size", 16);
+        var title = new Label { Text = "How We Got Here", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        title.AddThemeFontOverride("font", Ui.SerifBold);
+        title.AddThemeFontSizeOverride("font_size", 21);
+        title.AddThemeColorOverride("font_color", Ui.InkDeep);
         hb.AddChild(title);
-        var quick = new Button { Text = "Quick beats" };
-        quick.Pressed += () => { _catchupQuick = true; RenderCatchup(); };
-        hb.AddChild(quick);
-        var full = new Button { Text = "Full thread" };
-        full.Pressed += () => { _catchupQuick = false; RenderCatchup(); };
-        hb.AddChild(full);
-        var close = new Button { Text = "✕" };
+        _catchupQuickBtn = new Button { Text = "Quick beats" };
+        _catchupQuickBtn.Pressed += () => { _catchupQuick = true; RenderCatchup(); };
+        hb.AddChild(_catchupQuickBtn);
+        _catchupFullBtn = new Button { Text = "Full thread" };
+        _catchupFullBtn.Pressed += () => { _catchupQuick = false; RenderCatchup(); };
+        hb.AddChild(_catchupFullBtn);
+        var close = new Button { Text = "✕", CustomMinimumSize = new Vector2(28, 28) };
+        Ui.StyleButton(close);
         close.Pressed += () => _catchupPanel.Visible = false;
         hb.AddChild(close);
+
+        var rule = new HSeparator();
+        rule.AddThemeStyleboxOverride("separator", new StyleBoxFlat { BgColor = Ui.RowBorder, ContentMarginTop = 1 });
+        vb.AddChild(rule);
 
         var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
         vb.AddChild(scroll);
@@ -342,8 +493,10 @@ public partial class Main : Node
             FitContent = true,
             ScrollActive = false,
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(540, 0),
+            CustomMinimumSize = new Vector2(548, 0),
         };
+        _catchup.AddThemeColorOverride("default_color", Ui.Ink);
+        _catchup.AddThemeFontOverride("bold_font", Ui.SerifBold);
         scroll.AddChild(_catchup);
     }
 
@@ -391,7 +544,7 @@ public partial class Main : Node
         return notableSeen;
     }
 
-    private static void PulseFeedRow(RichTextLabel row)
+    private static void PulseFeedRow(Control row)
     {
         row.Modulate = new Color(1.7f, 1.55f, 0.7f);   // warm flash, fades back to white
         row.CreateTween()
@@ -412,7 +565,80 @@ public partial class Main : Node
         return false;
     }
 
-    private RichTextLabel? AddFeedRow(Event e, int imp, bool yours)
+    // One Saga row, per the handoff anatomy: event-class chip → small-caps label + faded year
+    // → one-to-two-line body. Hover warms the border; the whole row opens "How We Got Here".
+    private Control BuildFeedRowControl(Event e, int imp, bool yours)
+    {
+        var cls = Ui.ClassOf(e.Type);
+        var row = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Stop };
+        var normal = Ui.RowBox(yours ? Ui.RowBgWarm : Ui.RowBg, yours ? Ui.Gold : Ui.RowBorder);
+        var hover = Ui.RowBox(Ui.RowBgWarm, Ui.RowBorderHover);
+        row.AddThemeStyleboxOverride("panel", normal);
+        row.MouseEntered += () => row.AddThemeStyleboxOverride("panel", hover);
+        row.MouseExited += () => row.AddThemeStyleboxOverride("panel", normal);
+        row.TooltipText = $"weight {imp} — click: how we got here";
+        int eventId = e.Id;
+        row.GuiInput += ev =>
+        {
+            if (ev is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
+                OpenCatchup(eventId);
+        };
+
+        var hb = new HBoxContainer();
+        hb.AddThemeConstantOverride("separation", 8);
+        row.AddChild(hb);
+
+        var chip = new PanelContainer
+        {
+            CustomMinimumSize = new Vector2(24, 24),
+            SizeFlagsVertical = Control.SizeFlags.ShrinkBegin,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+        chip.AddThemeStyleboxOverride("panel", Ui.ChipBox(cls.Color));
+        var glyph = new Label
+        {
+            Text = cls.Glyph,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+        glyph.AddThemeFontSizeOverride("font_size", 11);
+        glyph.AddThemeColorOverride("font_color", Ui.RowBg);
+        chip.AddChild(glyph);
+        hb.AddChild(chip);
+
+        var body = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore };
+        body.AddThemeConstantOverride("separation", 1);
+        hb.AddChild(body);
+
+        var header = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        body.AddChild(header);
+        var type = Ui.SectionLabel((yours ? "★ " : "") + cls.Label);
+        type.AddThemeColorOverride("font_color", yours ? Ui.Gold : cls.Color);
+        type.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        type.MouseFilter = Control.MouseFilterEnum.Ignore;
+        header.AddChild(type);
+        var year = new Label { Text = $"Yr {e.Year}", MouseFilter = Control.MouseFilterEnum.Ignore };
+        year.AddThemeFontSizeOverride("font_size", 11);
+        year.AddThemeColorOverride("font_color", Ui.Faded);
+        header.AddChild(year);
+
+        var text = new Label
+        {
+            Text = e.Text,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            MaxLinesVisible = 2,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+        text.AddThemeFontSizeOverride("font_size", 13);
+        text.AddThemeColorOverride("font_color", Ui.Ink);
+        body.AddChild(text);
+
+        return row;
+    }
+
+    private Control? AddFeedRow(Event e, int imp, bool yours)
     {
         // YOURS cap: a +70-boosted bloodline can otherwise flood the window. Non-YOURS rows
         // always get in (they already cleared the threshold). A YOURS row past the cap displaces
@@ -437,29 +663,17 @@ public partial class Main : Node
             }
         }
 
-        var lbl = new RichTextLabel
-        {
-            BbcodeEnabled = true,
-            FitContent = true,
-            ScrollActive = false,
-            MetaUnderlined = false,
-            CustomMinimumSize = new Vector2(FeedWidth - 40, 0),
-        };
-        // Whole row is a link; clicking it opens the catch-up trace for this event.
-        string tag = yours ? "[color=#ffd54a]★ YOURS[/color]  " : "";
-        string yearCol = yours ? "#ffd54a" : "#7fd0a0";
-        lbl.Text = $"[url={e.Id}]{tag}[color={yearCol}]Yr {e.Year}[/color]  {e.Text}  [color=#7e8a96](w{imp})[/color][/url]";
-        lbl.MetaClicked += OnFeedMetaClicked;
-        _feedList.AddChild(lbl);
-        _feedList.MoveChild(lbl, 0);   // newest on top
-        _feedVis.Insert(0, new FeedVisRow { Node = lbl, Yours = yours, Weight = imp });
+        var row = BuildFeedRowControl(e, imp, yours);
+        _feedList.AddChild(row);
+        _feedList.MoveChild(row, 0);   // newest on top
+        _feedVis.Insert(0, new FeedVisRow { Node = row, Yours = yours, Weight = imp });
         while (_feedVis.Count > FeedWindow)
         {
             var oldest = _feedVis[_feedVis.Count - 1];
             oldest.Node.QueueFree();
             _feedVis.RemoveAt(_feedVis.Count - 1);
         }
-        return lbl;
+        return row;
     }
 
     // ------------------------------------------------------------- myth echoes
@@ -511,21 +725,41 @@ public partial class Main : Node
 
     private void AddEchoCard(Echo echo, int anchorEventId)
     {
-        var lbl = new RichTextLabel
+        // Echo cards carry the only luminous treatment in the feed: warm fill, gold border.
+        var row = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Stop };
+        var box = Ui.RowBox(Ui.RowBgWarm, Ui.Gold);
+        box.SetBorderWidthAll(2);
+        row.AddThemeStyleboxOverride("panel", box);
+        if (anchorEventId >= 0)
         {
-            BbcodeEnabled = true,
-            FitContent = true,
-            ScrollActive = false,
-            MetaUnderlined = false,
-            CustomMinimumSize = new Vector2(FeedWidth - 40, 0),
+            row.GuiInput += ev =>
+            {
+                if (ev is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
+                    OpenCatchup(anchorEventId);
+            };
+            row.TooltipText = "click: how we got here";
+        }
+
+        var vb = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        vb.AddThemeConstantOverride("separation", 1);
+        row.AddChild(vb);
+        var hdr = Ui.SectionLabel("◆ Myth Echo — " + echo.Archetype);
+        hdr.AddThemeColorOverride("font_color", new Color("8a5d12"));
+        hdr.MouseFilter = Control.MouseFilterEnum.Ignore;
+        vb.AddChild(hdr);
+        var text = new Label
+        {
+            Text = echo.Label,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
         };
-        string body = $"[bgcolor=#3a2c0a]  [color=#ffcf3a]◆ MYTH ECHO[/color]  [color=#f3e3a8]{echo.Archetype}[/color]\n"
-                    + $"  [color=#e8d79a]{echo.Label}[/color]  [/bgcolor]";
-        lbl.Text = anchorEventId >= 0 ? $"[url={anchorEventId}]{body}[/url]" : body;
-        lbl.MetaClicked += OnFeedMetaClicked;   // anchor is a real event id — reuses the catch-up trace
-        _feedList.AddChild(lbl);
-        _feedList.MoveChild(lbl, 0);
-        _feedVis.Insert(0, new FeedVisRow { Node = lbl, Yours = false, Weight = int.MaxValue });
+        text.AddThemeFontSizeOverride("font_size", 13);
+        text.AddThemeColorOverride("font_color", Ui.Ink);
+        vb.AddChild(text);
+
+        _feedList.AddChild(row);
+        _feedList.MoveChild(row, 0);
+        _feedVis.Insert(0, new FeedVisRow { Node = row, Yours = false, Weight = int.MaxValue });
         while (_feedVis.Count > FeedWindow)
         {
             var oldest = _feedVis[_feedVis.Count - 1];
@@ -536,10 +770,9 @@ public partial class Main : Node
 
     // -------------------------------------------------------------- inspectors
 
-    private void OnFeedMetaClicked(Variant meta)
+    private void OpenCatchup(int eventId)
     {
-        if (!int.TryParse(meta.AsString(), out int id)) return;
-        _catchupEventId = id;
+        _catchupEventId = eventId;
         _catchupQuick = true;
         _catchupPanel.Visible = true;
         RenderCatchup();
@@ -548,27 +781,33 @@ public partial class Main : Node
     private void RenderCatchup()
     {
         if (_catchupEventId is not int id) return;
+        Ui.StyleButton(_catchupQuickBtn, _catchupQuick);
+        Ui.StyleButton(_catchupFullBtn, !_catchupQuick);
+
         var chain = _world.Chronicle.Trace(id);   // event + all its causes, in year order
         var target = chain.FirstOrDefault(e => e.Id == id);
 
         var sb = new StringBuilder();
         sb.AppendLine($"[b]{(target is null ? "" : target.Text)}[/b]");
-        sb.AppendLine($"[color=#7e8a96]{(_catchupQuick ? "turning points" : "the full thread")} that led here[/color]");
+        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]{(_catchupQuick ? "the turning points" : "the full thread")} that led here[/color]");
         sb.AppendLine();
 
         var shown = _catchupQuick
             ? chain.Where(e => e.Id == id || e.Type is not ("birth" or "death" or "marriage")).ToList()
             : chain;
         if (shown.Count <= 1)
-            sb.AppendLine("[color=#7e8a96](this one stands alone — no deeper causes recorded)[/color]");
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}](this one stands alone — no deeper causes recorded)[/color]");
         foreach (var e in shown)
         {
             bool isTarget = e.Id == id;
-            string year = $"[color=#7fd0a0]Yr {e.Year}[/color]";
+            var cls = Ui.ClassOf(e.Type);
+            string year = $"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color]";
+            string chip = $"[color=#{Ui.Hex(cls.Color)}]{cls.Glyph} {cls.Label.ToUpperInvariant()}[/color]";
             string body = isTarget ? $"[b]{e.Text}[/b]" : e.Text;
             string where = e.RegionId is int rid && _world.RegionName(rid) is string rn
-                ? $"  [color=#7e8a96]· in {rn}[/color]" : "";
-            sb.AppendLine($"{year}  [color=#9aa6b2][{e.Type}][/color]  {body}{where}");
+                ? $"  [color=#{Ui.Hex(Ui.Faded)}]· in {rn}[/color]" : "";
+            string line = $"{year}  {chip}  {body}{where}";
+            sb.AppendLine(isTarget ? $"[bgcolor=#{Ui.Hex(Ui.RowBgWarm)}]{line}[/bgcolor]" : line);
         }
         _catchup.Text = sb.ToString();
     }
@@ -610,6 +849,21 @@ public partial class Main : Node
         _map.QueueRedraw();
     }
 
+    private static string SectionCap(string text)
+        => $"[color=#{Ui.Hex(Ui.Faded)}]{text.ToUpperInvariant()}[/color]";
+
+    // Reputation is public memory: admired names render warm gold, infamous names ink-stained
+    // dark — never cartoon-villain red. Unremarked people show nothing (sections appear only
+    // when meaningful).
+    private static (string text, string color)? ReputationDisplay(int rep) => rep switch
+    {
+        >= 3 => ("Admired — their name is spoken warmly", "8a5d12"),
+        >= 1 => ("Well spoken of", "7a6a2a"),
+        <= -3 => ("Infamous — a blackened name", "3a2418"),
+        <= -1 => ("Whispered against", "5a4632"),
+        _ => null,
+    };
+
     private void OnPersonPicked(int id)
     {
         if (!_world.People.TryGetValue(id, out var p)) return;
@@ -618,25 +872,37 @@ public partial class Main : Node
         _curseBtn.Visible = p.Alive && !p.Cursed;
         _followBtn.Visible = true;
         _followBtn.Text = _seedPeople.Contains(id) ? "★ Following bloodline — unfollow" : "☆ Follow this bloodline";
+        Ui.StyleButton(_followBtn, _seedPeople.Contains(id));
         var fac = _world.Factions[p.FactionId];
         string faith = p.ReligionId is int r && _world.Religions.TryGetValue(r, out var rr) ? rr.Name : "—";
-        string spouse = p.SpouseId is int s && _world.People.TryGetValue(s, out var sp) ? $"{sp.Name} (#{s})" : "—";
+        string spouse = p.SpouseId is int s && _world.People.TryGetValue(s, out var sp) ? sp.Name : "—";
         string status = p.Alive ? $"alive, age {p.Age(_world.Year)}" : $"died in year {p.DeathYear}";
 
+        _inspectorTitle.Text = p.Name;
+        _inspectorSub.Text = $"{(p.Sex == "f" ? "woman" : "man")} of {fac.Name}"
+            + (p.IsLeader ? " · leader" : "");
+
         var sb = new StringBuilder();
-        sb.AppendLine($"[b]{p.Name}[/b]  [color=#7e8a96]#{p.Id}[/color]");
-        sb.AppendLine($"{fac.Name}");
-        sb.AppendLine($"{(p.Sex == "f" ? "woman" : "man")}{(p.IsLeader ? "  ·  [color=#ffd54a]LEADER[/color]" : "")}{(p.Cursed ? "  ·  [color=#d24a64]CURSED[/color]" : "")}");
+        if (p.Cursed) sb.AppendLine($"[color=#{Ui.Hex(Ui.Ember)}][b]✳ CURSED[/b] — a god's mark lies on this bloodline[/color]\n");
+        if (ReputationDisplay(p.Reputation) is (string repText, string repColor))
+        {
+            sb.AppendLine(SectionCap("Reputation"));
+            sb.AppendLine($"[color=#{repColor}][b]{repText}[/b][/color]\n");
+        }
+        sb.AppendLine(SectionCap("The record"));
         sb.AppendLine($"status: {status}");
         sb.AppendLine($"faith: {faith}");
         sb.AppendLine($"spouse: {spouse}");
         sb.AppendLine($"children: {p.Children.Count}");
         sb.AppendLine();
-        sb.AppendLine("[b]Their thread[/b]");
+        sb.AppendLine(SectionCap("Their thread"));
         var theirs = _world.Chronicle.Events.Where(e => e.Participants.Contains(id)).TakeLast(8).ToList();
-        if (theirs.Count == 0) sb.AppendLine("[color=#7e8a96](no recorded events yet)[/color]");
+        if (theirs.Count == 0) sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}](no recorded events yet)[/color]");
         foreach (var e in theirs)
-            sb.AppendLine($"[color=#7fd0a0]Yr {e.Year}[/color] — {e.Text}");
+        {
+            var cls = Ui.ClassOf(e.Type);
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color] [color=#{Ui.Hex(cls.Color)}]{cls.Glyph}[/color] {e.Text}");
+        }
 
         _inspector.Text = sb.ToString();
         _inspectorPanel.Visible = true;
@@ -654,11 +920,9 @@ public partial class Main : Node
         _selectedFactionId = null;
         _curseBtn.Visible = false;
         _followBtn.Visible = false;
-        var sb = new StringBuilder();
-        sb.AppendLine($"[b]{region.Name}[/b]");
-        sb.AppendLine($"terrain: {region.TerrainType}");
-        sb.AppendLine("[color=#7e8a96]unclaimed wilderness — no people hold this land[/color]");
-        _inspector.Text = sb.ToString();
+        _inspectorTitle.Text = region.Name;
+        _inspectorSub.Text = $"{region.TerrainType} · wilderness";
+        _inspector.Text = $"[color=#{Ui.Hex(Ui.Faded)}]unclaimed wilderness — no people hold this land[/color]";
         _inspectorPanel.Visible = true;
     }
 
@@ -669,22 +933,33 @@ public partial class Main : Node
         _curseBtn.Visible = false;
         _followBtn.Visible = true;
         _followBtn.Text = _markedFactions.Contains(fid) ? "★ Following — unfollow" : "☆ Follow this people";
+        Ui.StyleButton(_followBtn, _markedFactions.Contains(fid));
         var fac = _world.Factions[fid];
         var members = _world.FactionMembers(fid);
-        string leader = fac.LeaderId is int lid ? $"{_world.People[lid].Name} (#{lid})" : "(none)";
+        string leader = fac.LeaderId is int lid ? _world.People[lid].Name : "(none)";
         var dom = _world.DominantReligion(fid);
 
+        _inspectorTitle.Text = fac.Name;
+        _inspectorSub.Text = $"{fac.Culture} culture · of {fac.Homeland}";
+
         var sb = new StringBuilder();
-        sb.AppendLine($"[b]{fac.Name}[/b]");
-        sb.AppendLine($"culture: {fac.Culture}");
-        sb.AppendLine($"homeland: {fac.Homeland}");
+        sb.AppendLine(SectionCap("The record"));
         sb.AppendLine($"living: {members.Count}");
         sb.AppendLine($"leader: {leader}");
         sb.AppendLine($"dominant faith: {dom?.Name ?? "—"}");
+        // Customs appear only once a value axis has hardened into one (M7 culture engine).
+        var customs = fac.CustomOriginEvent.Keys.OrderBy(c => c).ToList();
+        if (customs.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine(SectionCap("Customs they keep"));
+            foreach (var c in customs)
+                sb.AppendLine($"[color=#{Ui.Hex(Ui.Violet)}]❧[/color] {c}");
+        }
         sb.AppendLine();
-        sb.AppendLine("[b]Eldest among them[/b]");
+        sb.AppendLine(SectionCap("Eldest among them"));
         foreach (var p in members.OrderByDescending(p => p.Age(_world.Year)).Take(8))
-            sb.AppendLine($"{p.Name} (#{p.Id}) — age {p.Age(_world.Year)}{(p.IsLeader ? " ·  leader" : "")}");
+            sb.AppendLine($"{p.Name} — age {p.Age(_world.Year)}{(p.IsLeader ? $"  [color=#8a5d12]· leader[/color]" : "")}");
 
         _inspector.Text = sb.ToString();
         _inspectorPanel.Visible = true;
@@ -698,13 +973,14 @@ public partial class Main : Node
     {
         _speed = s;
         if (!_running) _running = true;
+        RestyleSpeedButtons();
     }
 
     private void RefreshTimeBar()
     {
-        _yearLabel.Text = $"Year {_world.Year}     {_world.LivingCount} living     {_world.Chronicle.Events.Count} events";
-        _playBtn.Text = _running ? "⏸ Pause" : "▶ Play";
-        _speedLabel.Text = $"{_speed:0.##}×";
+        _yearBig.Text = $"Year {_world.Year}";
+        _yearSub.Text = $"{_world.LivingCount} souls · {_world.Chronicle.Events.Count} tales";
+        _playBtn.Text = _running ? "❚❚ Pause" : "▶ Play";
         _chatLabel.Text = $"chattiness ≥ {(int)_chatSlider.Value}";
     }
 }

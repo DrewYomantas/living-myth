@@ -49,14 +49,17 @@ public partial class MapView : Control
     private const float Pad = 18f;
     private float MapSide() => Mathf.Min(Size.X, Size.Y) - Pad * 2f;
 
-    private static readonly Color Sea = new("0e2230");
-    private static readonly Color Land = new("23302a");
-    private static readonly Color Neutral = new("55665b");          // unclaimed wilderness
+    // Old-world palette (V2 handoff): faded slate water, moss/dry-grass land, muted banner
+    // colors. Faction color is a cloth/banner accent — territory paint stays restrained.
+    private static readonly Color Sea = new("1f3340");
+    private static readonly Color Land = new("3e4733");
+    private static readonly Color Coast = new("55604a");
+    private static readonly Color Neutral = new("6f6a58");          // unclaimed wilderness
     private static readonly Dictionary<string, Color> FactionColors = new()
     {
         ["highland"] = new Color("6b7a99"),
-        ["shore"] = new Color("3aa6a0"),
-        ["wood"] = new Color("5a9e57"),
+        ["shore"] = new Color("4f8f89"),
+        ["wood"] = new Color("5d8a4e"),
     };
 
     public override void _Ready() => MouseFilter = MouseFilterEnum.Stop;
@@ -151,7 +154,7 @@ public partial class MapView : Control
         {
             var poly = _islandNorm.Select(p => P(p.X, p.Y)).ToArray();
             DrawColoredPolygon(poly, Land);
-            DrawPolyline(poly.Append(poly[0]).ToArray(), new Color("33463c"), 2f, true);
+            DrawPolyline(poly.Append(poly[0]).ToArray(), Coast, 2f, true);
         }
 
         // Faint adjacency graph beneath the territories — the connective tissue of the island.
@@ -166,13 +169,14 @@ public partial class MapView : Control
         {
             var c = P(r.X, r.Y);
             var col = RegionColor(r);
-            DrawCircle(c, regionR, col with { A = r.ControllingFactionId is null ? 0.30f : 0.48f });
-            DrawArc(c, regionR, 0, Mathf.Tau, 40, col with { A = 0.8f }, _hoverRegion == r.Id ? 3f : 1.5f);
+            // Muted territorial hints, not giant faction paint: a soft tint plus a thin ring.
+            DrawCircle(c, regionR, col with { A = r.ControllingFactionId is null ? 0.18f : 0.30f });
+            DrawArc(c, regionR, 0, Mathf.Tau, 40, col with { A = 0.65f }, _hoverRegion == r.Id ? 3f : 1.5f);
             if (_regionPulses.TryGetValue(r.Id, out var pulse))
             {
                 float t = pulse / PulseDuration;                   // 1 -> 0 over the pulse's life
                 float ring = regionR * (1f + (1f - t) * 0.8f);     // expands outward as it fades
-                DrawArc(c, ring, 0, Mathf.Tau, 48, new Color(1f, 0.85f, 0.3f, t * 0.9f), 3f);
+                DrawArc(c, ring, 0, Mathf.Tau, 48, new Color(0.96f, 0.78f, 0.43f, t * 0.9f), 3f);
             }
             _regionHits.Add((c, regionR, r.Id));
         }
@@ -187,9 +191,9 @@ public partial class MapView : Control
             var c = P(r.X, r.Y);
             string holder = r.ControllingFactionId is string fid ? World.Factions[fid].Name : "unclaimed";
             DrawString(font, c + new Vector2(0, -regionR - 8), $"{r.Name}",
-                HorizontalAlignment.Center, -1, 14, modulate: Colors.White);
+                HorizontalAlignment.Center, -1, 14, modulate: new Color("f2e5c2"));
             DrawString(font, c + new Vector2(0, -regionR + 8), $"{r.TerrainType} · {holder}",
-                HorizontalAlignment.Center, -1, 11, modulate: new Color("b7c3cb"));
+                HorizontalAlignment.Center, -1, 11, modulate: new Color("c9b288"));
         }
     }
 
@@ -221,11 +225,11 @@ public partial class MapView : Control
             var pos = center + off;
 
             float r = (p.IsLeader ? 6.5f : 3.8f) * _zoom;
-            var dot = p.Cursed ? new Color("d24a64") : (p.Sex == "f" ? col.Lightened(0.28f) : col);
+            var dot = p.Cursed ? new Color("b0432e") : (p.Sex == "f" ? col.Lightened(0.28f) : col);
             DrawCircle(pos, r, dot);
-            if (p.IsLeader) DrawArc(pos, r + 2.5f, 0, Mathf.Tau, 20, new Color("ffd54a"), 1.6f);
+            if (p.IsLeader) DrawArc(pos, r + 2.5f, 0, Mathf.Tau, 20, new Color("d8a843"), 1.6f);
             if (Marked is not null && Marked.Contains(p.Id))
-                DrawArc(pos, r + 4.5f, 0, Mathf.Tau, 24, new Color("5fd8ff"), 2f);
+                DrawArc(pos, r + 4.5f, 0, Mathf.Tau, 24, new Color("7fc8d8"), 2f);
             _dots.Add((pos, Mathf.Max(r, 6f), p.Id));
         }
     }
@@ -243,7 +247,7 @@ public partial class MapView : Control
             string leader = fac.LeaderId is int lid ? World.People[lid].Name : "(none)";
             var col = FactionColors.GetValueOrDefault(f.Id, Neutral);
             DrawString(font, centroid + new Vector2(-60, -2), fac.Name,
-                HorizontalAlignment.Center, 120, 14, modulate: Colors.White);
+                HorizontalAlignment.Center, 120, 14, modulate: new Color("f2e5c2"));
             DrawString(font, centroid + new Vector2(-60, 15), $"pop {pop} · {leader}",
                 HorizontalAlignment.Center, 120, 11, modulate: col.Lightened(0.35f));
         }
