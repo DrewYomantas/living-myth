@@ -19,6 +19,15 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       rumor events off notable deeds — shifting `Person.Reputation` (-5..5) and nudging cross-faction
       tension (rumor ids enter grievance memory). Couples to crime discovery, prophet credibility, and
       war. "The Blackened Name" + "The War of Whispers" echoes. verify 884/699/567/706.
+- [x] Map readability pass (viewer-only): deterministic place-seed markers (PlaceSeeds.cs, FNV hash
+      of seed+region id — never sim Rng), same-faction roads, label tags + de-overlap, territory
+      tint reduction, fixed draw-order. verify unchanged 884/699/567/706.
+- [x] Region Lens foundation (viewer-only): clicking a region opens a Region Lens inspector (land /
+      neighbours / tales anchored here / honest not-modeled notes) instead of silently redirecting
+      to the faction panel; RegionActivity read-model indexes Event.RegionId incrementally
+      (O(new events), no history scans); inspector cross-links (e:/r:/f: via RichTextLabel meta)
+      interconnect person ↔ faction ↔ region ↔ catch-up; gold lens ring on the selected region.
+      verify unchanged 884/699/567/706.
 - [ ] Later — visual/UX pass (surface culture + gossip in the viewer); echo packs; timeline scrubbing. ← NEXT
 
 ## Session log
@@ -59,6 +68,28 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
   Caught a sentinel-overflow bug (`int.MinValue` LastRumorYear made `Year - LastRumorYear` overflow
   negative → cooldown always tripped → zero rumors; fixed with explicit sentinel guard). Re-baselined
   verify 884/699/567/706, cap=0 1145/1097/535/893. Determinism green; Godot builds.
+
+- [2026-06-10] Session: two viewer passes. (1) Map readability + place seeds (`fa6fc88`): PlaceSeeds
+  viewer hints, roads, label tags, layering. (2) Region Lens foundation: RegionActivity read-model
+  over Event.RegionId, Region Lens inspector with honest "not yet modeled" copy, e:/r:/f: inspector
+  cross-links, "Inspect <faction>" hand-off button, gold selected-region ring. No sim files touched
+  either pass; verify green at 884/699/567/706 throughout. Feel-checked via window captures.
+
+## Region Lens — data contracts still missing (design notes, not promises)
+The viewer-side lens is honest about these; each needs a deliberate sim-side milestone because all
+of them move the verify baseline (new RNG draws and/or new ordered iteration):
+- **Event anchoring coverage.** Event.RegionId exists but only territory (exact region), culture, and
+  rumor events (faction primary region) carry it. Personal events (birth/death/murder/marriage/
+  romance/justice/war/peace/famine/boom/trade/prophet/schism/friction/divine) are unplaced. Contract:
+  stamp regionId at Record() call sites from data the sim already has — no new RNG needed if the
+  region is derived deterministically (e.g. participants' faction primary region), so this *may* be
+  baseline-safe; verify must prove it.
+- **Person ↔ site anchoring.** People have no home region/site; the atlas scatter (p.Id % regions)
+  is presentation only. Contract: a Person.HomeRegionId assigned at birth/migration, deterministic.
+- **Settlement/site state.** No sites exist in the sim. Contract per GAME_DESIGN.md slice 3: 3–7
+  deterministic sites per region (id, kind, position), then optional Event.SiteId.
+- **Terrain geography.** Regions are points (X/Y + radius circles). Contract: deterministic region
+  polygons/bands so the atlas can read as landforms instead of circles.
 
 ## Next session starts with
 **Open the Godot viewer (F5, mono build) and feel-test Phase A passes 1+2, tuning the named consts.**

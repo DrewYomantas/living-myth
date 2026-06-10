@@ -31,6 +31,8 @@ public partial class Main : Node
     private Label _inspectorSub = null!;
     private Button _curseBtn = null!;
     private Button _followBtn = null!;
+    private Button _lensFactionBtn = null!;
+    private string? _lensFactionId;          // faction behind the Region Lens hand-off button
     private int? _selectedPersonId;
     private string? _selectedFactionId;
     private readonly HashSet<int> _seedPeople = new();      // the people the player explicitly marked
@@ -67,6 +69,7 @@ public partial class Main : Node
     private int _lastEventCount;
     private readonly List<FeedVisRow> _feedVis = new();     // (node, yours, weight) per visible row, newest first
     private readonly System.Collections.Generic.Dictionary<int, int> _consCount = new();
+    private readonly RegionActivity _regionActivity = new();   // Region Lens: per-region anchored events
     private const int EchoCadence = 8;                      // sim-years between echo scans (slow path, not per-tick)
     private int _lastEchoYear;
     private readonly System.Collections.Generic.Dictionary<string, int> _echoSeen = new();  // archetype -> latest carded start year
@@ -409,7 +412,7 @@ public partial class Main : Node
         titles.AddChild(_inspectorSub);
         var close = new Button { Text = "✕", CustomMinimumSize = new Vector2(28, 28) };
         Ui.StyleButton(close);
-        close.Pressed += () => { _inspectorPanel.Visible = false; _map.SelectedFactionId = null; };
+        close.Pressed += () => { _inspectorPanel.Visible = false; _map.SelectedFactionId = null; _map.SelectedRegionId = -1; };
         hb.AddChild(close);
 
         var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
@@ -424,7 +427,14 @@ public partial class Main : Node
         };
         _inspector.AddThemeColorOverride("default_color", Ui.Ink);
         _inspector.AddThemeFontOverride("bold_font", Ui.SerifBold);
+        _inspector.MetaClicked += meta => OnInspectorLink(meta.AsString());
         scroll.AddChild(_inspector);
+
+        // Region Lens hand-off: from a region to the people who hold it (the old direct route).
+        _lensFactionBtn = new Button { Visible = false };
+        Ui.StyleButton(_lensFactionBtn);
+        _lensFactionBtn.Pressed += () => { if (_lensFactionId is string fid) OnFactionPicked(fid); };
+        vb.AddChild(_lensFactionBtn);
 
         // Fate verbs pinned at the bottom: the curse tool (a living, not-yet-cursed person only)
         // and the Yours channel (follow a bloodline / a people).
@@ -511,11 +521,15 @@ public partial class Main : Node
         int threshold = (int)_chatSlider.Value;
         bool notableSeen = false;
 
-        // Maintain consequence counts incrementally so we never rebuild a reverse index over
-        // the whole (ever-growing) chronicle. Update first, then score the new slice.
+        // Maintain consequence counts (and the Region Lens activity index) incrementally so we
+        // never rebuild a reverse index over the whole (ever-growing) chronicle. Update first,
+        // then score the new slice.
         for (int i = _lastEventCount; i < events.Count; i++)
+        {
+            _regionActivity.Observe(events[i]);
             foreach (var c in events[i].Causes)
                 _consCount[c] = _consCount.GetValueOrDefault(c) + 1;
+        }
 
         for (int i = _lastEventCount; i < events.Count; i++)
         {
@@ -870,6 +884,8 @@ public partial class Main : Node
         _selectedPersonId = id;
         _selectedFactionId = null;
         _map.SelectedFactionId = null;
+        _map.SelectedRegionId = -1;
+        _lensFactionBtn.Visible = false;
         _curseBtn.Visible = p.Alive && !p.Cursed;
         _followBtn.Visible = true;
         _followBtn.Text = _seedPeople.Contains(id) ? "★ Following bloodline — unfollow" : "☆ Follow this bloodline";
@@ -902,33 +918,84 @@ public partial class Main : Node
         foreach (var e in theirs)
         {
             var cls = Ui.ClassOf(e.Type);
-            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color] [color=#{Ui.Hex(cls.Color)}]{cls.Glyph}[/color] {e.Text}");
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color] [color=#{Ui.Hex(cls.Color)}]{cls.Glyph}[/color] {Link("e:" + e.Id, e.Text)}");
         }
 
         _inspector.Text = sb.ToString();
         _inspectorPanel.Visible = true;
     }
 
-    // Clicking a territory: hand off to the faction inspector if it's held, else show the
-    // wilderness itself (terrain + that no one holds it).
+    // Inspector cross-links: e:<event id> opens How We Got Here, r:<region id> the Region
+    // Lens, f:<faction id> the faction inspector. The link targets are real ids the panels
+    // already render from — no new lookups.
+    private void OnInspectorLink(string link)
+    {
+        if (link.StartsWith("e:") && int.TryParse(link[2..], out var eid)) OpenCatchup(eid);
+        else if (link.StartsWith("r:") && int.TryParse(link[2..], out var rid)) OnRegionPicked(rid);
+        else if (link.StartsWith("f:")) OnFactionPicked(link[2..]);
+    }
+
+    private static string Link(string target, string text)
+        => $"[color=#8a5d12][url={target}]{text}[/url][/color]";
+
+    // The Region Lens (foundation slice): clicking any territory inspects the place itself —
+    // its land, its neighbours, and the tales anchored to it — instead of silently handing off
+    // to the holder's faction panel (that's now one click deeper, via button or link). Anchored
+    // tales are real chronicle events whose RegionId names this region; everything the sim
+    // doesn't model yet is said plainly rather than faked.
     private void OnRegionPicked(int regionId)
     {
         if (regionId < 0 || regionId >= _world.Regions.Count) return;
         var region = _world.Regions[regionId];
-        if (region.ControllingFactionId is string fid) { OnFactionPicked(fid); return; }
+        var holder = region.ControllingFactionId is string hid ? _world.Factions[hid] : null;
 
         _selectedPersonId = null;
         _selectedFactionId = null;
         _map.SelectedFactionId = null;
+        _map.SelectedRegionId = regionId;
         _curseBtn.Visible = false;
         _followBtn.Visible = false;
+        _lensFactionId = holder?.Id;
+        _lensFactionBtn.Visible = holder is not null;
+        if (holder is not null) _lensFactionBtn.Text = $"⚑ Inspect {holder.Name}";
+
         _inspectorTitle.Text = region.Name;
-        _inspectorSub.Text = $"{region.TerrainType} · wilderness";
-        // "Place hint" is viewer language: the map's deterministic marker, not sim settlement data.
-        _inspector.Text = $"[color=#{Ui.Hex(Ui.Faded)}]unclaimed wilderness — no people hold this land[/color]\n\n"
-            + SectionCap("Map notes") + "\n"
-            + $"terrain: {region.TerrainType}\n"
-            + $"place hint: {PlaceSeeds.Label(PlaceSeeds.KindOf(_world, region))} — a mark on the map, not a settled place";
+        _inspectorSub.Text = $"{region.TerrainType} · {(holder is null ? "wilderness" : $"held by {holder.Name}")}";
+
+        var sb = new StringBuilder();
+        sb.AppendLine(SectionCap("The land"));
+        sb.AppendLine($"terrain: {region.TerrainType}");
+        sb.AppendLine(holder is null
+            ? "held by: no one — unclaimed wilderness"
+            : $"held by: {Link("f:" + holder.Id, holder.Name)}");
+        sb.AppendLine($"map hint: {PlaceSeeds.Label(PlaceSeeds.KindOf(_world, region))} — a viewer's mark, not sim state");
+        sb.AppendLine();
+        sb.AppendLine(SectionCap("Neighbouring lands"));
+        foreach (var nid in region.AdjacentRegionIds)
+        {
+            var n = _world.Regions[nid];
+            string nh = n.ControllingFactionId is string nf ? _world.Factions[nf].Name : "wild";
+            sb.AppendLine($"{Link("r:" + n.Id, n.Name)} — {n.TerrainType} · {nh}");
+        }
+        sb.AppendLine();
+        int total = _regionActivity.TotalFor(regionId);
+        sb.AppendLine(SectionCap("Tales anchored here")
+            + (total > 0 ? $" [color=#{Ui.Hex(Ui.Faded)}]({total} recorded)[/color]" : ""));
+        var recent = _regionActivity.RecentFor(regionId);
+        if (recent.Count == 0)
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]no anchored tales yet — recorded history has not named this place[/color]");
+        for (int i = recent.Count - 1; i >= 0; i--)   // newest first
+        {
+            var e = _world.Chronicle.Get(recent[i]);
+            var cls = Ui.ClassOf(e.Type);
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color] [color=#{Ui.Hex(cls.Color)}]{cls.Glyph}[/color] {Link("e:" + e.Id, e.Text)}");
+        }
+        sb.AppendLine();
+        sb.AppendLine(SectionCap("Not yet in the record"));
+        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]people are not yet site-anchored — the atlas scatters each people across their lands[/color]");
+        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]settlements are not modeled yet — the place marker is a map hint only[/color]");
+
+        _inspector.Text = sb.ToString();
         _inspectorPanel.Visible = true;
     }
 
@@ -937,6 +1004,8 @@ public partial class Main : Node
         _selectedPersonId = null;
         _selectedFactionId = fid;
         _map.SelectedFactionId = fid;
+        _map.SelectedRegionId = -1;
+        _lensFactionBtn.Visible = false;
         _curseBtn.Visible = false;
         _followBtn.Visible = true;
         _followBtn.Text = _markedFactions.Contains(fid) ? "★ Following — unfollow" : "☆ Follow this people";
@@ -972,7 +1041,7 @@ public partial class Main : Node
             sb.AppendLine();
             sb.AppendLine(SectionCap("Their lands"));
             foreach (var r in lands.Take(8))
-                sb.AppendLine($"{r.Name} — {r.TerrainType} · map role: {PlaceSeeds.Label(PlaceSeeds.KindOf(_world, r))}");
+                sb.AppendLine($"{Link("r:" + r.Id, r.Name)} — {r.TerrainType} · map role: {PlaceSeeds.Label(PlaceSeeds.KindOf(_world, r))}");
             if (lands.Count > 8)
                 sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]…and {lands.Count - 8} more[/color]");
         }

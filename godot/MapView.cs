@@ -63,6 +63,7 @@ public partial class MapView : Control
     };
 
     public string? SelectedFactionId;   // set by Main while a faction inspector is open — label emphasis only
+    public int SelectedRegionId = -1;   // set by Main while the Region Lens is open — gold lens ring only
 
     // Place-seed marker palette: timber/thatch/stone/dirt, per DESIGN.md ("ancient, not generic").
     private static readonly Color Timber = new("6e5639");
@@ -75,6 +76,7 @@ public partial class MapView : Control
     private static readonly Color FieldGold = new("8f7c43");
     private static readonly Color TentCloth = new("7d6b50");
     private static readonly Color MarkInk = new(0.16f, 0.12f, 0.07f);
+    private static readonly Color LensGold = new("d8a843");
     private const float CaptionZoom = 2.0f;   // place captions appear at/above this zoom
 
     // Soft dark tags behind map text — readable over any terrain without a full parchment panel.
@@ -160,8 +162,8 @@ public partial class MapView : Control
 
     // Draw order (fixed): 1 water → 2 land/coast (+ faint adjacency) → 3 territory tint →
     // 4 roads → 5 place-seed markers → 6 people dots → 7 follow/leader highlights (inside
-    // DrawPeople) → 8 labels (faction tags, hover tag) → 9 event pulses. New layers slot
-    // into this order deliberately; pulses stay topmost so drama always reads.
+    // DrawPeople) + region lens ring → 8 labels (faction tags, hover tag) → 9 event pulses.
+    // New layers slot into this order deliberately; pulses stay topmost so drama always reads.
     public override void _Draw()
     {
         _dots.Clear();
@@ -210,6 +212,14 @@ public partial class MapView : Control
         DrawRoads(P);                                                       // 4. roads
         DrawPlaceSeeds(P, regionR, font);                                   // 5. place markers
         DrawPeople(P, regionR, font);                                       // 6+7. people + highlights
+
+        // 7b. region lens ring — the inspected place, ringed gold beneath the labels.
+        if (SelectedRegionId >= 0 && SelectedRegionId < World.Regions.Count)
+        {
+            var sr = World.Regions[SelectedRegionId];
+            DrawArc(P(sr.X, sr.Y), regionR + 3f, 0, Mathf.Tau, 48, LensGold with { A = 0.85f }, 2.5f);
+        }
+
         DrawFactionLabels(P, font);                                         // 8. labels
 
         if (_hoverRegion >= 0 && _hoverRegion < World.Regions.Count)
