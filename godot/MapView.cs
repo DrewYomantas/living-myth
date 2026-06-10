@@ -62,6 +62,32 @@ public partial class MapView : Control
         ["wood"] = new Color("5d8a4e"),
     };
 
+    public string? SelectedFactionId;   // set by Main while a faction inspector is open — label emphasis only
+
+    // Place-seed marker palette: timber/thatch/stone/dirt, per DESIGN.md ("ancient, not generic").
+    private static readonly Color Timber = new("6e5639");
+    private static readonly Color RoofDark = new("55432c");
+    private static readonly Color Thatch = new("a3854f");
+    private static readonly Color StoneMark = new("90908a");
+    private static readonly Color TreeGreen = new("55703f");
+    private static readonly Color TrunkBrown = new("4a3a26");
+    private static readonly Color RoadDirt = new("9c7c4a");
+    private static readonly Color FieldGold = new("8f7c43");
+    private static readonly Color TentCloth = new("7d6b50");
+    private static readonly Color MarkInk = new(0.16f, 0.12f, 0.07f);
+    private const float CaptionZoom = 2.0f;   // place captions appear at/above this zoom
+
+    // Soft dark tags behind map text — readable over any terrain without a full parchment panel.
+    private static readonly StyleBoxFlat LabelTag = MakeTag(new Color(0.12f, 0.09f, 0.05f, 0.42f), null);
+    private static readonly StyleBoxFlat LabelTagSelected = MakeTag(new Color(0.12f, 0.09f, 0.05f, 0.62f), new Color("d8a843"));
+    private static StyleBoxFlat MakeTag(Color bg, Color? border)
+    {
+        var sb = new StyleBoxFlat { BgColor = bg };
+        sb.SetCornerRadiusAll(6);
+        if (border is Color bc) { sb.BorderColor = bc; sb.SetBorderWidthAll(1); }
+        return sb;
+    }
+
     public override void _Ready() => MouseFilter = MouseFilterEnum.Stop;
 
     public void PulseRegion(int regionId)
@@ -132,11 +158,15 @@ public partial class MapView : Control
     private Color RegionColor(Region r)
         => r.ControllingFactionId is string fid ? FactionColors.GetValueOrDefault(fid, Neutral) : Neutral;
 
+    // Draw order (fixed): 1 water → 2 land/coast (+ faint adjacency) → 3 territory tint →
+    // 4 roads → 5 place-seed markers → 6 people dots → 7 follow/leader highlights (inside
+    // DrawPeople) → 8 labels (faction tags, hover tag) → 9 event pulses. New layers slot
+    // into this order deliberately; pulses stay topmost so drama always reads.
     public override void _Draw()
     {
         _dots.Clear();
         _regionHits.Clear();
-        DrawRect(new Rect2(Vector2.Zero, Size), Sea);
+        DrawRect(new Rect2(Vector2.Zero, Size), Sea);                       // 1. water
         var font = GetThemeDefaultFont();
         if (World is null || font is null) return;
 
@@ -149,7 +179,7 @@ public partial class MapView : Control
         Vector2 P(float nx, float ny) => (origin + new Vector2(nx, ny) * side - camCenter) * _zoom + camCenter + _pan;
         float regionR = RegionRadiusNorm * side * _zoom;
 
-        BuildIsland();
+        BuildIsland();                                                      // 2. land
         if (_islandNorm is not null)
         {
             var poly = _islandNorm.Select(p => P(p.X, p.Y)).ToArray();
@@ -162,39 +192,197 @@ public partial class MapView : Control
             foreach (var bid in a.AdjacentRegionIds)
                 if (bid > a.Id)
                     DrawLine(P(a.X, a.Y), P(World.Regions[bid].X, World.Regions[bid].Y),
-                             new Color(1, 1, 1, 0.07f), 1f);
+                             new Color(1, 1, 1, 0.05f), 1f);
 
-        // Territories.
+        // 3. territory tint: a banner-cloth hint, deliberately subordinate to markers and labels.
+        // The selected people's ring firms up so their lands read while their inspector is open.
         foreach (var r in World.Regions)
         {
             var c = P(r.X, r.Y);
             var col = RegionColor(r);
-            // Muted territorial hints, not giant faction paint: a soft tint plus a thin ring.
-            DrawCircle(c, regionR, col with { A = r.ControllingFactionId is null ? 0.18f : 0.30f });
-            DrawArc(c, regionR, 0, Mathf.Tau, 40, col with { A = 0.65f }, _hoverRegion == r.Id ? 3f : 1.5f);
-            if (_regionPulses.TryGetValue(r.Id, out var pulse))
-            {
-                float t = pulse / PulseDuration;                   // 1 -> 0 over the pulse's life
-                float ring = regionR * (1f + (1f - t) * 0.8f);     // expands outward as it fades
-                DrawArc(c, ring, 0, Mathf.Tau, 48, new Color(0.96f, 0.78f, 0.43f, t * 0.9f), 3f);
-            }
+            bool sel = r.ControllingFactionId is string f && f == SelectedFactionId;
+            DrawCircle(c, regionR, col with { A = r.ControllingFactionId is null ? 0.10f : 0.20f });
+            DrawArc(c, regionR, 0, Mathf.Tau, 40, col with { A = sel ? 0.85f : 0.40f },
+                    _hoverRegion == r.Id ? 3f : (sel ? 2.2f : 1.2f));
             _regionHits.Add((c, regionR, r.Id));
         }
 
-        DrawPeople(P, regionR, font);
-        DrawFactionLabels(P, font);
+        DrawRoads(P);                                                       // 4. roads
+        DrawPlaceSeeds(P, regionR, font);                                   // 5. place markers
+        DrawPeople(P, regionR, font);                                       // 6+7. people + highlights
+        DrawFactionLabels(P, font);                                         // 8. labels
 
-        // Hover tooltip: region name + who holds it.
         if (_hoverRegion >= 0 && _hoverRegion < World.Regions.Count)
+            DrawHoverTag(P, regionR, font);
+
+        // 9. event pulses — transient gold rings, always on top so drama reads through labels.
+        foreach (var (rid, pulse) in _regionPulses)
         {
-            var r = World.Regions[_hoverRegion];
-            var c = P(r.X, r.Y);
-            string holder = r.ControllingFactionId is string fid ? World.Factions[fid].Name : "unclaimed";
-            DrawString(font, c + new Vector2(0, -regionR - 8), $"{r.Name}",
-                HorizontalAlignment.Center, -1, 14, modulate: new Color("f2e5c2"));
-            DrawString(font, c + new Vector2(0, -regionR + 8), $"{r.TerrainType} · {holder}",
-                HorizontalAlignment.Center, -1, 11, modulate: new Color("c9b288"));
+            if (rid < 0 || rid >= World.Regions.Count) continue;
+            var r = World.Regions[rid];
+            float t = pulse / PulseDuration;                   // 1 -> 0 over the pulse's life
+            float ring = regionR * (1f + (1f - t) * 0.8f);     // expands outward as it fades
+            DrawArc(P(r.X, r.Y), ring, 0, Mathf.Tau, 48, new Color(0.96f, 0.78f, 0.43f, t * 0.9f), 3f);
         }
+    }
+
+    // Roads: dirt paths between adjacent regions held by the same people — the only
+    // high-confidence links the current data supports without scanning history. Each path's
+    // kink comes from a stable pair hash, never the sim's Rng.
+    private void DrawRoads(Func<float, float, Vector2> P)
+    {
+        foreach (var a in World!.Regions)
+        {
+            if (a.ControllingFactionId is not string fid) continue;
+            foreach (var bid in a.AdjacentRegionIds)
+            {
+                if (bid <= a.Id || World.Regions[bid].ControllingFactionId != fid) continue;
+                var b = World.Regions[bid];
+                var p1 = P(a.X, a.Y);
+                var p2 = P(b.X, b.Y);
+                var s = p1.Lerp(p2, 0.12f);     // trimmed ends so paths don't pierce the markers
+                var e = p1.Lerp(p2, 0.88f);
+                var dir = e - s;
+                uint h = PlaceSeeds.Hash(World.Seed, a.Id * 131 + bid, 2);
+                var mid = (s + e) / 2f + new Vector2(-dir.Y, dir.X).Normalized()
+                          * dir.Length() * (((h & 0xff) / 255f - 0.5f) * 0.22f);
+                DrawPolyline(new[] { s, mid, e }, RoadDirt with { A = 0.30f }, 2f, true);
+            }
+        }
+    }
+
+    // Place seeds: deterministic viewer-derived landmark glyphs (see PlaceSeeds.cs). Visual
+    // identity only — the sim has no settlements; nothing here is sim state or touches its Rng.
+    // Held regions fly a small faction banner; captions appear once zoomed in past CaptionZoom.
+    private void DrawPlaceSeeds(Func<float, float, Vector2> P, float regionR, Font font)
+    {
+        foreach (var r in World!.Regions)
+        {
+            var kind = PlaceSeeds.KindOf(World, r);
+            var c = P(r.X, r.Y) + PlaceSeeds.Offset(World.Seed, r.Id) * regionR * 0.30f;
+            float s = Mathf.Clamp(regionR * 0.30f, 7f, 30f);
+            DrawPlaceMarker(c, s, kind);
+            if (r.ControllingFactionId is string fid)
+                DrawBannerFlag(c + new Vector2(s * 0.85f, s * 0.5f), s,
+                               FactionColors.GetValueOrDefault(fid, Neutral));
+            if (_zoom >= CaptionZoom)
+            {
+                string cap = PlaceSeeds.Label(kind);
+                var pos = c + new Vector2(0, s * 0.9f + 12);
+                float w = font.GetStringSize(cap, HorizontalAlignment.Center, -1, 10).X;
+                DrawString(font, pos + new Vector2(-w / 2f + 1, 1), cap, HorizontalAlignment.Left, -1, 10, MarkInk with { A = 0.7f });
+                DrawString(font, pos + new Vector2(-w / 2f, 0), cap, HorizontalAlignment.Left, -1, 10, new Color("e3d3a6"));
+            }
+        }
+    }
+
+    private void DrawPlaceMarker(Vector2 c, float s, PlaceSeeds.Kind kind)
+    {
+        switch (kind)
+        {
+            case PlaceSeeds.Kind.HillFort:
+                DrawArc(c, s * 0.9f, 0, Mathf.Tau, 20, StoneMark with { A = 0.85f }, Mathf.Max(1.2f, s * 0.1f));
+                DrawHut(c + new Vector2(0, s * 0.1f), s * 0.7f);
+                break;
+            case PlaceSeeds.Kind.WatchPost:
+                DrawRect(new Rect2(c.X - s * 0.14f, c.Y - s * 0.9f, s * 0.28f, s * 1.1f), StoneMark);
+                DrawRect(new Rect2(c.X - s * 0.3f, c.Y - s * 1.05f, s * 0.6f, s * 0.18f), RoofDark);
+                break;
+            case PlaceSeeds.Kind.Cairn:
+                DrawCircle(c + new Vector2(-s * 0.22f, 0), s * 0.2f, StoneMark);
+                DrawCircle(c + new Vector2(s * 0.22f, 0), s * 0.2f, StoneMark);
+                DrawCircle(c + new Vector2(0, -s * 0.28f), s * 0.18f, StoneMark.Lightened(0.1f));
+                break;
+            case PlaceSeeds.Kind.Grove:
+                DrawTree(c + new Vector2(-s * 0.35f, s * 0.15f), s * 0.9f);
+                DrawTree(c + new Vector2(s * 0.3f, s * 0.05f), s * 1.1f);
+                DrawTree(c + new Vector2(0, s * 0.4f), s * 0.7f);
+                break;
+            case PlaceSeeds.Kind.Shrine:
+                DrawRect(new Rect2(c.X - s * 0.16f, c.Y - s * 0.5f, s * 0.32f, s * 0.75f), StoneMark);
+                DrawRect(new Rect2(c.X - s * 0.3f, c.Y - s * 0.62f, s * 0.6f, s * 0.14f), StoneMark.Darkened(0.15f));
+                DrawCircle(c + new Vector2(0, -s * 0.8f), s * 0.11f, new Color("c9973f"));
+                break;
+            case PlaceSeeds.Kind.Camp:
+                DrawTent(c + new Vector2(-s * 0.3f, s * 0.25f), s * 0.6f);
+                DrawTent(c + new Vector2(s * 0.32f, s * 0.3f), s * 0.45f);
+                break;
+            case PlaceSeeds.Kind.Ford:
+                DrawLine(c + new Vector2(-s * 0.6f, -s * 0.12f), c + new Vector2(s * 0.6f, -s * 0.12f), Sea.Lightened(0.25f) with { A = 0.8f }, Mathf.Max(1.2f, s * 0.1f));
+                DrawLine(c + new Vector2(-s * 0.6f, s * 0.16f), c + new Vector2(s * 0.6f, s * 0.16f), Sea.Lightened(0.25f) with { A = 0.8f }, Mathf.Max(1.2f, s * 0.1f));
+                for (int i = -1; i <= 1; i++)
+                    DrawLine(c + new Vector2(i * s * 0.3f, -s * 0.3f), c + new Vector2(i * s * 0.3f, s * 0.34f), Timber, Mathf.Max(1.4f, s * 0.14f));
+                break;
+            case PlaceSeeds.Kind.FarmCluster:
+                DrawRect(new Rect2(c.X - s * 0.7f, c.Y - s * 0.05f, s * 0.85f, s * 0.26f), FieldGold with { A = 0.85f });
+                DrawRect(new Rect2(c.X - s * 0.55f, c.Y + s * 0.3f, s * 0.85f, s * 0.26f), FieldGold.Darkened(0.12f) with { A = 0.85f });
+                DrawHut(c + new Vector2(s * 0.45f, -s * 0.3f), s * 0.5f);
+                break;
+            case PlaceSeeds.Kind.MarketHamlet:
+                DrawHut(c + new Vector2(-s * 0.35f, 0), s * 0.55f);
+                DrawHut(c + new Vector2(s * 0.3f, s * 0.2f), s * 0.45f);
+                DrawRect(new Rect2(c.X + s * 0.05f, c.Y + s * 0.42f, s * 0.4f, s * 0.16f), Thatch);
+                break;
+            case PlaceSeeds.Kind.Ruins:
+                DrawRect(new Rect2(c.X - s * 0.4f, c.Y - s * 0.45f, s * 0.18f, s * 0.6f), StoneMark with { A = 0.8f });
+                DrawRect(new Rect2(c.X + s * 0.15f, c.Y - s * 0.2f, s * 0.18f, s * 0.35f), StoneMark with { A = 0.7f });
+                DrawLine(c + new Vector2(-s * 0.15f, s * 0.25f), c + new Vector2(s * 0.45f, s * 0.12f), StoneMark with { A = 0.6f }, Mathf.Max(1.2f, s * 0.12f));
+                break;
+        }
+    }
+
+    private void DrawHut(Vector2 c, float w)
+    {
+        float h = w * 0.62f;
+        DrawRect(new Rect2(c.X - w / 2f, c.Y - h / 2f, w, h), Timber);
+        DrawColoredPolygon(new[]
+        {
+            new Vector2(c.X - w * 0.62f, c.Y - h / 2f),
+            new Vector2(c.X + w * 0.62f, c.Y - h / 2f),
+            new Vector2(c.X, c.Y - h / 2f - w * 0.55f),
+        }, RoofDark);
+    }
+
+    private void DrawTree(Vector2 basePos, float s)
+    {
+        DrawLine(basePos, basePos + new Vector2(0, -s * 0.45f), TrunkBrown, Mathf.Max(1f, s * 0.12f));
+        DrawCircle(basePos + new Vector2(0, -s * 0.62f), s * 0.34f, TreeGreen);
+    }
+
+    private void DrawTent(Vector2 basePos, float w)
+    {
+        DrawColoredPolygon(new[]
+        {
+            basePos + new Vector2(-w / 2f, 0),
+            basePos + new Vector2(w / 2f, 0),
+            basePos + new Vector2(0, -w * 0.8f),
+        }, TentCloth);
+    }
+
+    // Faction identity as cloth: a small pennant beside the place marker, not territory paint.
+    private void DrawBannerFlag(Vector2 basePos, float s, Color col)
+    {
+        var top = basePos + new Vector2(0, -s);
+        DrawLine(basePos, top, MarkInk with { A = 0.85f }, 1.2f);
+        DrawColoredPolygon(new[] { top, top + new Vector2(s * 0.45f, s * 0.15f), top + new Vector2(0, s * 0.3f) }, col);
+    }
+
+    // Hover tag: region name + terrain/holder/place-hint on a soft dark backing.
+    private void DrawHoverTag(Func<float, float, Vector2> P, float regionR, Font font)
+    {
+        var r = World!.Regions[_hoverRegion];
+        var c = P(r.X, r.Y);
+        string holder = r.ControllingFactionId is string fid ? World.Factions[fid].Name : "unclaimed";
+        string l1 = r.Name;
+        string l2 = $"{r.TerrainType} · {holder} · {PlaceSeeds.Label(PlaceSeeds.KindOf(World, r))}";
+        float w = Mathf.Max(font.GetStringSize(l1, HorizontalAlignment.Center, -1, 14).X,
+                            font.GetStringSize(l2, HorizontalAlignment.Center, -1, 11).X);
+        var rect = new Rect2(c.X - w / 2f - 8, c.Y - regionR - 46, w + 16, 38);
+        LabelTag.Draw(GetCanvasItem(), rect);
+        DrawString(font, new Vector2(rect.Position.X + 8, rect.Position.Y + 16), l1,
+            HorizontalAlignment.Center, w, 14, new Color("f2e5c2"));
+        DrawString(font, new Vector2(rect.Position.X + 8, rect.Position.Y + 31), l2,
+            HorizontalAlignment.Center, w, 11, new Color("c9b288"));
     }
 
     private void DrawPeople(Func<float, float, Vector2> P, float regionR, Font font)
@@ -236,6 +424,9 @@ public partial class MapView : Control
 
     private void DrawFactionLabels(Func<float, float, Vector2> P, Font font)
     {
+        // Greedy de-overlap: factions whose centroids land close (mid-island neighbours) would
+        // stack their tags; nudge any colliding tag downward until it clears the ones already drawn.
+        var placed = new List<Rect2>();
         foreach (var f in World!.Config.Factions)
         {
             var fac = World.Factions[f.Id];
@@ -243,13 +434,23 @@ public partial class MapView : Control
             if (held.Count == 0) continue;
 
             var centroid = P(held.Average(r => r.X), held.Average(r => r.Y));
-            int pop = fac.Members.Count;
-            string leader = fac.LeaderId is int lid ? World.People[lid].Name : "(none)";
+            string sub = $"pop {fac.Members.Count} · {(fac.LeaderId is int lid ? World.People[lid].Name : "(none)")}";
             var col = FactionColors.GetValueOrDefault(f.Id, Neutral);
-            DrawString(font, centroid + new Vector2(-60, -2), fac.Name,
-                HorizontalAlignment.Center, 120, 14, modulate: new Color("f2e5c2"));
-            DrawString(font, centroid + new Vector2(-60, 15), $"pop {pop} · {leader}",
-                HorizontalAlignment.Center, 120, 11, modulate: col.Lightened(0.35f));
+            bool sel = f.Id == SelectedFactionId;
+
+            // Tag backing keeps names readable over any terrain; selection earns a gold-bordered,
+            // darker tag — prominence through hierarchy, not size.
+            float w = Mathf.Max(font.GetStringSize(fac.Name, HorizontalAlignment.Center, -1, 14).X,
+                                font.GetStringSize(sub, HorizontalAlignment.Center, -1, 11).X);
+            var rect = new Rect2(centroid.X - w / 2f - 7, centroid.Y - 16, w + 14, 34);
+            for (int guard = 0; guard < 8 && placed.Any(p => p.Intersects(rect)); guard++)
+                rect.Position += new Vector2(0, 38);
+            placed.Add(rect);
+            (sel ? LabelTagSelected : LabelTag).Draw(GetCanvasItem(), rect);
+            DrawString(font, new Vector2(rect.Position.X + 7, rect.Position.Y + 14), fac.Name,
+                HorizontalAlignment.Center, w, 14, new Color("f2e5c2"));
+            DrawString(font, new Vector2(rect.Position.X + 7, rect.Position.Y + 29), sub,
+                HorizontalAlignment.Center, w, 11, col.Lightened(0.35f));
         }
     }
 

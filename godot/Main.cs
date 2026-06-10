@@ -409,7 +409,7 @@ public partial class Main : Node
         titles.AddChild(_inspectorSub);
         var close = new Button { Text = "✕", CustomMinimumSize = new Vector2(28, 28) };
         Ui.StyleButton(close);
-        close.Pressed += () => _inspectorPanel.Visible = false;
+        close.Pressed += () => { _inspectorPanel.Visible = false; _map.SelectedFactionId = null; };
         hb.AddChild(close);
 
         var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
@@ -869,6 +869,7 @@ public partial class Main : Node
         if (!_world.People.TryGetValue(id, out var p)) return;
         _selectedPersonId = id;
         _selectedFactionId = null;
+        _map.SelectedFactionId = null;
         _curseBtn.Visible = p.Alive && !p.Cursed;
         _followBtn.Visible = true;
         _followBtn.Text = _seedPeople.Contains(id) ? "★ Following bloodline — unfollow" : "☆ Follow this bloodline";
@@ -918,11 +919,16 @@ public partial class Main : Node
 
         _selectedPersonId = null;
         _selectedFactionId = null;
+        _map.SelectedFactionId = null;
         _curseBtn.Visible = false;
         _followBtn.Visible = false;
         _inspectorTitle.Text = region.Name;
         _inspectorSub.Text = $"{region.TerrainType} · wilderness";
-        _inspector.Text = $"[color=#{Ui.Hex(Ui.Faded)}]unclaimed wilderness — no people hold this land[/color]";
+        // "Place hint" is viewer language: the map's deterministic marker, not sim settlement data.
+        _inspector.Text = $"[color=#{Ui.Hex(Ui.Faded)}]unclaimed wilderness — no people hold this land[/color]\n\n"
+            + SectionCap("Map notes") + "\n"
+            + $"terrain: {region.TerrainType}\n"
+            + $"place hint: {PlaceSeeds.Label(PlaceSeeds.KindOf(_world, region))} — a mark on the map, not a settled place";
         _inspectorPanel.Visible = true;
     }
 
@@ -930,6 +936,7 @@ public partial class Main : Node
     {
         _selectedPersonId = null;
         _selectedFactionId = fid;
+        _map.SelectedFactionId = fid;
         _curseBtn.Visible = false;
         _followBtn.Visible = true;
         _followBtn.Text = _markedFactions.Contains(fid) ? "★ Following — unfollow" : "☆ Follow this people";
@@ -955,6 +962,19 @@ public partial class Main : Node
             sb.AppendLine(SectionCap("Customs they keep"));
             foreach (var c in customs)
                 sb.AppendLine($"[color=#{Ui.Hex(Ui.Violet)}]❧[/color] {c}");
+        }
+        // "Map role" is viewer language — the deterministic place marker drawn on the map,
+        // not sim settlement data (the sim has no settlements yet).
+        var lands = fac.ControlledRegions.Select(int.Parse).OrderBy(i => i)
+            .Select(i => _world.Regions[i]).ToList();
+        if (lands.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine(SectionCap("Their lands"));
+            foreach (var r in lands.Take(8))
+                sb.AppendLine($"{r.Name} — {r.TerrainType} · map role: {PlaceSeeds.Label(PlaceSeeds.KindOf(_world, r))}");
+            if (lands.Count > 8)
+                sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]…and {lands.Count - 8} more[/color]");
         }
         sb.AppendLine();
         sb.AppendLine(SectionCap("Eldest among them"));
