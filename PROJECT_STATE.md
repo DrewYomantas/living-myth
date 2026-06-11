@@ -112,11 +112,25 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       1/18/42/7 at 120 and 1000 yrs (100% coverage; all founding peoples are landed at these
       seeds). Viewer: one "home:" line in the person inspector ("—" when null) — the only visual
       touch; death/murder/memorial anchoring deliberately NOT done yet (next slice).
-- [ ] Later — anchor deaths/murders/births to HomeRegionId (events + viewer memorials — the
-      payoff slice for the home contract; event-text changes will move chronicle bytes, so it
-      needs a deliberate look at verify even without new RNG); battle sites and per-region
+- [x] Life Memory Home Anchors V1 (2026-06-11, sim metadata + viewer memory language): births,
+      deaths, and murders now carry `Event.HomeRegionId` — a **memory anchor** (where the life is
+      remembered: the lineage's home root), kept strictly apart from `Event.RegionId` (where it
+      happened, still null on life events). Birth ← child's home; death ← deceased's; murder ←
+      **victim's** home (the grief belongs to the victim's line). Null home → null anchor, no
+      fallback. Event texts untouched, no RNG — verify held **exactly 884/699/567/706**. `homes`
+      gate extended: life anchors match the soul's home, RegionId stays null on life events, no
+      text names its anchor region, anchors deterministic across double runs — green at 120 yrs
+      (life anchors 542/419/335/434, seeds 1/18/42/7) and 1000 yrs. Viewer: memorial where-line
+      gains "remembered in {home}, the home of their line" (births: "of a line rooted in {X}")
+      below true "in {X}", above the honest no-place line; memorial pulse falls back to the home;
+      Region Lens "Lives rooted here" section (separate from "Tales anchored here", with its own
+      not-where-it-happened caption) off a second incremental RegionActivity channel. Full
+      anchor-semantics table below ("Life Memory — anchor contract").
+- [ ] Later — battle sites and per-region
       economy (add events/RNG and move the verify baseline; together they extend place memory to
-      battles/famine and let war's-peace / famine's-end close chapters); followed regions (roadmap 4 in
+      battles/famine and let war's-peace / famine's-end close chapters); home-memory cairn marks
+      on the map (Place Memory V2 — the data now exists; needs a mark kind that reads
+      HomeRegionId and is visually distinct from true place marks); followed regions (roadmap 4 in
       docs/TIME_AND_STORY_PACING.md); mythic glosses / entity links; relationship constellation;
       local site/tableau visuals; memorial tableau upgrade; visual/UX pass (surface culture +
       gossip in the viewer); echo packs; timeline scrubbing. ← NEXT
@@ -301,6 +315,33 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
   honest-null, and double-run home-map determinism — green at 120 and 1000 yrs, 100% coverage
   on seeds 1/18/42/7. Viewer got exactly one line (inspector "home: {region}" / "—"). Event
   anchoring to homes (deaths, murders, births) deliberately deferred to its own slice.
+
+- [2026-06-11] Session: Life Memory Home Anchors V1 — the payoff slice, and it stayed
+  baseline-safe (884/699/567/706 exact) because the design adds a **second anchor channel**
+  instead of bending the first: `Event.HomeRegionId` (where a life is remembered) lives beside
+  `Event.RegionId` (where it happened), so every existing place consumer — catch-up "· in {X}",
+  place pulses, Place Memory marks, "Tales anchored here" — is structurally unable to mistake
+  memory for location. Event texts and RNG untouched; `Render()` prints only text, so verify
+  could not move. Wording contract: home anchors may say only "of {X}" / "rooted in {X}" /
+  "remembered in {X}" — never bare "in {X}", never died/born/murdered in/at. Murder anchors to
+  the victim's home, documented. `homes` gate extended (anchor-matches-soul, RegionId-null on
+  life events, text-never-names-anchor, double-run anchor determinism). Viewer: memorial
+  where-line + pulse fallback, Region Lens "Lives rooted here" via a second incremental
+  RegionActivity channel — all O(new events), no history scans.
+
+### Life Memory — anchor contract (2026-06-11)
+
+| Event | `RegionId` (where it happened) | `HomeRegionId` (where it is remembered) | Whose home, and why |
+|---|---|---|---|
+| birth | null — no birthplace is modeled | child's home | the new life's own root (inherited at birth) |
+| death (all causes) | null — no death place is modeled | deceased's home | the line that mourns is the dead's own |
+| murder | null — no murder site is modeled | **victim's** home | the grief and memorial belong to the victim's line, not the killer's provenance |
+| everything else | unchanged (exact anchors / disclosed seat conventions) | null | home memory is life-event semantics only |
+
+Viewer language rules for `HomeRegionId` (binding): "of {X}", "rooted in {X}", "remembered in
+{X}", "home of their line" — never "in {X}" alone, never "born/died/murdered in/at {X}". Null
+anchors produce no place language at all (the memorial's honest no-place line remains). Home
+memory and true place anchors must never share a viewer surface without distinct labeling.
 
 Core principle: **no fake locations.** `Event.RegionId` is set only when the recording code
 path already holds a specific real region. It is never derived from faction land for

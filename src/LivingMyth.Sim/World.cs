@@ -975,7 +975,8 @@ public sealed class World
         RemoveFromLife(p);
         string text = $"{p.Name} of {fac.Name} dies {reason ?? DeathReason(age)} at {age}.";
         var ev = Chronicle.Record(Year, "death", text, participants: new() { p.Id },
-            causes: cause is null ? null : new() { cause.Id }, tags: new() { "death" });
+            causes: cause is null ? null : new() { cause.Id }, tags: new() { "death" },
+            homeRegionId: p.HomeRegionId);   // remembered at the home of their line, not a death place
         fac.LastDeathEventId = ev.Id;
         if (wasLeader) Succeed(fac, p, ev);
         return ev;
@@ -1028,7 +1029,8 @@ public sealed class World
         var allTags = new List<string> { "crime", "murder" };
         allTags.AddRange(tags);
         var ev = Chronicle.Record(Year, "murder", text,
-            participants: new() { victim.Id, killer.Id }, causes: causes, tags: allTags);
+            participants: new() { victim.Id, killer.Id }, causes: causes, tags: allTags,
+            homeRegionId: victim.HomeRegionId);   // the victim's line carries the grief — never a murder site
         fac.LastDeathEventId = ev.Id;
         victim.KillerId = killer.Id;
         victim.Murdered = true;
@@ -1264,7 +1266,8 @@ public sealed class World
         father.Children.Add(child.Id);
         Chronicle.Record(Year, "birth",
             $"{child.Name} is born to {mother.Name} and {father.Name} of {Factions[father.FactionId].Name}.",
-            participants: new() { child.Id, mother.Id, father.Id }, tags: new() { "birth" });
+            participants: new() { child.Id, mother.Id, father.Id }, tags: new() { "birth" },
+            homeRegionId: child.HomeRegionId);   // the root of the new life's line, not a birthplace
     }
 
     // ---------- war ----------

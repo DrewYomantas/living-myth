@@ -279,7 +279,8 @@ void SurfaceCmd(int seed, int years)
 // home else mother's, nulls are honest (landless line), and the whole map is deterministic.
 void HomesCmd(int years)
 {
-    Console.WriteLine($"Home contract gate ({years} yrs): founders at the founding seat, children inherit, nulls honest.");
+    Console.WriteLine($"Home contract gate ({years} yrs): founders at the founding seat, children inherit, nulls honest,");
+    Console.WriteLine("life events remembered at home (never a literal place), all of it deterministic.");
     int failures = 0;
     foreach (int seed in new[] { 1, 18, 42, 7 })
     {
@@ -313,18 +314,45 @@ void HomesCmd(int years)
             }
         }
 
-        // Determinism of the home map itself: a second run must root every soul identically.
+        // Life-memory anchors: births/deaths/murders carry the remembered-at-home anchor
+        // (HomeRegionId), never a literal event place (RegionId), and never name the home
+        // region in their text — the anchor is memory, not geography the text could claim.
+        int anchored = 0, lifeEvents = 0;
+        foreach (var e in w.Chronicle.Events.Where(e => e.Type is "birth" or "death" or "murder"))
+        {
+            lifeEvents++;
+            if (e.RegionId is not null)
+                bad.Add($"life event #{e.Id} claims a literal place ({e.RegionId})");
+            var soul = w.People[e.Participants[0]];   // child / deceased / victim by contract
+            if (e.HomeRegionId != soul.HomeRegionId)
+                bad.Add($"life event #{e.Id} anchor {e.HomeRegionId?.ToString() ?? "null"} != {soul.Name}'s home {soul.HomeRegionId?.ToString() ?? "null"}");
+            if (e.HomeRegionId is int ah)
+            {
+                anchored++;
+                if (ah < 0 || ah >= w.Regions.Count)
+                    bad.Add($"life event #{e.Id} home anchor {ah} is not a real region");
+                else if (e.Text.Contains(w.Regions[ah].Name))
+                    bad.Add($"life event #{e.Id} text names its home region — text must never claim place");
+            }
+        }
+
+        // Determinism of the home map itself: a second run must root every soul identically
+        // and stamp every life event with the same memory anchor.
         var (c2, n2) = Load();
         var w2 = new World(seed, c2, n2); w2.Run(years);
         bool sameMap = w.People.Count == w2.People.Count &&
             w.People.Values.OrderBy(p => p.Id).Select(p => (p.Id, p.HomeRegionId))
              .SequenceEqual(w2.People.Values.OrderBy(p => p.Id).Select(p => (p.Id, p.HomeRegionId)));
         if (!sameMap) bad.Add("home map differs between identical runs");
+        bool sameAnchors = w.Chronicle.Events.Count == w2.Chronicle.Events.Count &&
+            w.Chronicle.Events.Select(e => (e.Id, e.HomeRegionId))
+             .SequenceEqual(w2.Chronicle.Events.Select(e => (e.Id, e.HomeRegionId)));
+        if (!sameAnchors) bad.Add("life-memory anchors differ between identical runs");
 
         int ever = w.People.Count, everHome = w.People.Values.Count(p => p.HomeRegionId is not null);
         var living = w.Living();
         int liveHome = living.Count(p => p.HomeRegionId is not null);
-        Console.WriteLine($"  seed {seed,3}: {(bad.Count == 0 ? "OK" : "FAIL")}  homes {everHome}/{ever} ever, {liveHome}/{living.Count} living");
+        Console.WriteLine($"  seed {seed,3}: {(bad.Count == 0 ? "OK" : "FAIL")}  homes {everHome}/{ever} ever, {liveHome}/{living.Count} living, life anchors {anchored}/{lifeEvents}");
         foreach (var b in bad.Take(5)) Console.WriteLine($"           {b}");
         if (bad.Count > 0) failures++;
     }

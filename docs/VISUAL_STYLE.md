@@ -286,7 +286,7 @@ below waits on a deliberate, baseline-moving sim contract:
 
 | Future mark | Blocked on |
 |---|---|
-| death / murder cairn | ~~`Person.HomeRegionId`~~ **contract shipped 2026-06-11** (founders ← founding seat, newborns inherit, immutable, honest nulls; baseline-safe, gated by console `homes`). Remaining: stamp death/murder/birth events with the home region — a deliberate slice of its own |
+| death / murder cairn | **data shipped 2026-06-11**: `Person.HomeRegionId` + `Event.HomeRegionId` on births/deaths/murders (Life Memory Home Anchors V1). Remaining: a *home-memory* mark kind, visually and verbally distinct from true place marks — a cairn from a home anchor means "remembered here", never "died here" |
 | battle scar at the battlefield | battle-site contract (battles aren't events at all today) |
 | famine / drought / plenty land mood | per-region economy (prosperity is per-faction; drought unmodeled) |
 | peace ribbon | faction ids on peace events + a treaty-site convention |
@@ -298,6 +298,25 @@ Forbidden until those contracts exist: marking any of the above from faction lan
 nearest-region guesses, participants' homelands, or prose inference. The existing
 custom/rumor `PrimaryRegion` anchors are a disclosed pre-doctrine seat-proxy
 convention — kept for continuity, slated for replacement by the seat contract.
+
+### Home-memory anchor language (Life Memory V1, 2026-06-11 — binding)
+
+Life events (births, deaths, murders) carry `Event.HomeRegionId` — where the life is
+**remembered** (the lineage's home root), a separate field from `Event.RegionId`
+(where it happened, still null on life events). Viewer rules:
+
+- Allowed copy: "of {X}", "rooted in {X}", "remembered in {X}", "the home of their
+  line", "memorial raised in {X}".
+- Forbidden copy: bare "in {X}", "born in {X}", "died in {X}", "murdered at {X}" —
+  any phrasing that reads as the event's physical location.
+- Null `HomeRegionId` → no place language at all; the memorial's honest
+  "the chronicle records no place for this passing" line stays.
+- Home memory and true place anchors never share a surface unlabeled: the memorial
+  where-line distinguishes "in {X}" (true place) from "remembered in {X}" (home),
+  and the Region Lens keeps "Lives rooted here" (with a not-where-it-happened
+  caption) apart from "Tales anchored here".
+- Place Memory map marks read `RegionId` only — home anchors never scar the land
+  until a visually distinct home-memory mark kind exists (deferred).
 
 ## Sim-truth honesty contract (restated, binding)
 

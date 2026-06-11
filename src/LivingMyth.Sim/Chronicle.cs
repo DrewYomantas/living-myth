@@ -19,10 +19,13 @@ public sealed class Event
     public List<int> Causes { get; }         // ids of earlier events that led to this one
     public List<string> Tags { get; }
     public int? RegionId { get; }            // where it happened, when the caller knows (null otherwise)
+    public int? HomeRegionId { get; }        // where it is REMEMBERED — the lineage home-root of the
+                                             // life this event marks (births/deaths/murders), never a
+                                             // claim about where the event physically happened
 
     public Event(int id, int year, string etype, string text,
                  List<int>? participants = null, List<int>? causes = null, List<string>? tags = null,
-                 int? regionId = null)
+                 int? regionId = null, int? homeRegionId = null)
     {
         Id = id;
         Year = year;
@@ -32,6 +35,7 @@ public sealed class Event
         Causes = causes ?? new();
         Tags = tags ?? new();
         RegionId = regionId;
+        HomeRegionId = homeRegionId;
     }
 }
 
@@ -44,9 +48,9 @@ public sealed class Chronicle
     /// event's id as the cause of a follow-up event.</summary>
     public Event Record(int year, string etype, string text,
                         List<int>? participants = null, List<int>? causes = null, List<string>? tags = null,
-                        int? regionId = null)
+                        int? regionId = null, int? homeRegionId = null)
     {
-        var ev = new Event(_nextId, year, etype, text, participants, causes, tags, regionId);
+        var ev = new Event(_nextId, year, etype, text, participants, causes, tags, regionId, homeRegionId);
         _nextId++;
         Events.Add(ev);
         return ev;

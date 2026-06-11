@@ -1169,7 +1169,8 @@ public partial class Main : Node
 
         var cls = Ui.ClassOf(e.Type);
         StyleGuardCard(memorial, cls);
-        if (memorial && e.RegionId is int prid) _map.PulseRegion(prid);   // only a real place pulses
+        // A real place pulses first; failing that, the home the soul is remembered in.
+        if (memorial && (e.RegionId ?? e.HomeRegionId) is int prid) _map.PulseRegion(prid);
 
         var sb = new StringBuilder();
         string lead = memorial ? "a soul you followed has died — the world holds its breath"
@@ -1178,8 +1179,14 @@ public partial class Main : Node
             : "a great deed marks the age — the world waits";
         sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]{lead}[/color]");
         sb.AppendLine();
+        // Place language stays honest: "in X" only for a true event place; a home anchor is
+        // memory ("remembered in"), never where it happened; no anchor at all is said plainly.
         string where = e.RegionId is int rid && _world.RegionName(rid) is string rn
             ? $"  [color=#{Ui.Hex(Ui.Faded)}]· in {rn}[/color]"
+            : e.HomeRegionId is int hrid && _world.RegionName(hrid) is string hrn
+            ? $"  [color=#{Ui.Hex(Ui.Faded)}]· {(e.Type == "birth" ? $"of a line rooted in {hrn}"
+                : e.Type == "murder" ? $"remembered in {hrn}, the home of the slain's line"
+                : $"remembered in {hrn}, the home of their line")}[/color]"
             : memorial ? $"  [color=#{Ui.Hex(Ui.Faded)}]· the chronicle records no place for this passing[/color]" : "";
         sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color]  [color=#{Ui.Hex(cls.Color)}]{cls.Glyph} {cls.Label.ToUpperInvariant()}[/color]  [b]{e.Text}[/b]{where}");
 
@@ -1843,6 +1850,20 @@ public partial class Main : Node
             var m = marks[i];
             var me = _world.Chronicle.Get(m.eventId);
             sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {m.year}[/color] {MarkLabel(m.kind)} — {Link("e:" + m.eventId, me.Text)}");
+        }
+        sb.AppendLine();
+        int homeTotal = _regionActivity.HomeTotalFor(regionId);
+        sb.AppendLine(SectionCap("Lives rooted here")
+            + (homeTotal > 0 ? $" [color=#{Ui.Hex(Ui.Faded)}]({homeTotal} remembered)[/color]" : ""));
+        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]home memory of lines rooted in this place — not where these moments happened[/color]");
+        var homeRecent = _regionActivity.HomeRecentFor(regionId);
+        if (homeRecent.Count == 0)
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]no lives are yet remembered here[/color]");
+        for (int i = homeRecent.Count - 1; i >= 0; i--)   // newest first
+        {
+            var he = _world.Chronicle.Get(homeRecent[i]);
+            var hcls = Ui.ClassOf(he.Type);
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {he.Year}[/color] [color=#{Ui.Hex(hcls.Color)}]{hcls.Glyph}[/color] {Link("e:" + he.Id, he.Text)}");
         }
         sb.AppendLine();
         int total = _regionActivity.TotalFor(regionId);

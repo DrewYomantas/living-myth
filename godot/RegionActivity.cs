@@ -3,8 +3,9 @@ using LivingMyth.Sim;
 
 // Viewer read-model for the Region Lens: which chronicle events are anchored to each region.
 // The sim already stamps Event.RegionId where it knows the place (territory changes exactly;
-// culture/rumor events at the faction's primary region; personal events not yet) — this just
-// indexes that truth incrementally as events stream in, O(new events) per tick, never a
+// culture/rumor events at the faction's primary region) and Event.HomeRegionId where a life
+// event is remembered (births/deaths/murders at the lineage's home root) — this just
+// indexes both truths incrementally as events stream in, O(new events) per tick, never a
 // history scan. Read-only over sim data; lives entirely in the viewer.
 public sealed class RegionActivity
 {
@@ -12,17 +13,36 @@ public sealed class RegionActivity
     private readonly Dictionary<int, List<int>> _recent = new();   // region id -> event ids, oldest..newest
     private readonly Dictionary<int, int> _total = new();
 
+    // Home-memory channel: life events remembered at a lineage's home (Event.HomeRegionId).
+    // Kept strictly apart from the place channel above — home memory is never "it happened here".
+    private readonly Dictionary<int, List<int>> _homeRecent = new();
+    private readonly Dictionary<int, int> _homeTotal = new();
+
     public void Observe(Event e)
     {
-        if (e.RegionId is not int rid) return;
-        _total[rid] = _total.GetValueOrDefault(rid) + 1;
-        if (!_recent.TryGetValue(rid, out var list)) { list = new(); _recent[rid] = list; }
-        list.Add(e.Id);
-        if (list.Count > KeepPerRegion) list.RemoveAt(0);
+        if (e.RegionId is int rid)
+        {
+            _total[rid] = _total.GetValueOrDefault(rid) + 1;
+            if (!_recent.TryGetValue(rid, out var list)) { list = new(); _recent[rid] = list; }
+            list.Add(e.Id);
+            if (list.Count > KeepPerRegion) list.RemoveAt(0);
+        }
+        if (e.HomeRegionId is int hid)
+        {
+            _homeTotal[hid] = _homeTotal.GetValueOrDefault(hid) + 1;
+            if (!_homeRecent.TryGetValue(hid, out var list)) { list = new(); _homeRecent[hid] = list; }
+            list.Add(e.Id);
+            if (list.Count > KeepPerRegion) list.RemoveAt(0);
+        }
     }
 
     public int TotalFor(int regionId) => _total.GetValueOrDefault(regionId);
 
     public IReadOnlyList<int> RecentFor(int regionId)
         => _recent.TryGetValue(regionId, out var list) ? list : System.Array.Empty<int>();
+
+    public int HomeTotalFor(int regionId) => _homeTotal.GetValueOrDefault(regionId);
+
+    public IReadOnlyList<int> HomeRecentFor(int regionId)
+        => _homeRecent.TryGetValue(regionId, out var list) ? list : System.Array.Empty<int>();
 }
