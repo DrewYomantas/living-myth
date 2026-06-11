@@ -20,6 +20,7 @@ public partial class MapView : Control
     private readonly List<(Vector2 pos, float r, int id)> _dots = new();
     private readonly List<(Vector2 pos, float r, int id)> _regionHits = new();
     private List<Vector2>? _islandNorm;     // island outline in normalized [0,1] space, built once
+    private List<Vector2>? _shallowsNorm;   // island outline scaled out slightly — the shallows rim
     private int _hoverRegion = -1;
 
     // Transient gold rings on regions where a notable event just landed — pure rendering, aged
@@ -49,11 +50,13 @@ public partial class MapView : Control
     private const float Pad = 18f;
     private float MapSide() => Mathf.Min(Size.X, Size.Y) - Pad * 2f;
 
-    // Old-world palette (V2 handoff): faded slate water, moss/dry-grass land, muted banner
-    // colors. Faction color is a cloth/banner accent — territory paint stays restrained.
-    private static readonly Color Sea = new("1f3340");
-    private static readonly Color Land = new("3e4733");
-    private static readonly Color Coast = new("55604a");
+    // Old-world palette (V2 handoff, warmed toward the Batch 1 atlas references): muted
+    // teal-slate water with a shallows rim, dry-grass-warmed land, muted banner colors.
+    // Faction color is a cloth/banner accent — territory paint stays restrained.
+    private static readonly Color Sea = new("22424d");
+    private static readonly Color Shallows = new("2e5560");
+    private static readonly Color Land = new("474c31");
+    private static readonly Color Coast = new("5d6242");
     private static readonly Color Neutral = new("6f6a58");          // unclaimed wilderness
     private static readonly Dictionary<string, Color> FactionColors = new()
     {
@@ -76,12 +79,15 @@ public partial class MapView : Control
     private static readonly Color FieldGold = new("8f7c43");
     private static readonly Color TentCloth = new("7d6b50");
     private static readonly Color MarkInk = new(0.16f, 0.12f, 0.07f);
-    private static readonly Color LensGold = new("d8a843");
-    private const float CaptionZoom = 2.0f;   // place captions appear at/above this zoom
+    private const float CaptionZoom = 2.0f;   // place tags appear at/above this zoom
 
     // Soft dark tags behind map text — readable over any terrain without a full parchment panel.
     private static readonly StyleBoxFlat LabelTag = MakeTag(new Color(0.12f, 0.09f, 0.05f, 0.42f), null);
-    private static readonly StyleBoxFlat LabelTagSelected = MakeTag(new Color(0.12f, 0.09f, 0.05f, 0.62f), new Color("d8a843"));
+    private static readonly StyleBoxFlat LabelTagSelected = MakeTag(new Color(0.12f, 0.09f, 0.05f, 0.62f), Ui.LensGold);
+
+    // Parchment place tags — the atlas pill under each place marker (region name + place kind).
+    private static readonly StyleBoxFlat PlaceTag = Ui.ParchmentTag();
+    private static readonly StyleBoxFlat PlaceTagSelected = Ui.ParchmentTag(selected: true);
     private static StyleBoxFlat MakeTag(Color bg, Color? border)
     {
         var sb = new StyleBoxFlat { BgColor = bg };
@@ -160,9 +166,10 @@ public partial class MapView : Control
     private Color RegionColor(Region r)
         => r.ControllingFactionId is string fid ? FactionColors.GetValueOrDefault(fid, Neutral) : Neutral;
 
-    // Draw order (fixed): 1 water → 2 land/coast (+ faint adjacency) → 3 territory tint →
-    // 4 roads → 5 place-seed markers → 6 people dots → 7 follow/leader highlights (inside
-    // DrawPeople) + region lens ring → 8 labels (faction tags, hover tag) → 9 event pulses.
+    // Draw order (fixed): 1 water → 2 shallows rim + land/coast (+ faint adjacency) →
+    // 3 territory tint → 4 roads → 5 place-seed markers → 6 people dots → 7 follow/leader
+    // highlights (inside DrawPeople) + region lens ring → 8 labels (faction tags → parchment
+    // place tags → hover tag) → 9 event pulses.
     // New layers slot into this order deliberately; pulses stay topmost so drama always reads.
     public override void _Draw()
     {
@@ -184,6 +191,8 @@ public partial class MapView : Control
         BuildIsland();                                                      // 2. land
         if (_islandNorm is not null)
         {
+            if (_shallowsNorm is not null)                                  // shallows rim under the coast
+                DrawColoredPolygon(_shallowsNorm.Select(p => P(p.X, p.Y)).ToArray(), Shallows);
             var poly = _islandNorm.Select(p => P(p.X, p.Y)).ToArray();
             DrawColoredPolygon(poly, Land);
             DrawPolyline(poly.Append(poly[0]).ToArray(), Coast, 2f, true);
@@ -194,7 +203,7 @@ public partial class MapView : Control
             foreach (var bid in a.AdjacentRegionIds)
                 if (bid > a.Id)
                     DrawLine(P(a.X, a.Y), P(World.Regions[bid].X, World.Regions[bid].Y),
-                             new Color(1, 1, 1, 0.05f), 1f);
+                             new Color(1, 1, 1, 0.035f), 1f);
 
         // 3. territory tint: a banner-cloth hint, deliberately subordinate to markers and labels.
         // The selected people's ring firms up so their lands read while their inspector is open.
@@ -217,10 +226,11 @@ public partial class MapView : Control
         if (SelectedRegionId >= 0 && SelectedRegionId < World.Regions.Count)
         {
             var sr = World.Regions[SelectedRegionId];
-            DrawArc(P(sr.X, sr.Y), regionR + 3f, 0, Mathf.Tau, 48, LensGold with { A = 0.85f }, 2.5f);
+            DrawArc(P(sr.X, sr.Y), regionR + 3f, 0, Mathf.Tau, 48, Ui.LensGold with { A = 0.85f }, 2.5f);
         }
 
-        DrawFactionLabels(P, font);                                         // 8. labels
+        var placed = DrawFactionLabels(P, font);                            // 8. labels
+        DrawPlaceTags(P, regionR, placed);
 
         if (_hoverRegion >= 0 && _hoverRegion < World.Regions.Count)
             DrawHoverTag(P, regionR, font);
@@ -232,7 +242,7 @@ public partial class MapView : Control
             var r = World.Regions[rid];
             float t = pulse / PulseDuration;                   // 1 -> 0 over the pulse's life
             float ring = regionR * (1f + (1f - t) * 0.8f);     // expands outward as it fades
-            DrawArc(P(r.X, r.Y), ring, 0, Mathf.Tau, 48, new Color(0.96f, 0.78f, 0.43f, t * 0.9f), 3f);
+            DrawArc(P(r.X, r.Y), ring, 0, Mathf.Tau, 48, Ui.GoldGlow with { A = t * 0.9f }, 3f);
         }
     }
 
@@ -263,26 +273,53 @@ public partial class MapView : Control
 
     // Place seeds: deterministic viewer-derived landmark glyphs (see PlaceSeeds.cs). Visual
     // identity only — the sim has no settlements; nothing here is sim state or touches its Rng.
-    // Held regions fly a small faction banner; captions appear once zoomed in past CaptionZoom.
+    // Held regions fly a small faction banner; parchment name tags are drawn later (layer 8) so
+    // they sit above people dots — see DrawPlaceTags.
+    private (Vector2 c, float s) MarkerAnchor(Func<float, float, Vector2> P, float regionR, Region r)
+    {
+        var c = P(r.X, r.Y) + PlaceSeeds.Offset(World!.Seed, r.Id) * regionR * 0.30f;
+        return (c, Mathf.Clamp(regionR * 0.30f, 7f, 30f));
+    }
+
     private void DrawPlaceSeeds(Func<float, float, Vector2> P, float regionR, Font font)
     {
         foreach (var r in World!.Regions)
         {
-            var kind = PlaceSeeds.KindOf(World, r);
-            var c = P(r.X, r.Y) + PlaceSeeds.Offset(World.Seed, r.Id) * regionR * 0.30f;
-            float s = Mathf.Clamp(regionR * 0.30f, 7f, 30f);
-            DrawPlaceMarker(c, s, kind);
+            var (c, s) = MarkerAnchor(P, regionR, r);
+            DrawPlaceMarker(c, s, PlaceSeeds.KindOf(World, r));
             if (r.ControllingFactionId is string fid)
                 DrawBannerFlag(c + new Vector2(s * 0.85f, s * 0.5f), s,
                                FactionColors.GetValueOrDefault(fid, Neutral));
-            if (_zoom >= CaptionZoom)
+        }
+    }
+
+    // Parchment place tags: region name over its place-kind hint, pinned under the marker.
+    // Zoom-gated like the old captions were; the selected region's tag shows at any zoom so the
+    // Region Lens always has its place named on the map. Readability beats completeness: one
+    // nudge-down attempt when crowded, then skip — a far-flung tag is worse than a missing one.
+    private void DrawPlaceTags(Func<float, float, Vector2> P, float regionR, List<Rect2> placed)
+    {
+        foreach (var r in World!.Regions)
+        {
+            bool sel = r.Id == SelectedRegionId;
+            if (!sel && _zoom < CaptionZoom) continue;
+            var (c, s) = MarkerAnchor(P, regionR, r);
+            string name = r.Name;
+            string sub = PlaceSeeds.Label(PlaceSeeds.KindOf(World, r));
+            float w = Mathf.Max(Ui.SerifBold.GetStringSize(name, HorizontalAlignment.Left, -1, 13).X,
+                                Ui.SmallCaps.GetStringSize(sub, HorizontalAlignment.Left, -1, 10).X);
+            var rect = new Rect2(c.X - w / 2f - 8, c.Y + s * 0.9f + 6, w + 16, 34);
+            if (!sel)
             {
-                string cap = PlaceSeeds.Label(kind);
-                var pos = c + new Vector2(0, s * 0.9f + 12);
-                float w = font.GetStringSize(cap, HorizontalAlignment.Center, -1, 10).X;
-                DrawString(font, pos + new Vector2(-w / 2f + 1, 1), cap, HorizontalAlignment.Left, -1, 10, MarkInk with { A = 0.7f });
-                DrawString(font, pos + new Vector2(-w / 2f, 0), cap, HorizontalAlignment.Left, -1, 10, new Color("e3d3a6"));
+                if (placed.Any(p => p.Intersects(rect))) rect.Position += new Vector2(0, 36);
+                if (placed.Any(p => p.Intersects(rect))) continue;
             }
+            placed.Add(rect);
+            (sel ? PlaceTagSelected : PlaceTag).Draw(GetCanvasItem(), rect);
+            DrawString(Ui.SerifBold, rect.Position + new Vector2(8, 15), name,
+                HorizontalAlignment.Left, -1, 13, Ui.InkDeep);
+            DrawString(Ui.SmallCaps, rect.Position + new Vector2(8, 28), sub,
+                HorizontalAlignment.Left, -1, 10, Ui.Faded);
         }
     }
 
@@ -311,7 +348,7 @@ public partial class MapView : Control
             case PlaceSeeds.Kind.Shrine:
                 DrawRect(new Rect2(c.X - s * 0.16f, c.Y - s * 0.5f, s * 0.32f, s * 0.75f), StoneMark);
                 DrawRect(new Rect2(c.X - s * 0.3f, c.Y - s * 0.62f, s * 0.6f, s * 0.14f), StoneMark.Darkened(0.15f));
-                DrawCircle(c + new Vector2(0, -s * 0.8f), s * 0.11f, new Color("c9973f"));
+                DrawCircle(c + new Vector2(0, -s * 0.8f), s * 0.11f, Ui.Gold);
                 break;
             case PlaceSeeds.Kind.Camp:
                 DrawTent(c + new Vector2(-s * 0.3f, s * 0.25f), s * 0.6f);
@@ -390,9 +427,9 @@ public partial class MapView : Control
         var rect = new Rect2(c.X - w / 2f - 8, c.Y - regionR - 46, w + 16, 38);
         LabelTag.Draw(GetCanvasItem(), rect);
         DrawString(font, new Vector2(rect.Position.X + 8, rect.Position.Y + 16), l1,
-            HorizontalAlignment.Center, w, 14, new Color("f2e5c2"));
+            HorizontalAlignment.Center, w, 14, Ui.Parchment);
         DrawString(font, new Vector2(rect.Position.X + 8, rect.Position.Y + 31), l2,
-            HorizontalAlignment.Center, w, 11, new Color("c9b288"));
+            HorizontalAlignment.Center, w, 11, Ui.RowBorder);
     }
 
     private void DrawPeople(Func<float, float, Vector2> P, float regionR, Font font)
@@ -423,19 +460,20 @@ public partial class MapView : Control
             var pos = center + off;
 
             float r = (p.IsLeader ? 6.5f : 3.8f) * _zoom;
-            var dot = p.Cursed ? new Color("b0432e") : (p.Sex == "f" ? col.Lightened(0.28f) : col);
+            var dot = p.Cursed ? Ui.Ember : (p.Sex == "f" ? col.Lightened(0.28f) : col);
             DrawCircle(pos, r, dot);
-            if (p.IsLeader) DrawArc(pos, r + 2.5f, 0, Mathf.Tau, 20, new Color("d8a843"), 1.6f);
+            if (p.IsLeader) DrawArc(pos, r + 2.5f, 0, Mathf.Tau, 20, Ui.LensGold, 1.6f);
             if (Marked is not null && Marked.Contains(p.Id))
                 DrawArc(pos, r + 4.5f, 0, Mathf.Tau, 24, new Color("7fc8d8"), 2f);
             _dots.Add((pos, Mathf.Max(r, 6f), p.Id));
         }
     }
 
-    private void DrawFactionLabels(Func<float, float, Vector2> P, Font font)
+    private List<Rect2> DrawFactionLabels(Func<float, float, Vector2> P, Font font)
     {
         // Greedy de-overlap: factions whose centroids land close (mid-island neighbours) would
         // stack their tags; nudge any colliding tag downward until it clears the ones already drawn.
+        // Returns the claimed rects so the place tags drawn next can dodge them too.
         var placed = new List<Rect2>();
         foreach (var f in World!.Config.Factions)
         {
@@ -458,10 +496,11 @@ public partial class MapView : Control
             placed.Add(rect);
             (sel ? LabelTagSelected : LabelTag).Draw(GetCanvasItem(), rect);
             DrawString(font, new Vector2(rect.Position.X + 7, rect.Position.Y + 14), fac.Name,
-                HorizontalAlignment.Center, w, 14, new Color("f2e5c2"));
+                HorizontalAlignment.Center, w, 14, Ui.Parchment);
             DrawString(font, new Vector2(rect.Position.X + 7, rect.Position.Y + 29), sub,
                 HorizontalAlignment.Center, w, 11, col.Lightened(0.35f));
         }
+        return placed;
     }
 
     private void BuildIsland()
@@ -478,6 +517,13 @@ public partial class MapView : Control
             list.Add(new Vector2(0.5f + Mathf.Cos(ang) * rad, 0.5f + Mathf.Sin(ang) * rad));
         }
         _islandNorm = list;
+
+        // Shallows rim: the same silhouette scaled slightly outward about its centroid — pure
+        // derived geometry, zero extra rng draws, so the island outline stays frame-identical.
+        var centroid = Vector2.Zero;
+        foreach (var p in list) centroid += p;
+        centroid /= list.Count;
+        _shallowsNorm = list.Select(p => centroid + (p - centroid) * 1.045f).ToList();
     }
 
     public override void _GuiInput(InputEvent @event)

@@ -21,6 +21,7 @@ public static class Ui
     public static readonly Color RowBorderHover = new("a8843c");
     public static readonly Color Gold = new("c9973f");
     public static readonly Color GoldGlow = new("f4c76d");
+    public static readonly Color LensGold = new("d8a843");   // ritual gold accent: lens ring, leader rings, selected map tag
     public static readonly Color Ember = new("b0432e");
     public static readonly Color Ochre = new("b8862e");
     public static readonly Color Moss = new("4e7d43");
@@ -95,7 +96,41 @@ public static class Ui
 
     public static StyleBoxFlat ChipBox(Color bg)
     {
-        var sb = new StyleBoxFlat { BgColor = bg, CornerRadiusTopLeft = 999, CornerRadiusTopRight = 999, CornerRadiusBottomLeft = 999, CornerRadiusBottomRight = 999 };
+        var sb = new StyleBoxFlat { BgColor = bg, BorderColor = bg.Darkened(0.32f), CornerRadiusTopLeft = 999, CornerRadiusTopRight = 999, CornerRadiusBottomLeft = 999, CornerRadiusBottomRight = 999 };
+        sb.SetBorderWidthAll(1);
+        return sb;
+    }
+
+    // Parchment map tag: the atlas place-name pill (region name over its place-kind hint).
+    // Selected (Region Lens open) earns the gold border — hierarchy, not size.
+    public static StyleBoxFlat ParchmentTag(bool selected = false)
+    {
+        var sb = new StyleBoxFlat
+        {
+            BgColor = Parchment with { A = 0.92f },
+            BorderColor = selected ? LensGold : PanelBorder with { A = 0.75f },
+            ShadowColor = new Color(0.05f, 0.035f, 0.015f, 0.35f),
+            ShadowSize = 3,
+            ShadowOffset = new Vector2(0, 2),
+        };
+        sb.SetCornerRadiusAll(7);
+        sb.SetBorderWidthAll(1);
+        return sb;
+    }
+
+    // Subtle frame around each bottom-bar dock group, so Time/Lens/Chronicle read as
+    // carved sections of one parchment dock rather than a loose strip of buttons.
+    public static StyleBoxFlat DockBox()
+    {
+        var sb = new StyleBoxFlat
+        {
+            BgColor = ParchmentLo,
+            BorderColor = RowBorder,
+            ContentMarginLeft = 8, ContentMarginRight = 8,
+            ContentMarginTop = 5, ContentMarginBottom = 5,
+        };
+        sb.SetCornerRadiusAll(8);
+        sb.SetBorderWidthAll(1);
         return sb;
     }
 

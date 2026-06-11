@@ -4,6 +4,8 @@
 // per-tick Feed.BuildFeed). This pass applied the V2 mythic-parchment UI handoff (year card,
 // Saga feed v2 with event-class chips, sectioned inspectors, grouped time dock, parchment
 // "How We Got Here") — presentation only, the sim tick path is untouched. See PROJECT_STATE.md.
+// Living-atlas foundation pass: framed dock groups, parchment map place tags, warmed atlas
+// palette — viewer styling only, per docs/VISUAL_STYLE.md.
 using Godot;
 using System.Collections.Generic;
 using System.Linq;
@@ -253,7 +255,7 @@ public partial class Main : Node
         vb.AddChild(scroll);
 
         _feedList = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        _feedList.AddThemeConstantOverride("separation", 6);
+        _feedList.AddThemeConstantOverride("separation", 8);
         scroll.AddChild(_feedList);
 
         var hint = new Label { Text = "click a tale to see how it happened", HorizontalAlignment = HorizontalAlignment.Center };
@@ -262,20 +264,24 @@ public partial class Main : Node
         vb.AddChild(hint);
     }
 
-    private VBoxContainer DockGroup(HBoxContainer bar, string caption)
+    // A captioned, parchment-framed dock section — returns the inner row buttons get added to.
+    private HBoxContainer DockGroup(HBoxContainer bar, string caption)
     {
         var vb = new VBoxContainer();
         vb.AddThemeConstantOverride("separation", 4);
         vb.Alignment = BoxContainer.AlignmentMode.Center;
         bar.AddChild(vb);
-        var cap = Ui.SectionLabel($"— {caption} —");
+        var cap = Ui.SectionLabel(caption);
         cap.HorizontalAlignment = HorizontalAlignment.Center;
         vb.AddChild(cap);
+        var frame = new PanelContainer();
+        frame.AddThemeStyleboxOverride("panel", Ui.DockBox());
+        vb.AddChild(frame);
         var hb = new HBoxContainer();
         hb.AddThemeConstantOverride("separation", 6);
         hb.Alignment = BoxContainer.AlignmentMode.Center;
-        vb.AddChild(hb);
-        return vb;
+        frame.AddChild(hb);
+        return hb;
     }
 
     private void BuildBottomBar(Control root)
@@ -296,8 +302,7 @@ public partial class Main : Node
         margin.AddChild(hb);
 
         // --- Time group: play, speed ladder, drama ---
-        var timeGroup = DockGroup(hb, "Time");
-        var timeRow = (HBoxContainer)timeGroup.GetChild(1);
+        var timeRow = DockGroup(hb, "Time");
 
         _playBtn = new Button { Text = "❚❚ Pause", CustomMinimumSize = new Vector2(86, 0) };
         Ui.StyleButton(_playBtn);
@@ -317,11 +322,8 @@ public partial class Main : Node
         _dramaBtn.Pressed += () => { _dramaticPacing = !_dramaticPacing; RestyleToggles(); };
         timeRow.AddChild(_dramaBtn);
 
-        hb.AddChild(new VSeparator());
-
         // --- Lens group: zoom + camera ---
-        var lensGroup = DockGroup(hb, "Lens");
-        var lensRow = (HBoxContainer)lensGroup.GetChild(1);
+        var lensRow = DockGroup(hb, "Lens");
 
         var zoomOut = new Button { Text = "－", CustomMinimumSize = new Vector2(36, 0) };
         Ui.StyleButton(zoomOut);
@@ -339,11 +341,8 @@ public partial class Main : Node
         _camBtn.Pressed += () => { _map.CameraFollow = !_map.CameraFollow; RestyleToggles(); };
         lensRow.AddChild(_camBtn);
 
-        hb.AddChild(new VSeparator());
-
         // --- Chronicle group: chattiness threshold ---
-        var chronGroup = DockGroup(hb, "Chronicle");
-        var chronRow = (HBoxContainer)chronGroup.GetChild(1);
+        var chronRow = DockGroup(hb, "Chronicle");
         _chatLabel = new Label();
         _chatLabel.AddThemeFontSizeOverride("font_size", 12);
         _chatLabel.AddThemeColorOverride("font_color", Ui.FadedSub);
@@ -617,7 +616,7 @@ public partial class Main : Node
             MouseFilter = Control.MouseFilterEnum.Ignore,
         };
         glyph.AddThemeFontSizeOverride("font_size", 11);
-        glyph.AddThemeColorOverride("font_color", Ui.RowBg);
+        glyph.AddThemeColorOverride("font_color", Ui.ParchmentHi);
         chip.AddChild(glyph);
         hb.AddChild(chip);
 

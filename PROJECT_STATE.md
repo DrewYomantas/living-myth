@@ -28,6 +28,11 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       (O(new events), no history scans); inspector cross-links (e:/r:/f: via RichTextLabel meta)
       interconnect person ↔ faction ↔ region ↔ catch-up; gold lens ring on the selected region.
       verify unchanged 884/699/567/706.
+- [x] Living atlas visual style foundation (viewer-only): `docs/VISUAL_STYLE.md` style bible locks
+      the Batch 1 north-star references (honest/aspirational/forbidden reading + staged roadmap);
+      foundation slice — parchment map place tags (zoom-gated, always-on for the selected region),
+      framed bottom dock groups, warmed atlas palette + shallows rim, medallion feed chips, shared
+      gold/ember accents single-sourced in UiTheme. verify unchanged 884/699/567/706.
 - [ ] Later — visual/UX pass (surface culture + gossip in the viewer); echo packs; timeline scrubbing. ← NEXT
 
 ## Session log
@@ -74,6 +79,19 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
   over Event.RegionId, Region Lens inspector with honest "not yet modeled" copy, e:/r:/f: inspector
   cross-links, "Inspect <faction>" hand-off button, gold selected-region ring. No sim files touched
   either pass; verify green at 884/699/567/706 throughout. Feel-checked via window captures.
+
+- [2026-06-10] Session: living atlas visual style foundation. Drew delivered the four Batch 1
+  north-star concept images (renamed `Visual references/gpt-northstar-*.png`, concept-reference-only
+  per that folder's README); wrote `docs/VISUAL_STYLE.md` — the implementation-facing style bible
+  (reference interpretation split honest/aspirational/forbidden, component language tied to the
+  `Ui.*` API, palette/typography direction, F5 visual check ritual, staged roadmap 1–6, viewer
+  audit). Viewer foundation slice (viewer-only, 3 files): `Ui.ParchmentTag`/`Ui.DockBox`/`LensGold` +
+  medallion-rim `ChipBox` in UiTheme; MapView — parchment place tags (region name + place-kind hint,
+  zoom ≥ CaptionZoom, always-on gold-bordered for the selected region, skip-on-overlap vs faction
+  tags), warmed sea/land/coast + shallows rim (derived geometry, zero extra rng draws), fainter
+  adjacency web, shared accents now from `Ui.*`; Main — framed dock groups, feed breathing 6→8,
+  brighter chip glyphs. Sim untouched; verify green at 884/699/567/706. Next visual milestone:
+  Atlas Composition Pass (roadmap 2 in docs/VISUAL_STYLE.md).
 
 ## Region Lens — data contracts still missing (design notes, not promises)
 The viewer-side lens is honest about these; each needs a deliberate sim-side milestone because all

@@ -3,6 +3,9 @@
 This is the visual source of truth for Living Myth. It should guide Claude Design, Figma, concept-art batches, Godot viewer work, and future art-pipeline decisions.
 
 `GAME_DESIGN.md` defines what the game is. This file defines how the game should look and feel.
+`docs/VISUAL_STYLE.md` is the implementation-facing style bible: it locks the Batch 1 north-star
+references (`Visual references/gpt-northstar-*.png`) into concrete viewer component language,
+an honest/aspirational/forbidden reading of the references, and the staged visual roadmap.
 
 ## Visual Thesis
 
