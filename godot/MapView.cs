@@ -38,6 +38,25 @@ public partial class MapView : Control
     private float _breath;
     private readonly List<(Vector2 pos, int id)> _soulScreen = new();   // souls drawn this frame, for name tags
 
+    // Place memory (V1): real anchored events leave subtle marks on the land. Only events that
+    // truly carry Event.RegionId may mark — Main classifies the stream and feeds marks in here.
+    // Capped per region (the oldest yields); alpha ages by sim year, deterministically — no RNG.
+    public enum MarkKind { FoundingStone, WarScar, AbandonCairn, CultureRibbon }
+    private readonly Dictionary<int, List<(MarkKind kind, int year, int eventId)>> _placeMarks = new();
+    private const int MarksPerRegion = 4;
+    private static readonly float[] MarkAngles = { 3.6f, 5.5f, 1.1f, 2.4f };   // fixed slots ringing the centre
+
+    public void AddPlaceMark(int regionId, MarkKind kind, int year, int eventId)
+    {
+        if (!_placeMarks.TryGetValue(regionId, out var list)) { list = new(); _placeMarks[regionId] = list; }
+        list.Add((kind, year, eventId));
+        if (list.Count > MarksPerRegion) list.RemoveAt(0);
+    }
+
+    public IReadOnlyList<(MarkKind kind, int year, int eventId)> MarksFor(int regionId)
+        => _placeMarks.TryGetValue(regionId, out var list) ? list
+           : Array.Empty<(MarkKind kind, int year, int eventId)>();
+
     // Camera: zoom (1 = fit-to-view) + pan (screen-space offset), folded into the draw transform
     // so hit-testing — which records post-transform positions during _Draw — stays correct for free.
     private float _zoom = 1f;
@@ -188,9 +207,9 @@ public partial class MapView : Control
         => r.ControllingFactionId is string fid ? FactionColors.GetValueOrDefault(fid, Neutral) : Neutral;
 
     // Draw order (fixed): 1 water → 2 shallows rim + land/coast (+ faint adjacency) →
-    // 3 territory tint → 4 roads → 5 place-seed markers → 6 people dots → 7 follow/leader
-    // highlights (inside DrawPeople) + region lens ring → 8 labels (faction tags → parchment
-    // place tags → watched-soul tags → hover tag) → 9 event pulses.
+    // 3 territory tint → 4 roads → 5a place-memory marks → 5 place-seed markers → 6 people dots
+    // → 7 follow/leader highlights (inside DrawPeople) + region lens ring → 8 labels (faction
+    // tags → parchment place tags → watched-soul tags → hover tag) → 9 event pulses.
     // New layers slot into this order deliberately; pulses stay topmost so drama always reads.
     public override void _Draw()
     {
@@ -241,6 +260,7 @@ public partial class MapView : Control
         }
 
         DrawRoads(P);                                                       // 4. roads
+        DrawPlaceMemory(P, regionR);                                        // 5a. place memory
         DrawPlaceSeeds(P, regionR, font);                                   // 5. place markers
         DrawPeople(P, regionR, font);                                       // 6+7. people + highlights
 
@@ -313,6 +333,61 @@ public partial class MapView : Control
             if (r.ControllingFactionId is string fid)
                 DrawBannerFlag(c + new Vector2(s * 0.85f, s * 0.5f), s,
                                FactionColors.GetValueOrDefault(fid, Neutral));
+        }
+    }
+
+    // 5a. Place memory: scars and stones from real anchored events, drawn beneath the place
+    // markers and labels so the land remembers without shouting. Fixed slot angles keep each
+    // mark's spot stable; old marks fade toward a faint floor but never vanish until evicted.
+    private void DrawPlaceMemory(Func<float, float, Vector2> P, float regionR)
+    {
+        foreach (var (rid, marks) in _placeMarks)
+        {
+            if (rid < 0 || rid >= World!.Regions.Count) continue;
+            var r = World.Regions[rid];
+            var center = P(r.X, r.Y);
+            float s = Mathf.Clamp(regionR * 0.16f, 4f, 13f);
+            for (int i = 0; i < marks.Count; i++)
+            {
+                float age = World.Year - marks[i].year;
+                float a = Mathf.Lerp(0.85f, 0.30f, Mathf.Clamp(age / 250f, 0f, 1f));
+                var c = center + new Vector2(Mathf.Cos(MarkAngles[i]), Mathf.Sin(MarkAngles[i]))
+                        * regionR * 0.55f;
+                DrawMemoryMark(c, s, marks[i].kind, a);
+            }
+        }
+    }
+
+    private void DrawMemoryMark(Vector2 c, float s, MarkKind kind, float a)
+    {
+        switch (kind)
+        {
+            case MarkKind.FoundingStone:   // a standing stone raised where a people first held land
+                DrawRect(new Rect2(c.X - s * 0.18f, c.Y - s * 0.85f, s * 0.36f, s * 1.05f), StoneMark with { A = a });
+                DrawRect(new Rect2(c.X - s * 0.3f, c.Y - s * 0.98f, s * 0.6f, s * 0.16f), StoneMark.Darkened(0.2f) with { A = a });
+                break;
+            case MarkKind.WarScar:         // a scorch and a snapped banner pole where land was seized
+                DrawLine(c + new Vector2(-s * 0.45f, s * 0.35f), c + new Vector2(s * 0.45f, -s * 0.35f),
+                         Ui.Ember.Darkened(0.25f) with { A = a }, Mathf.Max(1.2f, s * 0.14f));
+                DrawLine(c + new Vector2(-s * 0.45f, -s * 0.35f), c + new Vector2(s * 0.45f, s * 0.35f),
+                         Ui.Ember.Darkened(0.25f) with { A = a }, Mathf.Max(1.2f, s * 0.14f));
+                DrawLine(c + new Vector2(0, s * 0.4f), c + new Vector2(s * 0.3f, -s * 0.6f),
+                         MarkInk with { A = a * 0.8f }, Mathf.Max(1f, s * 0.1f));
+                break;
+            case MarkKind.AbandonCairn:    // stones stacked over holds the wild crept back across
+                DrawCircle(c + new Vector2(-s * 0.22f, s * 0.1f), s * 0.2f, StoneMark with { A = a });
+                DrawCircle(c + new Vector2(s * 0.22f, s * 0.1f), s * 0.2f, StoneMark with { A = a });
+                DrawCircle(c + new Vector2(0, -s * 0.18f), s * 0.18f, StoneMark.Lightened(0.1f) with { A = a });
+                break;
+            case MarkKind.CultureRibbon:   // a custom took root (or faded, clashed, spread) here
+                DrawPolyline(new[]
+                {
+                    c + new Vector2(-s * 0.4f, s * 0.3f),
+                    c + new Vector2(-s * 0.1f, -s * 0.25f),
+                    c + new Vector2(s * 0.15f, s * 0.25f),
+                    c + new Vector2(s * 0.45f, -s * 0.3f),
+                }, Ui.Violet with { A = a }, Mathf.Max(1.2f, s * 0.16f), true);
+                break;
         }
     }
 

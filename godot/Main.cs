@@ -791,6 +791,9 @@ public partial class Main : Node
             _regionActivity.Observe(events[i]);
             foreach (var c in events[i].Causes)
                 _consCount[c] = _consCount.GetValueOrDefault(c) + 1;
+            // Place memory: a truly anchored event of a marking kind scars its region.
+            if (events[i].RegionId is int mrid && ClassifyMark(events[i]) is MapView.MarkKind mk)
+                _map.AddPlaceMark(mrid, mk, events[i].Year, events[i].Id);
         }
 
         for (int i = _lastEventCount; i < events.Count; i++)
@@ -840,6 +843,17 @@ public partial class Main : Node
         _lastEventCount = events.Count;
         return notableSeen;
     }
+
+    // Which anchored events scar the land (Place Memory V1). Rumors carry a RegionId too but
+    // deliberately don't mark — gossip is social, not a physical scar on a place.
+    private static MapView.MarkKind? ClassifyMark(Event e) => e.Type switch
+    {
+        "territory" when e.Tags.Contains("founding") => MapView.MarkKind.FoundingStone,
+        "territory" when e.Tags.Contains("war") => MapView.MarkKind.WarScar,
+        "territory" when e.Tags.Contains("abandonment") => MapView.MarkKind.AbandonCairn,
+        "custom" => MapView.MarkKind.CultureRibbon,
+        _ => null,
+    };
 
     private static void PulseFeedRow(Control row)
     {
@@ -1817,6 +1831,17 @@ public partial class Main : Node
             sb.AppendLine($"{Link("r:" + n.Id, n.Name)} — {n.TerrainType} · {nh}");
         }
         sb.AppendLine();
+        sb.AppendLine(SectionCap("Marks upon the land"));
+        var marks = _map.MarksFor(regionId);
+        if (marks.Count == 0)
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]unmarked — no recorded event has scarred this place[/color]");
+        for (int i = marks.Count - 1; i >= 0; i--)   // newest first
+        {
+            var m = marks[i];
+            var me = _world.Chronicle.Get(m.eventId);
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {m.year}[/color] {MarkLabel(m.kind)} — {Link("e:" + m.eventId, me.Text)}");
+        }
+        sb.AppendLine();
         int total = _regionActivity.TotalFor(regionId);
         sb.AppendLine(SectionCap("Tales anchored here")
             + (total > 0 ? $" [color=#{Ui.Hex(Ui.Faded)}]({total} recorded)[/color]" : ""));
@@ -1837,6 +1862,14 @@ public partial class Main : Node
         _inspector.Text = sb.ToString();
         _inspectorPanel.Visible = true;
     }
+
+    private static string MarkLabel(MapView.MarkKind kind) => kind switch
+    {
+        MapView.MarkKind.FoundingStone => "[color=#90908a]⌑ standing stone[/color]",
+        MapView.MarkKind.WarScar => $"[color=#{Ui.Hex(Ui.Ember)}]✕ war scar[/color]",
+        MapView.MarkKind.AbandonCairn => "[color=#90908a]∴ cairn[/color]",
+        _ => $"[color=#{Ui.Hex(Ui.Violet)}]❧ custom ribbon[/color]",
+    };
 
     private void OnFactionPicked(string fid)
     {

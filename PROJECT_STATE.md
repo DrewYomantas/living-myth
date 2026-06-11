@@ -80,11 +80,24 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       Docs: Visual Storytelling Doctrine ("the sim should be seen before it is read") + per-
       subject visibility audit (✅/◐/✎/⛭/✖) + Place Memory V1 spec (documented, not built) in
       docs/VISUAL_STYLE.md. verify unchanged 884/699/567/706.
-- [ ] Later — followed regions (roadmap 4 in docs/TIME_AND_STORY_PACING.md); region-anchoring
-      sim contract (would also let memorials and recaps name real places, and let war's-peace /
-      famine's-end close chapters); Place Memory V1; mythic glosses / entity links; relationship
-      constellation; local site/tableau visuals; memorial tableau upgrade; visual/UX pass
-      (surface culture + gossip in the viewer); echo packs; timeline scrubbing. ← NEXT
+- [x] Place Memory V1 — anchored events scar the land (viewer-only; Main.cs, MapView.cs): real
+      events that truly carry Event.RegionId leave persistent marks near the region centre —
+      standing stone (territory founding), scorch + snapped pole (territory seized in war),
+      cairn (abandonment after a people's extinction), violet ribbon (custom born/faded/clash/
+      diffusion). Rumors anchor but don't mark by design (gossip is social, not a scar).
+      Marks classified O(new events) in the existing stream loop, capped 4/region (oldest
+      yields), fixed slot angles, alpha aged by sim-year (full → 0.30 floor over ~250 yrs, no
+      RNG/wall clock), drawn beneath place markers + labels. Region Lens gained "Marks upon
+      the land": every mark lists its real event as a catch-up link; "unmarked" stated honestly.
+      VISUAL_STYLE.md Place Memory section flipped to SHIPPED with the as-built table; deferred
+      rows (death cairns, battle sites, famine land mood, omens) wait on the anchoring contract.
+      verify unchanged 884/699/567/706.
+- [ ] Later — event-anchoring sim contract (broader Event.RegionId coverage: would extend place
+      memory to deaths/battles/famine, let memorials and recaps name real places, and let
+      war's-peace / famine's-end close chapters); followed regions (roadmap 4 in
+      docs/TIME_AND_STORY_PACING.md); mythic glosses / entity links; relationship constellation;
+      local site/tableau visuals; memorial tableau upgrade; visual/UX pass (surface culture +
+      gossip in the viewer); echo packs; timeline scrubbing. ← NEXT
 
 ## Session log
 - [2026-06-07] Session: built M0→M2 + longevity pass (carrying capacity + perf refactor, proven
@@ -227,6 +240,19 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
   followed. Honesty: nothing new is invented — no homes, routines, or locations; the glimpse
   states absence plainly ("nothing of them has crossed the saga…"). Sim untouched; verify green
   884/699/567/706.
+
+- [2026-06-11] Session: Place Memory V1 — anchored events scar the land (viewer-only; Main.cs,
+  MapView.cs). The first persistent-memory slice, built strictly against what's honestly
+  anchored: only territory (founding/war/abandonment) and culture events truly carry
+  Event.RegionId, so only those mark — `ClassifyMark` in the existing O(new events) stream loop
+  feeds `MapView.AddPlaceMark`. Rumors anchor but are excluded by design. Marks: standing stone,
+  war scorch + snapped pole, cairn, violet culture ribbon — drawn at layer 5a (beneath place
+  markers and labels), fixed slot angles around the region centre, capped 4/region with the
+  oldest yielding, alpha aged deterministically by sim-year (no RNG, no wall clock). Region Lens
+  "Marks upon the land" lists the real event behind every mark as a catch-up link; unmarked
+  places say so plainly. Docs: VISUAL_STYLE.md Place Memory section flipped to SHIPPED with the
+  as-built table + deferred rows gated on the anchoring contract; audit lines updated (Scarred
+  by events ✖→◐, Memory coverage note). Sim untouched; verify green 884/699/567/706.
 
 ## Region Lens — data contracts still missing (design notes, not promises)
 The viewer-side lens is honest about these; each needs a deliberate sim-side milestone because all

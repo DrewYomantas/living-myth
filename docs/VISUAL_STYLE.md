@@ -195,7 +195,8 @@ but invisible · ✖ not modeled, forbidden to render):
   Candidate future slice (honest: derived from `BirthYear`).
 - ⛭ Prophet — `IsProphet` is real but undrawn. Candidate glyph slice.
 - ✎ Dead / remembered soul — exists only in cards and the chronicle; grave markers
-  wait on Place Memory V1 + the event-anchoring sim contract.
+  wait on the event-anchoring sim contract (Place Memory V1 is built and ready to
+  receive death anchors the moment they exist).
 - ✎ Killer / victim — real event context (`KillerId`, `Murdered`, `Avenged`) told in
   text only.
 - ✖ Omen-marked souls — no omen/prophecy-as-promise system; forbidden.
@@ -217,7 +218,9 @@ but invisible · ✖ not modeled, forbidden to render):
 - ◐ Contested — war exists but no per-region contested state; territory-change pulses
   are the only voice. Partly a sim-contract question.
 - ✎ Quiet vs storied — anchored-tale counts live in the Region Lens text only.
-- ✖ Scarred by events — no persistent marks yet; Place Memory V1 (below).
+- ◐ Scarred by events — Place Memory V1 (below): founding stones, war scars, cairns,
+  culture ribbons from truly anchored events. Deaths/battles/famine wait on the
+  anchoring contract.
 
 **Events**
 - ✅ Anchored events — expanding gold region pulse + feed row flash + dramatic
@@ -229,8 +232,10 @@ but invisible · ✖ not modeled, forbidden to render):
 **Memory**
 - Temporary: pulses (~1.2 s), feed-row flash, the rolling saga window.
 - Persistent today: territory tint changes, leader rings moving, customs appearing in
-  text — all current-state, not scars.
-- ✖ Persistent event marks need true `Event.RegionId` anchors — see Place Memory V1.
+  text — current-state — plus Place Memory V1 marks: real scars from truly anchored
+  events, aged by sim-year.
+- ◐ Mark coverage is bounded by what carries a true `Event.RegionId` (territory +
+  culture today) — broader memory waits on the anchoring contract.
 
 **Attention (the player's divine gaze, in rank order)**
 1. **Memorial** (followed soul's death) — dimmed world, ceremonial frame. Outranks all.
@@ -245,25 +250,32 @@ but invisible · ✖ not modeled, forbidden to render):
 - ✖ Followed region / prophecy — future; region is viewer-ready but quiet until the
   anchoring contract, prophecy needs a sim system.
 
-## Place Memory V1 (next visual milestone — documented, NOT built)
+## Place Memory V1 — SHIPPED (2026-06-11, viewer-only)
 
 The first persistent-memory slice: **real anchored events leave subtle marks on the
 place where they happened.** Only events that truly carry `Event.RegionId` may mark a
 region; unanchored events cannot scar anything — no exceptions, no inference.
 
-| Anchored event | Mark (subtle, parchment-atlas language) |
-|---|---|
-| murder / death | small cairn / dark stain near the place marker |
-| war / battle | broken banner / scorch scar |
-| prophecy / omen | faint omen glyph — only if prophet events gain anchors |
-| founding / ritual | standing stone / ribbon / shrine mark |
-| plenty / famine / drought | land mood tint, aged off slowly |
+As built, against what's honestly anchored today:
 
-Constraints: marks age/fade deterministically (no RNG), capped per region (the oldest
-yields), drawn beneath labels, and the Region Lens lists the real events behind every
-mark. **Coverage caveat:** today only territory/culture/rumor events carry `RegionId`,
-so Place Memory V1 is mostly gated on the event-anchoring **sim contract**
-(PROJECT_STATE.md) — build the viewer slice against what's honestly anchored first.
+| Anchored event (real `RegionId`) | Mark (parchment-atlas language) |
+|---|---|
+| territory founding | standing stone (`⌑`) |
+| territory seized in war | scorch + snapped banner pole (`✕`) |
+| territory abandonment (extinct people) | cairn (`∴`) |
+| custom born / faded / clash / diffusion | culture ribbon (`❧`, violet) |
+| rumor | **no mark by design** — gossip is social, not a physical scar |
+
+Constraints honored: marks age/fade deterministically by sim-year (no RNG, no wall
+clock — full at 0 yrs, faded to a 0.30 floor by ~250 yrs, never gone until evicted),
+capped at 4 per region (the oldest yields), drawn beneath place markers and labels
+(layer 5a), fixed slot angles ringing the region centre. The Region Lens "Marks upon
+the land" section lists the real event behind every mark as a catch-up link, and says
+"unmarked" honestly when nothing recorded has scarred a place.
+
+Deferred to the event-anchoring **sim contract** (PROJECT_STATE.md): murder/death
+cairns, battle scars at the battlefield, prophecy omens, plenty/famine land mood —
+none of those events carry a `RegionId` yet, so they may not mark.
 
 ## Sim-truth honesty contract (restated, binding)
 
