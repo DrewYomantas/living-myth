@@ -277,6 +277,28 @@ Deferred to the event-anchoring **sim contract** (PROJECT_STATE.md): murder/deat
 cairns, battle scars at the battlefield, prophecy omens, plenty/famine land mood —
 none of those events carry a `RegionId` yet, so they may not mark.
 
+### Place Memory V2 readiness (anchoring audit, 2026-06-11)
+
+The full Record()-call-site audit (PROJECT_STATE.md, "Event Anchoring Contract")
+found **no new safe anchors** — the sim already stamps every region it truthfully
+knows. So **nothing new is unlocked for Place Memory V2 yet**; every candidate mark
+below waits on a deliberate, baseline-moving sim contract:
+
+| Future mark | Blocked on |
+|---|---|
+| death / murder cairn | `Person.HomeRegionId` (assigned at birth/migration) |
+| battle scar at the battlefield | battle-site contract (battles aren't events at all today) |
+| famine / drought / plenty land mood | per-region economy (prosperity is per-faction; drought unmodeled) |
+| peace ribbon | faction ids on peace events + a treaty-site convention |
+| ritual shrine ribbon | ritual events (unmodeled) + seat/site contract |
+| succession stone / banner | seat-of-power contract (no seat is modeled) |
+| prophecy / omen glyph | a prophecy system (only the prophet-arises event exists) |
+
+Forbidden until those contracts exist: marking any of the above from faction land,
+nearest-region guesses, participants' homelands, or prose inference. The existing
+custom/rumor `PrimaryRegion` anchors are a disclosed pre-doctrine seat-proxy
+convention — kept for continuity, slated for replacement by the seat contract.
+
 ## Sim-truth honesty contract (restated, binding)
 
 The viewer may *derive* presentation (place kinds, scatter positions, road kinks, island

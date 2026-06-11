@@ -92,9 +92,17 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       VISUAL_STYLE.md Place Memory section flipped to SHIPPED with the as-built table; deferred
       rows (death cairns, battle sites, famine land mood, omens) wait on the anchoring contract.
       verify unchanged 884/699/567/706.
-- [ ] Later — event-anchoring sim contract (broader Event.RegionId coverage: would extend place
-      memory to deaths/battles/famine, let memorials and recaps name real places, and let
-      war's-peace / famine's-end close chapters); followed regions (roadmap 4 in
+- [x] Event Anchoring Contract V1 — audit-only (docs): all 31 Record() call sites walked; zero
+      new safe anchors exist (the sim already stamps every region it truthfully knows). Full
+      audit table + per-contract unlock map below ("Event Anchoring Contract — audit"). The
+      anchoring work is now scoped into concrete sim contracts, ranked by unlock value:
+      Person.HomeRegionId (deaths/murders/births → memorial places, cairns), per-region economy
+      (famine/plenty land mood), seat-of-power (successions, true custom seats), battle sites.
+- [ ] Later — anchoring sim contracts above (battle sites and per-region economy add events/RNG
+      and move the verify baseline; a deterministic Person.HomeRegionId may be baseline-safe —
+      verify must prove it; together they extend place memory to deaths/battles/famine, let
+      memorials and recaps name real places, and let war's-peace / famine's-end close
+      chapters); followed regions (roadmap 4 in
       docs/TIME_AND_STORY_PACING.md); mythic glosses / entity links; relationship constellation;
       local site/tableau visuals; memorial tableau upgrade; visual/UX pass (surface culture +
       gossip in the viewer); echo packs; timeline scrubbing. ← NEXT
@@ -254,15 +262,61 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
   as-built table + deferred rows gated on the anchoring contract; audit lines updated (Scarred
   by events ✖→◐, Memory coverage note). Sim untouched; verify green 884/699/567/706.
 
+- [2026-06-11] Session: Event Anchoring Contract V1 — audit-only, no code changed. Walked all 31
+  `Chronicle.Record()` call sites in World.cs against the no-fake-locations principle (anchor only
+  when the code path already holds a specific real region; never faction land for convenience,
+  never nearest, never inferred). Finding: **zero new safe anchors exist** — territory events are
+  already exactly anchored, custom/rumor carry the pre-doctrine PrimaryRegion seat-proxy
+  convention (kept, flagged for the seat contract), and every other category genuinely has no
+  region in scope: people have no locations, wars have no battlefields (battles aren't modeled),
+  the economy is faction-scoped, leadership has no seat, peace has no treaty site. Full audit
+  table added above ("Event Anchoring Contract — audit"); VISUAL_STYLE.md readiness note: no new
+  Place Memory V2 mark kinds unlocked this pass, with the per-contract unlock map. Confirmed
+  nothing sim-side reads Event.RegionId (write-only metadata) and viewer place language is gated
+  on real anchors everywhere (memorial: "the chronicle records no place for this passing").
+  Sim untouched; verify green 884/699/567/706.
+
+## Event Anchoring Contract — audit (2026-06-11, all 31 Record() call sites walked)
+
+Core principle: **no fake locations.** `Event.RegionId` is set only when the recording code
+path already holds a specific real region. It is never derived from faction land for
+convenience, never the nearest region, never inferred from prose. Nothing in the sim *reads*
+`RegionId` (write-only metadata), so anchoring can never shift RNG draws or outcomes.
+
+**Audit finding: there are no new safe anchors to add today.** Every call site with a real
+region in scope already passes it; every unanchored site genuinely has no region available.
+The audit's value is the contract map below — what each blocked category waits on.
+
+| Event category | RegionId today | Real region in scope? | Safe to anchor? | Reason / future contract |
+|---|---|---|---|---|
+| founding (world begins) | — | no (map not yet generated) | no | world-scoped by design |
+| founding territory ("hold the lands") | ✅ eldest hold (`owned[0]`) | yes (exact list) | shipped | multi-region event; anchors to the eldest hold by id |
+| territory seized in war | ✅ exact region | yes | shipped | the gold standard — the code iterates the seized region |
+| territory abandonment | ✅ eldest freed (`freed[0]`) | yes (full list) | shipped | multi-region event; anchors to the eldest freed hold |
+| custom (born/fade/clash/diffusion) | ◐ `PrimaryRegion(f)` | convention only | shipped (M7) | **seat-proxy convention**: the people's eldest hold (lowest id — same rule as the territory anchors) stands in for "the heart of their lands". Pre-dates the strict doctrine; kept because Place Memory V1 consumes it, flagged for replacement by a seat-of-power contract |
+| rumor | ◐ `PrimaryRegion(fac)` | convention only | shipped (M8) | same convention; the viewer deliberately never marks rumors |
+| birth | — | no | no | parents have no location → `Person.HomeRegionId` contract |
+| death (age/illness/famine/curse/war) | — | no | no | the person has no location; war deaths additionally have no battlefield → `Person.HomeRegionId` + battle-site contract |
+| murder (ambition/revenge/persecution/honor) | — | no | no | killer and victim are unplaced → `Person.HomeRegionId` |
+| succession / leadership | — | no | no | no seat of power is modeled → seat-of-power contract |
+| war declared | — | no | no | war is faction-pair scoped; no front or mustering ground exists |
+| battle / skirmish / raid | not modeled | n/a | n/a | war yields abstract yearly casualties, no battle events; a battle-site contract would *create* events (moves the baseline — deliberate future milestone) |
+| peace | — | no | no | no treaty site; peace also carries no faction ids (separate known gap) |
+| famine | — | no | no | prosperity is per-*faction*, not per-region → per-region economy contract |
+| boom / plenty | — | no | no | same as famine |
+| drought | not modeled | n/a | n/a | no drought system exists |
+| trade | — | no | no | no routes or markets are modeled |
+| prophet | — | no | no | the prophet is a person, unplaced → `Person.HomeRegionId` |
+| prophecy / omen | not modeled | n/a | n/a | no prophecy-as-promise system exists (only the prophet event above) |
+| schism / martyr | — | no | no | religions span factions; no holy site is modeled |
+| justice (execution/exile) | — | no | no | unplaced people |
+| romance / scandal / marriage | — | no | no | unplaced people |
+| friction | — | no | no | faction-pair scoped |
+| divine (curse) | — | no | no | the cursed person is unplaced; the map click position is viewer scatter, **not** sim truth |
+
 ## Region Lens — data contracts still missing (design notes, not promises)
 The viewer-side lens is honest about these; each needs a deliberate sim-side milestone because all
 of them move the verify baseline (new RNG draws and/or new ordered iteration):
-- **Event anchoring coverage.** Event.RegionId exists but only territory (exact region), culture, and
-  rumor events (faction primary region) carry it. Personal events (birth/death/murder/marriage/
-  romance/justice/war/peace/famine/boom/trade/prophet/schism/friction/divine) are unplaced. Contract:
-  stamp regionId at Record() call sites from data the sim already has — no new RNG needed if the
-  region is derived deterministically (e.g. participants' faction primary region), so this *may* be
-  baseline-safe; verify must prove it.
 - **Person ↔ site anchoring.** People have no home region/site; the atlas scatter (p.Id % regions)
   is presentation only. Contract: a Person.HomeRegionId assigned at birth/migration, deterministic.
 - **Settlement/site state.** No sites exist in the sim. Contract per GAME_DESIGN.md slice 3: 3–7
