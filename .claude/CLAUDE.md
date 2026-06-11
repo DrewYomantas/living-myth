@@ -15,13 +15,15 @@ separate from logic. Never let simulation logic leak into Godot nodes.
 - `src/LivingMyth.Console/` — proof runner (run | divergence | surface | verify).
 - `godot/` — the viewer (.NET build): `MapView.cs` (map render + click + region pulse) and `Main.cs`
   (tick loop, pacing/speed ladder + dramatic auto-slow, live feed, inspectors, curse tool, catch-up,
-  Follow/Yours channel). References the Sim; open the folder with the Godot mono editor and press F5.
-  M0–M5.1 + longevity done (spatial island/regions/territory + extinction land-release in M5). M7 added
-  the culture pressure engine (per-faction value axes → named customs → clash/diffusion + The Vanished
-  Way echo); M8 added the gossip/reputation layer (`Gossip()`: rumor events off notable deeds shift
-  Person.Reputation + nudge tension; couples to crime discovery, prophet credibility, and war via
-  grievance memory; The Blackened Name + The War of Whispers echoes). Next: surface culture + gossip in
-  the viewer (reputation on the person inspector, rumor styling in the feed), then timeline scrubbing.
+  Follow/Yours channel, focus guard + memorial cards, chapter recaps). References the Sim.
+
+## Milestones
+- **M0–M5.1** — spatial island, regions, territory, extinction land-release.
+- **M7** — culture pressure engine: per-faction value axes → named customs → clash/diffusion (The Vanished Way echo).
+- **M8** — gossip/reputation layer: rumor events shift Person.Reputation, nudge tension, drive war (The Blackened Name + The War of Whispers echoes).
+- **Visual: Living Atlas Foundation** (2026-06-10) — docs/VISUAL_STYLE.md style bible, parchment map place tags, framed docks, warmed atlas palette. See PROJECT_STATE.md for details.
+- **Focus Time arc** (2026-06-10/11, viewer-only) — docs/TIME_AND_STORY_PACING.md design doc; focus guard (pause-on-drama off/★/all + recap/death cards); Guard V2 soul follow + memorial card; held-card return chip; chapter recaps (25 shown years or echo/memorial arc closure → queued recap card with top-3, Your Threads deltas, echoes).
+- **Next** — followed regions + the region-anchoring sim contract (gives memorials/recaps real places; lets war's-peace and famine's-end close chapters — today peace events carry no faction ids and famine's end records no event); then surface culture + gossip in the viewer; timeline scrubbing.
 
 ## Commands
 ```bash
@@ -33,6 +35,8 @@ dotnet run --project src/LivingMyth.Console -- surface --seed 1
 dotnet run --project src/LivingMyth.Console -- run --seed 7 --years 3000 --cap 300  # --cap overrides carrying_capacity for balance tuning
 dotnet build godot/LivingMyth.Godot.csproj                     # build Godot project headlessly
 ```
+
+**Viewer:** open `godot/` with Godot mono editor and press **F5** to launch the viewer.
 
 ## Gotchas
 - **The yearly tick is a fixed engine order** (`World.Tick`): Economy → ProcessWars → Deaths →
@@ -51,10 +55,9 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 - **Population balance is the `carrying_capacity` param** (config.json, currently 300):
   logistic births → plateau. Too low (~120) drifts to extinction. With the M4 economy on,
   verified stable ~165–490 living over 5000 yrs at 300 across seeds 18/42/1/7.
-  `curse_death_multiplier` (2.5) tunes how apocalyptic curses are; `famine_death_multiplier`
-  (1.4) + `famine_threshold` (0.45) tune how deadly economic collapse is — the economy is a net
-  population suppressor (famine adds deaths, booms only help births), so raising the multiplier
-  drifts the low seeds toward extinction.
+  `curse_death_multiplier` (2.5) and `famine_death_multiplier` (1.4) + `famine_threshold` (0.45)
+  tune how deadly curses and collapse are. The economy is a net population suppressor (famine adds
+  deaths, booms only help births), so raising multipliers drifts low seeds toward extinction.
 - **The verify baseline moves whenever sim RNG consumption changes.** Current
   `verify` counts (120 yr, cap 300): 884/699/567/706 (seeds 1/18/42/7, M8 gossip-layer baseline —
   added `Gossip()` to the tick: a bounded per-year chronicle cursor that rolls rumor events off
@@ -92,10 +95,10 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 <!-- TOKENOMICS:START -->
 ## Token Optimization Insights
 
-_Last updated: 2026-06-10_
+_Last updated: 2026-06-11_
 
 ### Context Management
-- Your context snowballs at **turn 20** on average (42% of sessions). Use `/compact` proactively after turn 18-20 on long sessions to prevent unbounded growth.
+- Your context snowballs at **turn 20** on average (40% of sessions). Use `/compact` proactively after turn 18-20 on long sessions to prevent unbounded growth.
 - Some sessions use significantly more tokens than others. Consider shorter, more focused sessions with clear goals.
 - You could benefit from subagents for parallel tasks. Consider splitting multi-file operations into parallel agent tasks.
 - You read files you don't end up using. Use `Grep` first to locate relevant files before reading them — reduces unnecessary context by ~0%.
@@ -106,5 +109,5 @@ _Last updated: 2026-06-10_
 - MCP server(s) **unity-mcp** are loaded but never used. Consider removing them to reduce per-session overhead.
 
 ### Prompt Quality
-- **7%** of your prompts are under 10 words. Include specific file paths, function names, and expected outcomes to reduce clarification rounds.
+- **6%** of your prompts are under 10 words. Include specific file paths, function names, and expected outcomes to reduce clarification rounds.
 <!-- TOKENOMICS:END -->
