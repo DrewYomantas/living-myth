@@ -13,6 +13,7 @@ public partial class MapView : Control
 {
     public World? World;
     public HashSet<int>? Marked;            // followed bloodline — ringed cyan
+    public HashSet<int>? Souls;             // souls followed as individuals — ringed warm gold (the player's mark)
     public Action<int>? PersonPicked;
     public Action<string>? FactionPicked;
     public Action<int>? RegionPicked;       // region id — Main decides faction vs. unclaimed
@@ -463,7 +464,9 @@ public partial class MapView : Control
             var dot = p.Cursed ? Ui.Ember : (p.Sex == "f" ? col.Lightened(0.28f) : col);
             DrawCircle(pos, r, dot);
             if (p.IsLeader) DrawArc(pos, r + 2.5f, 0, Mathf.Tau, 20, Ui.LensGold, 1.6f);
-            if (Marked is not null && Marked.Contains(p.Id))
+            if (Souls is not null && Souls.Contains(p.Id))
+                DrawArc(pos, r + 4.5f, 0, Mathf.Tau, 24, Ui.GoldGlow, 2.4f);
+            else if (Marked is not null && Marked.Contains(p.Id))
                 DrawArc(pos, r + 4.5f, 0, Mathf.Tau, 24, new Color("7fc8d8"), 2f);
             _dots.Add((pos, Mathf.Max(r, 6f), p.Id));
         }

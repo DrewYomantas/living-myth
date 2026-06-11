@@ -139,7 +139,7 @@ The followable subjects, with honesty status:
 
 | Subject | Status | Basis |
 |---|---|---|
-| **Soul / bloodline** | SHIPPED | `Follow` on person inspector; directed lineage (`Feed.Bloodline`), viral growth at birth (`Main.cs`, `StreamNewHeadlines`) |
+| **Soul / bloodline** | SHIPPED (verbs split in Guard V2) | Two verbs on the person inspector: *Follow this soul* — one person, a per-soul set never expanded into kin — and *Follow this bloodline* — directed lineage (`Feed.Bloodline`), viral growth at birth (`Main.cs`, `StreamNewHeadlines`) |
 | **People (faction)** | SHIPPED | `Follow` on faction inspector; `_markedFactions` |
 | **Region** | Viewer-ready | `RegionActivity` already indexes anchored events; follow = YOURS treatment for events whose `RegionId` matches. Coverage caveat: only territory/culture/rumor events carry `RegionId` today, so a followed region is honest but quiet until the anchoring **[sim contract]** lands. Say so in the lens, like the existing not-modeled notes. |
 | **Faith** | Needs audit | `ReligionId` on people and religion lineage exist; most faith events name participants, not the faith. Audit event coverage before promising it. |
@@ -165,11 +165,19 @@ Mechanics, in dependency order:
 3. **Notifications without pause.** In *off* mode, YOURS Major+ events still deserve
    more than a gold row: a brief toast anchored to the year card ("◆ Your bloodline:
    Maia was murdered — click to pause & trace"). Quietly skippable, never modal.
-4. **Death of a followed soul is a chapter beat — SHIPPED.** When a followed person
-   dies, the guard shows "Their Tale Ends": born–died years, reputation, children,
-   their last deeds (the existing per-person event filter, one-shot on card open), and
-   the last-seen line — all real events. This is the emotional payoff loop for
-   following, and it costs nothing the chronicle doesn't already know.
+4. **Death of a followed soul is a chapter beat — SHIPPED; memorial moment in Guard V2.**
+   When a followed person dies, the guard shows "Their Tale Ends": born–died years,
+   reputation, children, their last deeds (the existing per-person event filter, one-shot
+   on card open), and the last-seen line — all real events. Guard V2 makes the *specific*
+   soul's death a memorial, not an info card: the atlas dims behind a larger ceremonial
+   frame (3px gold border, gold rule, event-class medallion), the name stands centered
+   with faction and years lived, and the lead reads "the world holds its breath." A
+   bloodline-only death keeps the standard card and says so ("a tale of a bloodline you
+   follow closes") — the card language always matches what the player actually followed.
+   A soul death outranks a bloodline death, which outranks a recap, within one tick. No
+   recorded region → a gentle "no place recorded" line, and the map pulses only a real
+   region. This is the emotional payoff loop for following, and it costs nothing the
+   chronicle doesn't already know.
 
 ## Chapter recaps (defining "era recap" at last)
 
@@ -221,7 +229,7 @@ Shipped: catch-up modal (Quick beats / Full thread), region anchors shown when k
 | Drama Time: ladder | 0.25–16× buttons, `BaseInterval` 1.2 | Unnamed paces (tooltips shipped this pass); beats don't scale with speed; no quiet-years acceleration. |
 | Drama Time: beats | Auto-slow 1.6 s → 0.15×, re-armed; pulse 1.2 s; camera lean ≤ pulse life, last-writer-wins | Beat too short to read; pulses anonymous; camera steals/abandons. |
 | Drama Time: rationing | Chattiness slider; YOURS cap 60% of window; echo cooldown/bar/cap | Healthy. Bands formalize what these already do. |
-| Focus Time: follow | Bloodline + faction follow, viral growth, YOURS boost +70, cyan rings; focus guard (pause off/★/all, recap + death cards, per-soul last-seen, year-card signal) | No region/faith follow; no per-faction last-seen deltas; no toasts in *off* mode. |
+| Focus Time: follow | Soul + bloodline + faction follow (soul = per-person set, gold rings; bloodline = viral growth, cyan rings), YOURS boost +70; focus guard (pause off/★/all, recap + death cards, soul-death memorial card, per-soul last-seen, year-card signal with soul/bloodline counts) | No region/faith follow; no per-faction last-seen deltas; no toasts in *off* mode; one memorial per tick. |
 | Chapter recaps | Nothing (undesigned until this doc) | Aggregator + card; arc-closure detection for followed subjects. |
 | Replay Time | Catch-up modal Quick/Full; region line when anchored | No beat numbering, no visual path, no scrub; alternate paths impossible (correctly absent). |
 | Subjects the sim can't support yet | — | Region-anchored personal events, person homes, sites, prophecies, near-misses: all **[sim contract]**, below. |
@@ -233,8 +241,13 @@ Shipped: catch-up modal (Quick beats / Full thread), region anchors shown when k
 2. **Focus guard slice** — SHIPPED: pause-on-drama toggle (off/★ followed/all) + guard
    recap card + per-soul "you last saw" memory (card + inspector) + "Their Tale Ends"
    followed-death card + year-card guard signal. One pass in `Main.cs`, parchment
-   panels and the existing stream loop reused. Remaining from this slice: toasts in
-   *off* mode, per-faction last-seen deltas.
+   panels and the existing stream loop reused. **Guard V2 — SHIPPED:** specific-soul
+   follow (distinct verb, never expanded into kin; gold soul rings, souls counted in
+   the year-card signal) + the memorial death card (dim backdrop, ceremonial frame,
+   honest place/kin lines). Remaining from this slice: toasts in *off* mode,
+   per-faction last-seen deltas, multiple followed deaths in one tick, richer
+   relationship cards / family tree / portrait-token treatments, region/home/site
+   anchoring (the **[sim contract]** below).
 3. **Chapter recap slice:** the 25-shown-year aggregator + recap card + arc-closure
    triggers. Subsumes the deferred "era recap."
 4. **Followed regions (viewer-only):** Follow on the Region Lens; YOURS treatment for

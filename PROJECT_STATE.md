@@ -47,6 +47,15 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       card + person inspector; "⛨ guard watches…" signal on the year card. All wall-clock
       presentation — pausing only gates whether _Process keeps calling Tick().
       verify unchanged 884/699/567/706.
+- [x] Focus Guard V2 — followed soul + memorial moment (viewer-only): "Follow this soul" on the
+      person inspector — a per-soul set, never expanded into kin, distinct from the bloodline verb;
+      a followed soul's death upgrades the guard card to a memorial — dimmed atlas backdrop, larger
+      ceremonial gold frame, event-class medallion, centered name/faction/born–died/age, reputation
+      + children lines only when real, last six deeds clickable into catch-up, honest "no place
+      recorded" when the death carries no RegionId (the map pulses only a real region); card
+      language distinguishes soul-follow from bloodline-follow; year-card guard signal counts souls
+      separately; warm-gold soul rings on the map (bloodline stays cyan).
+      verify unchanged 884/699/567/706.
 - [ ] Later — chapter recaps + followed regions (roadmap 3–4 in docs/TIME_AND_STORY_PACING.md);
       visual/UX pass (surface culture + gossip in the viewer); echo packs; timeline scrubbing. ← NEXT
 
@@ -135,6 +144,23 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
   (inspector panel shifted to match). Kill()/RecordMurder audit confirmed types "death"/"murder"
   with the victim as a participant cover every real death path (executions Kill first; martyr/
   justice are post-death commentary). Sim untouched; verify green at 884/699/567/706.
+
+- [2026-06-11] Session: Focus Guard V2 — followed soul + memorial moment (viewer-only; Main.cs,
+  MapView.cs). Drew's playtest verdict on V1: the followed-death card read as a normal info card,
+  and only bloodlines were followable. Added `_followedSouls` — an explicit per-soul set consulted
+  by IsYours, RememberSeen, the guard death trigger, and the inspector last-seen line, but never
+  passed through `Feed.ExpandMarked` and never grown virally at birth (soul ≠ line). Two distinct
+  inspector verbs: "Follow this soul" (living people; a dead soul can still be unfollowed) above
+  "Follow this bloodline". Memorial path in ShowGuardCard/StyleGuardCard: ink-veil backdrop that
+  swallows clicks, 640×500 frame, 3px gold border + gold rule + class-glyph medallion, centered
+  [font_size] name with faction/born–died/age, "the world holds its breath" lead; a soul death
+  outranks a bloodline death which outranks a recap within one tick. Honesty: no RegionId → gentle
+  "the chronicle records no place for this passing" (never an invented place; pulse only a real
+  region); "N children carry the line" only from real Children.Count; "once their leader" only from
+  EverLeader; bloodline-only deaths say "a tale of a bloodline you follow closes". Future work:
+  richer relationship cards, family tree view, portrait/token system, region/home/site anchoring,
+  chapter recap cards, handling multiple followed deaths in one tick. Sim untouched; build + Godot
+  build clean; verify green 884/699/567/706.
 
 ## Region Lens — data contracts still missing (design notes, not promises)
 The viewer-side lens is honest about these; each needs a deliberate sim-side milestone because all
