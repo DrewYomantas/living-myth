@@ -36,6 +36,12 @@ public sealed class Person
     public int Reputation { get; set; }
     public int LastRumorYear { get; set; } = int.MinValue;
 
+    // home contract (anchoring V1): the region this person's line is rooted in. Founders get
+    // their people's founding seat (the same region the founding-territory event anchors);
+    // newborns inherit father's home, else mother's. Never reassigned — home is heritage, not
+    // current control. Null = the chronicle honestly does not record where this line is rooted.
+    public int? HomeRegionId { get; set; }
+
     public Person(int id, string name, string factionId, int birthYear, string sex)
     {
         Id = id;

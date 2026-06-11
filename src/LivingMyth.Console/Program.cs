@@ -18,8 +18,9 @@ switch (cmd)
     case "divergence": DivergenceCmd(Seed(18), Years(120)); break;
     case "surface": SurfaceCmd(Seed(1), Years(120)); break;
     case "verify": VerifyCmd(); break;
+    case "homes": HomesCmd(Years(120)); break;
     default:
-        Console.WriteLine("commands: run | divergence | surface | verify");
+        Console.WriteLine("commands: run | divergence | surface | verify | homes");
         break;
 }
 return;
@@ -269,6 +270,66 @@ void SurfaceCmd(int seed, int years)
     var full = Feed.BuildFeed(world, markedPeople: new[] { target.Id }, echoes: echoes, limit: 10000);
     var yoursOnly = full.Where(r => r.Labels.Contains("YOURS")).Take(10).ToList();
     PrintFeed("FOLLOWING THE CURSED BLOODLINE  -  beats that surface because it's YOURS", yoursOnly);
+}
+
+// -------------------------------------------------------------------------- homes
+
+// Proof gate for the Person.HomeRegionId contract: founders carry their people's founding
+// seat (the region the founding-territory event itself anchors), newborns inherit father's
+// home else mother's, nulls are honest (landless line), and the whole map is deterministic.
+void HomesCmd(int years)
+{
+    Console.WriteLine($"Home contract gate ({years} yrs): founders at the founding seat, children inherit, nulls honest.");
+    int failures = 0;
+    foreach (int seed in new[] { 1, 18, 42, 7 })
+    {
+        var (c1, n1) = Load();
+        var w = new World(seed, c1, n1); w.Run(years);
+
+        // Founding seats, recovered from the chronicle's own anchors — not from sim internals.
+        var seat = new Dictionary<string, int>();
+        foreach (var e in w.Chronicle.Events.Where(e =>
+                     e.Type == "territory" && e.Tags.Contains("founding") && e.RegionId is int))
+            foreach (int pid in e.Participants)
+                seat[w.People[pid].FactionId] = e.RegionId!.Value;
+
+        var bad = new List<string>();
+        foreach (var p in w.People.Values.OrderBy(p => p.Id))
+        {
+            if (p.HomeRegionId is int h && (h < 0 || h >= w.Regions.Count))
+                bad.Add($"#{p.Id} home {h} is not a real region");
+            if (p.Parents.Count == 0)
+            {
+                int? want = seat.TryGetValue(p.FactionId, out int s) ? s : null;
+                if (p.HomeRegionId != want)
+                    bad.Add($"founder #{p.Id} home {p.HomeRegionId?.ToString() ?? "null"} != seat {want?.ToString() ?? "null"}");
+            }
+            else
+            {
+                var father = w.People[p.Parents.First(id => w.People[id].Sex == "m")];
+                var mother = w.People[p.Parents.First(id => w.People[id].Sex == "f")];
+                if (p.HomeRegionId != (father.HomeRegionId ?? mother.HomeRegionId))
+                    bad.Add($"child #{p.Id} home {p.HomeRegionId?.ToString() ?? "null"} breaks inheritance");
+            }
+        }
+
+        // Determinism of the home map itself: a second run must root every soul identically.
+        var (c2, n2) = Load();
+        var w2 = new World(seed, c2, n2); w2.Run(years);
+        bool sameMap = w.People.Count == w2.People.Count &&
+            w.People.Values.OrderBy(p => p.Id).Select(p => (p.Id, p.HomeRegionId))
+             .SequenceEqual(w2.People.Values.OrderBy(p => p.Id).Select(p => (p.Id, p.HomeRegionId)));
+        if (!sameMap) bad.Add("home map differs between identical runs");
+
+        int ever = w.People.Count, everHome = w.People.Values.Count(p => p.HomeRegionId is not null);
+        var living = w.Living();
+        int liveHome = living.Count(p => p.HomeRegionId is not null);
+        Console.WriteLine($"  seed {seed,3}: {(bad.Count == 0 ? "OK" : "FAIL")}  homes {everHome}/{ever} ever, {liveHome}/{living.Count} living");
+        foreach (var b in bad.Take(5)) Console.WriteLine($"           {b}");
+        if (bad.Count > 0) failures++;
+    }
+    Console.WriteLine(failures == 0 ? "\nHOME CONTRACT HOLDS." : $"\n{failures} SEED(S) BROKE THE CONTRACT.");
+    Environment.Exit(failures == 0 ? 0 : 1);
 }
 
 // ------------------------------------------------------------------------- verify

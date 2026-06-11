@@ -1754,6 +1754,9 @@ public partial class Main : Node
         }
         sb.AppendLine(SectionCap("The record"));
         sb.AppendLine($"status: {status}");
+        sb.AppendLine(p.HomeRegionId is int hr
+            ? $"home: {Link("r:" + hr, _world.Regions[hr].Name)}"
+            : "home: —");
         sb.AppendLine($"faith: {faith}");
         sb.AppendLine($"spouse: {spouse}");
         sb.AppendLine($"children: {p.Children.Count}");

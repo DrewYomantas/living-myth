@@ -98,11 +98,25 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       anchoring work is now scoped into concrete sim contracts, ranked by unlock value:
       Person.HomeRegionId (deaths/murders/births → memorial places, cairns), per-region economy
       (famine/plenty land mood), seat-of-power (successions, true custom seats), battle sites.
-- [ ] Later — anchoring sim contracts above (battle sites and per-region economy add events/RNG
-      and move the verify baseline; a deterministic Person.HomeRegionId may be baseline-safe —
-      verify must prove it; together they extend place memory to deaths/battles/famine, let
-      memorials and recaps name real places, and let war's-peace / famine's-end close
-      chapters); followed regions (roadmap 4 in
+- [x] Person.HomeRegionId Contract V1 (2026-06-11, sim + console gate + one inspector line):
+      every soul now knows where its line is rooted, with zero fabricated geography. Rules:
+      founders receive their people's **founding seat** — the exact region the founding-territory
+      event already anchors (`owned[0]`, backfilled in that same GenerateMap loop); newborns
+      inherit `father.HomeRegionId ?? mother.HomeRegionId` (father first — the child's faction
+      follows the father); home is **immutable heritage** (conquest never rewrites it); null is
+      honest (landless people at founding, and descendants of all-null parents). No RNG draws, no
+      new events — verify held **exactly 884/699/567/706** (baseline-safe, as predicted). New
+      console gate `homes [--years N]` proves it: founder-seat invariant (seats recovered from the
+      chronicle's own founding anchors, not sim internals), inheritance invariant, valid-region +
+      honest-null checks, and double-run determinism of the whole home map — green on seeds
+      1/18/42/7 at 120 and 1000 yrs (100% coverage; all founding peoples are landed at these
+      seeds). Viewer: one "home:" line in the person inspector ("—" when null) — the only visual
+      touch; death/murder/memorial anchoring deliberately NOT done yet (next slice).
+- [ ] Later — anchor deaths/murders/births to HomeRegionId (events + viewer memorials — the
+      payoff slice for the home contract; event-text changes will move chronicle bytes, so it
+      needs a deliberate look at verify even without new RNG); battle sites and per-region
+      economy (add events/RNG and move the verify baseline; together they extend place memory to
+      battles/famine and let war's-peace / famine's-end close chapters); followed regions (roadmap 4 in
       docs/TIME_AND_STORY_PACING.md); mythic glosses / entity links; relationship constellation;
       local site/tableau visuals; memorial tableau upgrade; visual/UX pass (surface culture +
       gossip in the viewer); echo packs; timeline scrubbing. ← NEXT
@@ -276,7 +290,17 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
   on real anchors everywhere (memorial: "the chronicle records no place for this passing").
   Sim untouched; verify green 884/699/567/706.
 
-## Event Anchoring Contract — audit (2026-06-11, all 31 Record() call sites walked)
+- [2026-06-11] Session: Person.HomeRegionId Contract V1 — the first sim contract off the
+  anchoring audit's unlock map, and it proved **baseline-safe**: verify held exactly
+  884/699/567/706 because the contract draws no RNG, records no events, and changes no
+  iteration that feeds either (the founders' backfill rides the existing founding-territory
+  loop; verify hashes only `Chronicle.Render()`). Rules: founders ← founding seat (the region
+  their founding event already anchors), newborns ← father's home else mother's, immutable for
+  life, null stays honestly null. New console gate `homes` (pattern-matched to `verify`)
+  asserts founder-seat (recovered from the chronicle's own anchors), inheritance, valid-region,
+  honest-null, and double-run home-map determinism — green at 120 and 1000 yrs, 100% coverage
+  on seeds 1/18/42/7. Viewer got exactly one line (inspector "home: {region}" / "—"). Event
+  anchoring to homes (deaths, murders, births) deliberately deferred to its own slice.
 
 Core principle: **no fake locations.** `Event.RegionId` is set only when the recording code
 path already holds a specific real region. It is never derived from faction land for

@@ -392,6 +392,12 @@ public sealed class World
                 $"{fac.Name} hold the lands of {string.Join(", ", owned.Select(r => r.Name))}.",
                 participants: fac.LeaderId is int lid ? new() { lid } : null,
                 tags: new() { "territory", "founding" }, regionId: owned[0].Id);
+
+            // Root the founding generation at the same seat the event above anchors. Draws no
+            // RNG and records nothing, so it cannot move the verify baseline. Landless peoples
+            // (loop skipped above) honestly stay null.
+            foreach (int pid in fac.Members.OrderBy(id => id))
+                People[pid].HomeRegionId = owned[0].Id;
         }
     }
 
@@ -1247,6 +1253,7 @@ public sealed class World
     private void Birth(Person mother, Person father)
     {
         var child = CreatePerson(father.FactionId, age: 0);
+        child.HomeRegionId = father.HomeRegionId ?? mother.HomeRegionId;
         child.Parents.Add(mother.Id);
         child.Parents.Add(father.Id);
         if (mother.Cursed || father.Cursed) child.Cursed = true;

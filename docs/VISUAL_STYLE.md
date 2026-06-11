@@ -286,7 +286,7 @@ below waits on a deliberate, baseline-moving sim contract:
 
 | Future mark | Blocked on |
 |---|---|
-| death / murder cairn | `Person.HomeRegionId` (assigned at birth/migration) |
+| death / murder cairn | ~~`Person.HomeRegionId`~~ **contract shipped 2026-06-11** (founders ← founding seat, newborns inherit, immutable, honest nulls; baseline-safe, gated by console `homes`). Remaining: stamp death/murder/birth events with the home region — a deliberate slice of its own |
 | battle scar at the battlefield | battle-site contract (battles aren't events at all today) |
 | famine / drought / plenty land mood | per-region economy (prosperity is per-faction; drought unmodeled) |
 | peace ribbon | faction ids on peace events + a treaty-site convention |
@@ -325,8 +325,9 @@ was touched by accident — stop and investigate, never re-baseline silently.
    or authored bands) so the atlas reads as landforms; gateway to diorama rendering.
    Viewer-only, deterministic from seed.
 6. **Site/Settlement Data Contract** — sim-side: 3–7 deterministic sites per region,
-   `Person.HomeRegionId`, broader `Event.RegionId` coverage (see PROJECT_STATE.md).
-   **Moves the verify baseline; deliberate sim milestone.** Unlocks honest buildings,
+   broader `Event.RegionId` coverage (see PROJECT_STATE.md). (`Person.HomeRegionId`
+   shipped 2026-06-11 and proved baseline-safe — not every sim contract moves verify.)
+   **Sites and event coverage likely move the verify baseline; deliberate sim milestone.** Unlocks honest buildings,
    features, people-at-site, and settlement populations — everything in the
    "forbidden" list above graduates to "honest" only through this gate.
 
