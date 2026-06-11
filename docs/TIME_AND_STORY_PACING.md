@@ -179,7 +179,7 @@ Mechanics, in dependency order:
    region. This is the emotional payoff loop for following, and it costs nothing the
    chronicle doesn't already know.
 
-## Chapter recaps (defining "era recap" at last)
+## Chapter recaps (defining "era recap" at last) — SHIPPED
 
 "Timeline scrubbing + era recap" has been deferred in PROJECT_STATE.md with no design
 behind "era recap" (before this doc, the phrase appeared exactly once in the repo). Definition:
@@ -195,6 +195,22 @@ behind "era recap" (before this doc, the phrase appeared exactly once in the rep
   — the recap aggregator must stay O(new events), never a history scan.
 - Recaps queue politely: shown at the next pause or chapter boundary, never interrupting
   a focus-guard card.
+
+**As shipped (`Main.cs`, chapter-recaps section).** Closing a chapter only *queues* its
+recap: a "❖ Years X–Y — a chapter closed" chip waits by the year card, and the card
+auto-opens on the next transition into a pause (player pause, or a guard card closing
+into stillness is *not* one — the guard's moment is respected; the chip covers it). The
+stream is never auto-paused at a boundary — at 16× that would interrupt every ~2 s.
+Only the latest unread chapter is offered; an unread recap is superseded at the next
+boundary (history stays reachable in catch-up). Arc closures shipped: **an echo
+carding** and **a followed soul's memorial**. *War's peace* and *famine's end* honestly
+can't trigger yet — peace events carry no faction attribution and famine's end records
+no event at all — both are **[sim contract]** work. Deltas measure from the chapter
+start or the follow, whichever is later; reputation lines show band changes only
+(admired/whispered-against/…), never raw numbers. Top-3 uses full `Importance` over the
+chapter's slice with `BuildReverse` — one-shot on card open (the echo-scan cost class),
+never per-tick. The held-card return chip covers the recap too ("↩ Return to the
+chapter").
 
 ## Chronicle Replay Time — design
 
@@ -230,7 +246,7 @@ Shipped: catch-up modal (Quick beats / Full thread), region anchors shown when k
 | Drama Time: beats | Auto-slow 1.6 s → 0.15×, re-armed; pulse 1.2 s; camera lean ≤ pulse life, last-writer-wins | Beat too short to read; pulses anonymous; camera steals/abandons. |
 | Drama Time: rationing | Chattiness slider; YOURS cap 60% of window; echo cooldown/bar/cap | Healthy. Bands formalize what these already do. |
 | Focus Time: follow | Soul + bloodline + faction follow (soul = per-person set, gold rings; bloodline = viral growth, cyan rings), YOURS boost +70; focus guard (pause off/★/all, recap + death cards, soul-death memorial card, per-soul last-seen, year-card signal with soul/bloodline counts) | No region/faith follow; no per-faction last-seen deltas; no toasts in *off* mode; one memorial per tick. |
-| Chapter recaps | Nothing (undesigned until this doc) | Aggregator + card; arc-closure detection for followed subjects. |
+| Chapter recaps | 25-shown-year chapters; queued recap chip + card (top-3 matured, YOURS deltas, echoes); echo + memorial arc closures | War's-peace / famine's-end closures need the sim contract (peace events carry no faction ids; famine's end records no event); only the latest unread chapter is kept. |
 | Replay Time | Catch-up modal Quick/Full; region line when anchored | No beat numbering, no visual path, no scrub; alternate paths impossible (correctly absent). |
 | Subjects the sim can't support yet | — | Region-anchored personal events, person homes, sites, prophecies, near-misses: all **[sim contract]**, below. |
 
@@ -248,8 +264,10 @@ Shipped: catch-up modal (Quick beats / Full thread), region anchors shown when k
    per-faction last-seen deltas, multiple followed deaths in one tick, richer
    relationship cards / family tree / portrait-token treatments, region/home/site
    anchoring (the **[sim contract]** below).
-3. **Chapter recap slice:** the 25-shown-year aggregator + recap card + arc-closure
-   triggers. Subsumes the deferred "era recap."
+3. **Chapter recap slice — SHIPPED:** the 25-shown-year aggregator + recap card +
+   arc-closure triggers (echo carding, followed-soul memorial), queued-chip delivery.
+   Subsumes the deferred "era recap." Remaining: war's-peace / famine's-end closures
+   (**[sim contract]**).
 4. **Followed regions (viewer-only):** Follow on the Region Lens; YOURS treatment for
    region-anchored events; honest "quiet until anchored" copy.
 5. **Drama polish:** speed-scaled beats, identity-carrying pulses, camera dwell queue,

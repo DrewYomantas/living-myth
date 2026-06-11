@@ -56,8 +56,19 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       language distinguishes soul-follow from bloodline-follow; year-card guard signal counts souls
       separately; warm-gold soul rings on the map (bloodline stays cyan).
       verify unchanged 884/699/567/706.
-- [ ] Later — chapter recaps + followed regions (roadmap 3–4 in docs/TIME_AND_STORY_PACING.md);
-      visual/UX pass (surface culture + gossip in the viewer); echo packs; timeline scrubbing. ← NEXT
+- [x] Chapter recaps (viewer-only, roadmap 3 in docs/TIME_AND_STORY_PACING.md): chapters of 25
+      SHOWN years (or an arc closure — echo carding / followed-soul memorial, whichever first);
+      closing queues a recap behind a "❖ Years X–Y — a chapter closed" chip by the year card,
+      auto-opened on the next transition into pause, never over a guard card, never auto-pausing
+      the stream; card = span + reason, top-3 by matured Importance (BuildReverse one-shot on
+      open), Your Threads deltas (births into follows, losses, reputation band shifts, regions
+      gained/lost — measured from chapter start or follow, whichever later), echoes carded; every
+      line links into catch-up; only the latest unread chapter is kept; the return chip also
+      covers the recap. verify unchanged 884/699/567/706.
+- [ ] Later — followed regions (roadmap 4 in docs/TIME_AND_STORY_PACING.md); region-anchoring
+      sim contract (would also let memorials and recaps name real places, and let war's-peace /
+      famine's-end close chapters); visual/UX pass (surface culture + gossip in the viewer);
+      echo packs; timeline scrubbing. ← NEXT
 
 ## Session log
 - [2026-06-07] Session: built M0→M2 + longevity pass (carrying capacity + perf refactor, proven
@@ -166,6 +177,22 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
   held card — content survives CloseGuardCard, so reopening is just re-show + restore the dim. The
   chip lives only while the world is still paused from that card; once time resumes the moment has
   passed and it disappears (a later manual pause never resurrects a stale card).
+- [2026-06-11] Session: chapter recaps (viewer-only; Main.cs). Chapters count SHOWN years (ticks
+  displayed), default 25, closing early on an echo carding or a followed soul's memorial; the sim
+  has no chapter state. Closing QUEUES the recap — chip by the year card, card auto-opens on the
+  next transition into pause (never over a guard card; the stream is never auto-paused for a
+  boundary, which at 16× would interrupt every ~2 s); latest unread chapter only. Card sections:
+  Loudest of the Age (top-3 full Importance over the chapter slice, BuildReverse one-shot on card
+  open — echo-scan cost class), Your Threads (births into follows, losses with event links,
+  reputation BAND shifts for followed souls, region counts for followed peoples — all measured
+  from chapter start or the follow, whichever later; "passed the age quietly" when nothing moved;
+  section omitted entirely when nothing is followed), Myths That Echoed. The guard-card return
+  chip generalizes to "↩ Return to the chapter". Honesty: war's-peace and famine's-end arc
+  closures are NOT implemented — peace events carry no faction attribution and famine's end
+  records no chronicle event; both filed under the region/sim contract. Verified live: boundary
+  chip at Yr 25/50/…, auto-open on pause, link→catch-up→return loop, guard card outranking a
+  queued recap, Your Threads with 41 births + 14→10 regions on a followed people. Sim untouched;
+  verify green 884/699/567/706.
 
 ## Region Lens — data contracts still missing (design notes, not promises)
 The viewer-side lens is honest about these; each needs a deliberate sim-side milestone because all

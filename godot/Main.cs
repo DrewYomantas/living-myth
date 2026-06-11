@@ -126,6 +126,37 @@ public partial class Main : Node
     private Button _guardReturnBtn = null!;               // floating way back to the held card
     private bool _guardWasMemorial;                       // restore the dim on return
     private bool _guardReturnable;                        // true while the world still holds its breath
+    private bool _returnIsRecap;                          // the held card is a chapter recap, not a guard card
+
+    // Chapter recaps (docs/TIME_AND_STORY_PACING.md, roadmap 3). A chapter is a span of SHOWN
+    // years — Drama/Focus Time, never sim state. It closes after ChapterYears shown years, or
+    // early on an arc closure: a myth echo carding, or a followed soul's memorial. Closing only
+    // QUEUES the recap (a chip by the year card); the card itself shows when the player next
+    // pauses, or on chip click — the stream is never auto-paused for a recap, and a queued recap
+    // never interrupts a focus-guard card. Only the latest unread chapter is offered.
+    private const int ChapterYears = 25;                  // shown years per chapter (≈ a generation)
+    private int _chapterStartYear;
+    private int _chapterStartEventId;
+    private int _chapterShownYears;
+    private string? _chapterCloseReason;                  // non-null = arc closure armed this frame
+    private readonly System.Collections.Generic.Dictionary<int, int> _chapterRepBase = new();      // followed soul -> reputation when the chapter (or the follow) began
+    private readonly System.Collections.Generic.Dictionary<string, int> _chapterRegionBase = new();// followed people -> region count when the chapter (or the follow) began
+    private readonly List<(string Archetype, string Label, int Anchor)> _chapterEchoes = new();
+    private RecapSnapshot? _queuedRecap;
+    private Panel _recapPanel = null!;
+    private Label _recapSub = null!;
+    private RichTextLabel _recapBody = null!;
+    private Button _recapChip = null!;                    // "a chapter closed" — click to read
+    private bool _wasRunning = true;                      // pause-transition edge for auto-showing a queued recap
+
+    private sealed class RecapSnapshot
+    {
+        public int StartYear, EndYear, StartEventId, EndEventId;
+        public string Reason = "";
+        public List<(string Archetype, string Label, int Anchor)> Echoes = new();
+        public System.Collections.Generic.Dictionary<int, int> RepBase = new();
+        public System.Collections.Generic.Dictionary<string, int> RegionBase = new();
+    }
 
     private sealed class FeedVisRow { public Node Node = null!; public bool Yours; public int Weight; }
 
@@ -144,6 +175,7 @@ public partial class Main : Node
         _map.Souls = _followedSouls;
         StreamNewHeadlines();
         if (_pendingGuardEventId is not null) ShowGuardCard();   // unreachable today; hardening
+        StartChapter(0);   // chapter one opens on the founding events themselves
         RefreshTimeBar();
         _map.QueueRedraw();
     }
@@ -171,6 +203,7 @@ public partial class Main : Node
             {
                 _accum -= interval;
                 _world.Tick();
+                _chapterShownYears++;
                 bool notable = StreamNewHeadlines();
                 if (_pendingGuardEventId is not null)
                 {
@@ -187,6 +220,8 @@ public partial class Main : Node
             }
             if (_accum > interval * 6) _accum = 0f;   // drop any backlog
             MaybeDetectEchoes();
+            if (_chapterCloseReason is not null || _chapterShownYears >= ChapterYears)
+                CloseChapter(_chapterCloseReason ?? "a generation told");
         }
         _map.QueueRedraw();
         RefreshTimeBar();
@@ -218,7 +253,8 @@ public partial class Main : Node
         BuildYearCard(root);
         BuildInspector(root);
         BuildCatchup(root);
-        BuildGuardCard(root);
+        BuildRecap(root);
+        BuildGuardCard(root);   // last: the guard card (and its return chip) sits above everything
     }
 
     private void UpdateRootSize()
@@ -818,6 +854,10 @@ public partial class Main : Node
 
     private void AddEchoCard(Echo echo, int anchorEventId)
     {
+        _chapterEchoes.Add((echo.Archetype, echo.Label, anchorEventId));
+        _chapterCloseReason ??= "a myth echoed";   // an echo carding closes the chapter
+
+
         // Echo cards carry the only luminous treatment in the feed: warm fill, gold border.
         var row = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Stop };
         var box = Ui.RowBox(Ui.RowBgWarm, Ui.Gold);
@@ -937,7 +977,9 @@ public partial class Main : Node
         _guardEventId = eid;
         _guardWasMemorial = memorial;
         _guardReturnable = true;
+        _returnIsRecap = false;
         _guardReturnBtn.Text = memorial ? "↩ Return to the memorial" : "↩ Return to the tale";
+        if (memorial) _chapterCloseReason ??= "a followed soul's tale ended";   // a memorial closes the chapter
         _guardTitle.Text = isDeath ? "Their Tale Ends" : "Focus Guard";
 
         var cls = Ui.ClassOf(e.Type);
@@ -1141,6 +1183,7 @@ public partial class Main : Node
         _guardReturnBtn.Pressed += () =>
         {
             _catchupPanel.Visible = false;
+            if (_returnIsRecap) { _recapPanel.Visible = true; return; }
             _guardBackdrop.Visible = _guardWasMemorial;
             _guardPanel.Visible = true;
         };
@@ -1150,6 +1193,226 @@ public partial class Main : Node
     {
         _guardPanel.Visible = false;
         _guardBackdrop.Visible = false;
+    }
+
+    // ------------------------------------------------------------- chapter recaps
+
+    private void StartChapter(int fromEventId)
+    {
+        _chapterStartYear = _world.Year;
+        _chapterStartEventId = fromEventId;
+        _chapterShownYears = 0;
+        _chapterCloseReason = null;
+        _chapterEchoes.Clear();
+        _chapterRepBase.Clear();
+        foreach (var pid in _followedSouls)
+            if (_world.People.TryGetValue(pid, out var p)) _chapterRepBase[pid] = p.Reputation;
+        _chapterRegionBase.Clear();
+        foreach (var fid in _markedFactions) _chapterRegionBase[fid] = RegionCount(fid);
+    }
+
+    private int RegionCount(string fid)
+    {
+        int n = 0;
+        foreach (var r in _world.Regions) if (r.ControllingFactionId == fid) n++;
+        return n;
+    }
+
+    private void CloseChapter(string reason)
+    {
+        _queuedRecap = new RecapSnapshot
+        {
+            StartYear = _chapterStartYear,
+            EndYear = _world.Year,
+            StartEventId = _chapterStartEventId,
+            EndEventId = _world.Chronicle.Events.Count,
+            Reason = reason,
+            Echoes = new(_chapterEchoes),
+            RepBase = new(_chapterRepBase),
+            RegionBase = new(_chapterRegionBase),
+        };
+        _recapChip.Text = $"❖ Years {_chapterStartYear}–{_world.Year} — a chapter closed";
+        StartChapter(_world.Chronicle.Events.Count);
+    }
+
+    // Render and show the queued recap; pauses the world. All content comes from the chapter's
+    // own chronicle slice plus the snapshots taken when it began — the only history-wide work is
+    // BuildReverse for matured importance, a one-shot on card open (same cost class as the echo
+    // scan), never per-tick.
+    private void ShowRecapCard()
+    {
+        if (_queuedRecap is not RecapSnapshot snap) return;
+        _queuedRecap = null;
+        _running = false;
+        _guardReturnable = true;
+        _returnIsRecap = true;
+        _guardReturnBtn.Text = "↩ Return to the chapter";
+
+        _recapSub.Text = $"Years {snap.StartYear}–{snap.EndYear} · {snap.Reason}";
+        var events = _world.Chronicle.Events;
+        var reverse = Scoring.BuildReverse(_world);
+
+        var scored = new List<(int Score, Event E)>();
+        int births = 0;
+        var lost = new List<Event>();
+        for (int i = snap.StartEventId; i < snap.EndEventId; i++)
+        {
+            var e = events[i];
+            scored.Add((Scoring.Importance(e, _world, reverse), e));
+            if (e.Type == "birth" && IsYours(e)) births++;
+            if ((e.Type is "death" or "murder")
+                && e.Participants.Any(pid => _marked.Contains(pid) || _followedSouls.Contains(pid)))
+                lost.Add(e);
+        }
+        scored.Sort((a, b) => b.Score.CompareTo(a.Score));
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]the saga closes a chapter — {snap.Reason}[/color]");
+        sb.AppendLine();
+        sb.AppendLine(SectionCap("Loudest of the age"));
+        if (scored.Count == 0)
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}](a quiet age — the chronicle recorded nothing)[/color]");
+        foreach (var (_, e) in scored.Take(3))
+        {
+            var cls = Ui.ClassOf(e.Type);
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color] [color=#{Ui.Hex(cls.Color)}]{cls.Glyph}[/color] {Link("e:" + e.Id, e.Text)}");
+        }
+
+        if (_followedSouls.Count > 0 || _seedPeople.Count > 0 || _markedFactions.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine(SectionCap("Your threads"));
+            bool any = false;
+            if (births > 0)
+            {
+                sb.AppendLine($"{births} born into what you follow");
+                any = true;
+            }
+            var lostLines = new List<string>();
+            foreach (var e in lost)
+            {
+                var who = e.Participants.Where(pid => _marked.Contains(pid) || _followedSouls.Contains(pid))
+                    .Select(pid => _world.People.TryGetValue(pid, out var dp) ? dp.Name : null)
+                    .FirstOrDefault(n => n is not null);
+                if (who is not null)
+                    lostLines.Add($"lost: {who} — [color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color] {Link("e:" + e.Id, e.Text)}");
+            }
+            foreach (var line in lostLines.Take(6)) { sb.AppendLine(line); any = true; }
+            if (lostLines.Count > 6) sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]…and {lostLines.Count - 6} more losses[/color]");
+            foreach (var (pid, baseRep) in OrderedRepBase(snap))
+            {
+                if (!_followedSouls.Contains(pid) || !_world.People.TryGetValue(pid, out var p)) continue;
+                string before = ReputationDisplay(baseRep)?.text ?? "unremarked";
+                string after = ReputationDisplay(p.Reputation)?.text ?? "unremarked";
+                if (before == after) continue;
+                sb.AppendLine($"{p.Name} — {before} → {after}");
+                any = true;
+            }
+            foreach (var fid in snap.RegionBase.Keys.OrderBy(k => k))
+            {
+                if (!_markedFactions.Contains(fid)) continue;
+                int now = RegionCount(fid);
+                int was = snap.RegionBase[fid];
+                if (now == was) continue;
+                sb.AppendLine($"{_world.Factions[fid].Name} — {was} → {now} regions {(now > was ? "(gained)" : "(lost)")}");
+                any = true;
+            }
+            if (!any) sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]your threads passed the age quietly[/color]");
+        }
+
+        if (snap.Echoes.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine(SectionCap("Myths that echoed"));
+            foreach (var (arch, label, anchor) in snap.Echoes)
+                sb.AppendLine($"[color=#8a5d12]◆ {arch}[/color] — "
+                    + (anchor >= 0 ? Link("e:" + anchor, label) : label));
+        }
+
+        _recapBody.Text = sb.ToString();
+        _recapPanel.Visible = true;
+    }
+
+    // Snapshot dict in stable (id) order for rendering — presentation only, no RNG involved.
+    private static IEnumerable<(int, int)> OrderedRepBase(RecapSnapshot snap)
+        => snap.RepBase.OrderBy(kv => kv.Key).Select(kv => (kv.Key, kv.Value));
+
+    private void BuildRecap(Control root)
+    {
+        _recapPanel = new Panel { Visible = false };
+        root.AddChild(_recapPanel);
+        _recapPanel.AnchorLeft = 0.5f; _recapPanel.AnchorRight = 0.5f;
+        _recapPanel.AnchorTop = 0.5f; _recapPanel.AnchorBottom = 0.5f;
+        _recapPanel.OffsetLeft = -300; _recapPanel.OffsetRight = 300;
+        _recapPanel.OffsetTop = -230; _recapPanel.OffsetBottom = 230;
+        _recapPanel.AddThemeStyleboxOverride("panel", Ui.PanelBox());
+
+        var margin = new MarginContainer();
+        margin.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        foreach (var s in new[] { "left", "right", "top", "bottom" })
+            margin.AddThemeConstantOverride($"margin_{s}", 14);
+        _recapPanel.AddChild(margin);
+
+        var vb = new VBoxContainer();
+        vb.AddThemeConstantOverride("separation", 8);
+        margin.AddChild(vb);
+
+        var hb = new HBoxContainer();
+        hb.AddThemeConstantOverride("separation", 8);
+        vb.AddChild(hb);
+        var titles = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        titles.AddThemeConstantOverride("separation", 0);
+        hb.AddChild(titles);
+        var title = new Label { Text = "A Chapter Closes" };
+        title.AddThemeFontOverride("font", Ui.SerifBold);
+        title.AddThemeFontSizeOverride("font_size", 21);
+        title.AddThemeColorOverride("font_color", Ui.InkDeep);
+        titles.AddChild(title);
+        _recapSub = new Label { Text = "" };
+        _recapSub.AddThemeFontSizeOverride("font_size", 12);
+        _recapSub.AddThemeColorOverride("font_color", Ui.FadedSub);
+        titles.AddChild(_recapSub);
+        var close = new Button { Text = "✕", CustomMinimumSize = new Vector2(28, 28), TooltipText = "Close (stay paused)" };
+        Ui.StyleButton(close);
+        close.Pressed += () => _recapPanel.Visible = false;
+        hb.AddChild(close);
+
+        var rule = new HSeparator();
+        rule.AddThemeStyleboxOverride("separator", new StyleBoxFlat { BgColor = Ui.RowBorder, ContentMarginTop = 1 });
+        vb.AddChild(rule);
+
+        var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
+        vb.AddChild(scroll);
+        _recapBody = new RichTextLabel
+        {
+            BbcodeEnabled = true,
+            FitContent = true,
+            ScrollActive = false,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(548, 0),
+        };
+        _recapBody.AddThemeColorOverride("default_color", Ui.Ink);
+        _recapBody.AddThemeFontOverride("bold_font", Ui.SerifBold);
+        _recapBody.MetaClicked += meta => { _recapPanel.Visible = false; OnInspectorLink(meta.AsString()); };
+        scroll.AddChild(_recapBody);
+
+        var btns = new HBoxContainer();
+        btns.AddThemeConstantOverride("separation", 8);
+        vb.AddChild(btns);
+        var resume = new Button { Text = "▶ Resume" };
+        Ui.StyleButton(resume, active: true);
+        resume.Pressed += () => { _recapPanel.Visible = false; _running = true; };
+        btns.AddChild(resume);
+
+        // The chip: a closed chapter waits by the year card until read (or superseded).
+        _recapChip = new Button { Visible = false };
+        Ui.StyleButton(_recapChip);
+        root.AddChild(_recapChip);
+        _recapChip.AnchorLeft = 0; _recapChip.AnchorRight = 0;
+        _recapChip.AnchorTop = 0; _recapChip.AnchorBottom = 0;
+        _recapChip.OffsetLeft = 264; _recapChip.OffsetRight = 264 + 290;
+        _recapChip.OffsetTop = 10; _recapChip.OffsetBottom = 42;
+        _recapChip.Pressed += ShowRecapCard;
     }
 
     // -------------------------------------------------------------- inspectors
@@ -1217,7 +1480,11 @@ public partial class Main : Node
         }
         else if (_selectedFactionId is string fid)
         {
-            if (!_markedFactions.Remove(fid)) _markedFactions.Add(fid);
+            if (!_markedFactions.Remove(fid))
+            {
+                _markedFactions.Add(fid);
+                _chapterRegionBase[fid] = RegionCount(fid);   // recap deltas measure from the follow
+            }
             RecomputeMarked();
             OnFactionPicked(fid);
         }
@@ -1228,7 +1495,12 @@ public partial class Main : Node
     private void OnFollowSoulPressed()
     {
         if (_selectedPersonId is not int pid) return;
-        if (!_followedSouls.Remove(pid)) _followedSouls.Add(pid);   // toggle
+        if (!_followedSouls.Remove(pid))
+        {
+            _followedSouls.Add(pid);   // toggle on
+            // Recap deltas measure from the follow (or chapter start, whichever is later).
+            if (_world.People.TryGetValue(pid, out var p)) _chapterRepBase[pid] = p.Reputation;
+        }
         _map.QueueRedraw();
         OnPersonPicked(pid);
     }
@@ -1475,6 +1747,13 @@ public partial class Main : Node
         _playBtn.Text = _running ? "❚❚ Pause" : "▶ Play";
         _chatLabel.Text = $"chattiness ≥ {(int)_chatSlider.Value}";
         if (_running) _guardReturnable = false;   // time moved on; the held moment has passed
-        _guardReturnBtn.Visible = _guardReturnable && !_guardPanel.Visible && !_catchupPanel.Visible;
+        bool cardUp = _guardPanel.Visible || _catchupPanel.Visible || _recapPanel.Visible
+            || _pendingGuardEventId is not null;
+        _guardReturnBtn.Visible = _guardReturnable && !cardUp;
+        // A queued recap shows on the transition INTO a pause (never over another card —
+        // the focus guard always outranks it) and otherwise waits on its chip.
+        if (_wasRunning && !_running && _queuedRecap is not null && !cardUp) ShowRecapCard();
+        _wasRunning = _running;
+        _recapChip.Visible = _queuedRecap is not null && !cardUp;
     }
 }
