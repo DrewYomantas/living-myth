@@ -123,6 +123,9 @@ public partial class Main : Node
     private HSeparator _guardRule = null!;
     private PanelContainer _guardChip = null!;            // memorial medallion: the event-class glyph
     private Label _guardChipGlyph = null!;
+    private Button _guardReturnBtn = null!;               // floating way back to the held card
+    private bool _guardWasMemorial;                       // restore the dim on return
+    private bool _guardReturnable;                        // true while the world still holds its breath
 
     private sealed class FeedVisRow { public Node Node = null!; public bool Yours; public int Weight; }
 
@@ -932,6 +935,9 @@ public partial class Main : Node
 
         _running = false;
         _guardEventId = eid;
+        _guardWasMemorial = memorial;
+        _guardReturnable = true;
+        _guardReturnBtn.Text = memorial ? "↩ Return to the memorial" : "↩ Return to the tale";
         _guardTitle.Text = isDeath ? "Their Tale Ends" : "Focus Guard";
 
         var cls = Ui.ClassOf(e.Type);
@@ -1121,6 +1127,23 @@ public partial class Main : Node
         Ui.StyleButton(trace);
         trace.Pressed += () => { CloseGuardCard(); if (_guardEventId >= 0) OpenCatchup(_guardEventId); };
         btns.AddChild(trace);
+
+        // The way back: chasing a link off the card (a deed, a child) shouldn't lose the
+        // moment. While the world still holds its breath this chip reopens the held card;
+        // once time moves again the moment has passed and the chip goes with it.
+        _guardReturnBtn = new Button { Text = "↩ Return to the tale", Visible = false };
+        Ui.StyleButton(_guardReturnBtn, active: true);
+        root.AddChild(_guardReturnBtn);
+        _guardReturnBtn.AnchorLeft = 0.5f; _guardReturnBtn.AnchorRight = 0.5f;
+        _guardReturnBtn.AnchorTop = 0; _guardReturnBtn.AnchorBottom = 0;
+        _guardReturnBtn.OffsetLeft = -115; _guardReturnBtn.OffsetRight = 115;
+        _guardReturnBtn.OffsetTop = 10; _guardReturnBtn.OffsetBottom = 42;
+        _guardReturnBtn.Pressed += () =>
+        {
+            _catchupPanel.Visible = false;
+            _guardBackdrop.Visible = _guardWasMemorial;
+            _guardPanel.Visible = true;
+        };
     }
 
     private void CloseGuardCard()
@@ -1451,5 +1474,7 @@ public partial class Main : Node
         }
         _playBtn.Text = _running ? "❚❚ Pause" : "▶ Play";
         _chatLabel.Text = $"chattiness ≥ {(int)_chatSlider.Value}";
+        if (_running) _guardReturnable = false;   // time moved on; the held moment has passed
+        _guardReturnBtn.Visible = _guardReturnable && !_guardPanel.Visible && !_catchupPanel.Visible;
     }
 }

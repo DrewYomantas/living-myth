@@ -161,6 +161,11 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
   richer relationship cards, family tree view, portrait/token system, region/home/site anchoring,
   chapter recap cards, handling multiple followed deaths in one tick. Sim untouched; build + Godot
   build clean; verify green 884/699/567/706.
+- [2026-06-11] Playtest fix: chasing a link off a guard card (a child, a deed) lost the card with no
+  way back. Added a floating "↩ Return to the memorial / tale" chip (top-center) that reopens the
+  held card — content survives CloseGuardCard, so reopening is just re-show + restore the dim. The
+  chip lives only while the world is still paused from that card; once time resumes the moment has
+  passed and it disappears (a later manual pause never resurrects a stale card).
 
 ## Region Lens — data contracts still missing (design notes, not promises)
 The viewer-side lens is honest about these; each needs a deliberate sim-side milestone because all
