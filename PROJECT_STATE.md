@@ -371,6 +371,11 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
   surface as a generic guard card ("fate touches a land you watch") but never fakes a memorial. Recap land
   deltas count the two channels apart and never merge them. Map: persistent quiet gold ring
   (Ui.Gold A=0.45 at r+1.5 vs the lens ring's LensGold A=0.85 at r+3). verify 884/699/567/706.
+- [2026-06-11] Checkpoint: shipped memorial cairns + followed regions in one peer-reviewed pass
+  (ab0a2d9 — two recon subagents, two adversarial reviewers, one BLOCKER caught: murder cairn
+  line misattributing the victim's home to a killer-focused card) and refreshed .claude/CLAUDE.md
+  (840efbf: anchoring arc, homes gate, scoring + anchor-channel gotchas). All gates green, tree
+  clean, pushed. Next: F5 feel-test (see "Next session starts with").
 
 ### Life Memory — anchor contract (2026-06-11)
 
@@ -433,18 +438,23 @@ of them move the verify baseline (new RNG draws and/or new ordered iteration):
   polygons/bands so the atlas can read as landforms instead of circles.
 
 ## Next session starts with
-**Open the Godot viewer (F5, mono build) and feel-test Phase A passes 1+2, tuning the named consts.**
-None of the by-feel viewer work has been seen running yet. Watch a run and judge: is 1× readable and
-the dramatic auto-slow the right depth/length (`BaseInterval`, `SlowdownWindow`/`SlowdownFactor` in
-`Main.cs`); do echoes now feel like punctuation (`EchoArchetypeCooldown`/`EchoSignificanceBar`/
-`EchoWindowCap`); does zoom/pan feel right and does the drama-camera lean in without yanking
-(`FollowZoom`, `ManualCamCooldownSecs` in `MapView.cs`). Adjust consts by feel, rebuild, commit.
-The feel-test now also covers the focus guard (shipped): follow a young soul, let the guard
-card fire, judge the pause/resume rhythm and the death card's weight — none of it has been seen
-running. Then the next implementation pass: **chapter recaps** (roadmap 3 in
-`docs/TIME_AND_STORY_PACING.md` — the old "era recap" item, now designed), with followed
-regions (roadmap 4) behind it; timeline scrubbing per that doc's Replay design (item 3) once
-the historical-faction-membership audit hole is closed.
+**Open the Godot viewer (F5, mono build) and feel-test everything shipped since the pacing arc —
+none of it has been seen running.** One sitting: follow a young soul AND a land, watch ~200 years
+at mixed speeds, and judge by feel, tuning named consts as you go (rebuild + commit between tweaks):
+- Pacing basics (oldest unseen work): 1× readability, dramatic auto-slow depth/length
+  (`BaseInterval`, `SlowdownWindow`/`SlowdownFactor`), echoes as punctuation
+  (`EchoArchetypeCooldown`/`EchoSignificanceBar`/`EchoWindowCap`), drama-camera lean
+  (`FollowZoom`, `ManualCamCooldownSecs`).
+- Focus arc: guard pause/resume rhythm, memorial card weight, held-card return chip, chapter
+  recap cadence (25 shown years — too long? too short?), living glimpse usefulness.
+- This session's work: are memorial cairns legible at fit zoom and distinct from abandon cairns
+  (`HomeMarksPerRegion`, rim radius 0.78, the gold light); is the followed-land ring visible but
+  quiet (Gold A=0.45 at r+1.5); does following a populous land throttle high-speed playback too
+  hard (every home-rooted birth/death is YOURS + notable — if so, consider gating the dramatic
+  beat or the boost for region-yours life events); does the "fate touches a land you watch" card
+  fire at a sane rate.
+Then the next implementation pass: surface culture + gossip in the viewer, or timeline scrubbing
+(close the historical-faction-membership audit hole first, per docs/TIME_AND_STORY_PACING.md).
 
 ### Backlog (after Phase A)
 **More pressure engines, then richer surfacing.** The three core loops (watch → mark → trace) are done.
