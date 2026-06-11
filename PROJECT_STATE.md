@@ -40,8 +40,15 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       feasibility notes, staged roadmap + later sim contracts. Viewer slice: pace-tier tooltips
       on the speed ladder + doc-anchor TODO at the Drama Time constants in `Main.cs`.
       verify unchanged 884/699/567/706.
-- [ ] Later — focus guard slice (roadmap 2 in docs/TIME_AND_STORY_PACING.md); visual/UX pass
-      (surface culture + gossip in the viewer); echo packs; timeline scrubbing. ← NEXT
+- [x] Focus guard slice (viewer-only, roadmap 2 of docs/TIME_AND_STORY_PACING.md): pause-on-drama
+      toggle (off / ★ followed / all) in the Time dock; gold guard card (Resume / How We Got Here)
+      on Major+ YOURS events; followed-death "Their Tale Ends" card (fires even below the
+      chattiness threshold — a follow is an explicit ask); per-soul "you last saw…" memory on the
+      card + person inspector; "⛨ guard watches…" signal on the year card. All wall-clock
+      presentation — pausing only gates whether _Process keeps calling Tick().
+      verify unchanged 884/699/567/706.
+- [ ] Later — chapter recaps + followed regions (roadmap 3–4 in docs/TIME_AND_STORY_PACING.md);
+      visual/UX pass (surface culture + gossip in the viewer); echo packs; timeline scrubbing. ← NEXT
 
 ## Session log
 - [2026-06-07] Session: built M0→M2 + longevity pass (carrying capacity + perf refactor, proven
@@ -116,6 +123,19 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
   tooltips on the speed buttons (linger/watch/unfold/drift/hasten/sweep/ages) + doc-anchor TODO.
   Sim untouched; verify green at 884/699/567/706.
 
+- [2026-06-10] Session: focus guard slice (viewer-only, Main.cs). GuardMode off/★ followed/all
+  cycles on a new Time-dock toggle; MaybeArmGuard runs in the stream loop BEFORE the chattiness
+  gate (a followed soul's death always cards; otherwise Major+ YOURS, or any Major in "all");
+  a death outranks a same-tick recap; the armed trigger is consumed after the tick completes
+  (and after the curse tool's immediate stream), pausing via the existing _running gate. Gold-
+  bordered guard card: event line with band glyph + region, death cards add the record (born/
+  died/age, reputation, children) + last-6-deeds thread (one-shot scan, inspector-click cost
+  class), "you last saw…" from a per-marked-person last-YOURS-event dictionary (O(1) updates,
+  also shown in the person inspector). Year card grew 14 px for the "⛨ guard watches…" signal
+  (inspector panel shifted to match). Kill()/RecordMurder audit confirmed types "death"/"murder"
+  with the victim as a participant cover every real death path (executions Kill first; martyr/
+  justice are post-death commentary). Sim untouched; verify green at 884/699/567/706.
+
 ## Region Lens — data contracts still missing (design notes, not promises)
 The viewer-side lens is honest about these; each needs a deliberate sim-side milestone because all
 of them move the verify baseline (new RNG draws and/or new ordered iteration):
@@ -139,11 +159,12 @@ the dramatic auto-slow the right depth/length (`BaseInterval`, `SlowdownWindow`/
 `Main.cs`); do echoes now feel like punctuation (`EchoArchetypeCooldown`/`EchoSignificanceBar`/
 `EchoWindowCap`); does zoom/pan feel right and does the drama-camera lean in without yanking
 (`FollowZoom`, `ManualCamCooldownSecs` in `MapView.cs`). Adjust consts by feel, rebuild, commit.
-Then the recommended implementation pass: the **focus guard slice** — pause-on-drama toggle
-(off/followed/all), recap card, "you last saw…" memory, followed-death card (roadmap 2 in
-`docs/TIME_AND_STORY_PACING.md`, viewer-only). Chapter recaps (the old "era recap" item, now
-designed) follow as roadmap slice 3; timeline scrubbing per that doc's Replay design (item 3)
-once the historical-faction-membership audit hole is closed.
+The feel-test now also covers the focus guard (shipped): follow a young soul, let the guard
+card fire, judge the pause/resume rhythm and the death card's weight — none of it has been seen
+running. Then the next implementation pass: **chapter recaps** (roadmap 3 in
+`docs/TIME_AND_STORY_PACING.md` — the old "era recap" item, now designed), with followed
+regions (roadmap 4) behind it; timeline scrubbing per that doc's Replay design (item 3) once
+the historical-faction-membership audit hole is closed.
 
 ### Backlog (after Phase A)
 **More pressure engines, then richer surfacing.** The three core loops (watch → mark → trace) are done.

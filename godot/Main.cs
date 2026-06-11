@@ -20,7 +20,7 @@ public partial class Main : Node
     private const int Seed = 7;
     // Drama Time constants — see docs/TIME_AND_STORY_PACING.md (the four clocks). Wall-clock
     // presentation only; they never change Tick() count or order. TODO(focus-time): the next
-    // pacing slice is the focus guard — pause-on-drama + "you last saw" recap cards (roadmap 2).
+    // pacing slice is chapter recaps (roadmap 3) — the focus guard (roadmap 2) shipped.
     private const float BaseInterval = 1.2f;   // real seconds per sim-year at 1×
     private static readonly float[] SpeedLadder = { 0.25f, 0.5f, 1f, 2f, 4f, 8f, 16f };
     // Pace names per docs/TIME_AND_STORY_PACING.md — the ladder in lives, not factors.
@@ -98,6 +98,24 @@ public partial class Main : Node
     private readonly System.Collections.Generic.Dictionary<string, int> _echoCardedAt = new();  // archetype -> sim-year last carded
     private readonly List<int> _recentEchoYears = new();   // sim-years of recently carded echoes (window-pruned)
 
+    // Focus Time — the focus guard (docs/TIME_AND_STORY_PACING.md, roadmap 2). Pause-on-drama:
+    // off / followed (a major event touches what you follow, or a followed soul dies) / all
+    // (any major event). Pausing is wall-clock presentation only — it never changes how many
+    // times or in what order Tick() runs.
+    private enum GuardMode { Off, Followed, All }
+    private GuardMode _guardMode = GuardMode.Followed;
+    private Button _guardBtn = null!;
+    private Label _guardLabel = null!;                    // year-card "guard watches…" signal
+    private Panel _guardPanel = null!;
+    private Label _guardTitle = null!;
+    private RichTextLabel _guardBody = null!;
+    private int _guardEventId = -1;                       // event behind the open card
+    private readonly System.Collections.Generic.Dictionary<int, int> _lastSeenEvent = new();  // marked pid -> last YOURS event actually shown (feed row or guard card)
+    private int? _pendingGuardEventId;                    // armed during streaming, consumed after the tick
+    private int? _pendingGuardFocusPid;                   // the followed soul at the heart of it
+    private bool _pendingGuardIsDeath;
+    private int _pendingGuardPrevSeen = -1;               // their last-seen event BEFORE this one (-1 none)
+
     private sealed class FeedVisRow { public Node Node = null!; public bool Yours; public int Weight; }
 
     public override void _Ready()
@@ -113,6 +131,7 @@ public partial class Main : Node
         _map.World = _world;
         _map.Marked = _marked;       // same HashSet, mutated in place — map sees follows live
         StreamNewHeadlines();
+        if (_pendingGuardEventId is not null) ShowGuardCard();   // unreachable today; hardening
         RefreshTimeBar();
         _map.QueueRedraw();
     }
@@ -141,6 +160,11 @@ public partial class Main : Node
                 _accum -= interval;
                 _world.Tick();
                 bool notable = StreamNewHeadlines();
+                if (_pendingGuardEventId is not null)
+                {
+                    ShowGuardCard();   // pauses; the world waits for the player
+                    break;
+                }
                 if (notable && _dramaticPacing)
                 {
                     // Re-arm to the full window (rather than stacking) so a burst holds one
@@ -182,6 +206,7 @@ public partial class Main : Node
         BuildYearCard(root);
         BuildInspector(root);
         BuildCatchup(root);
+        BuildGuardCard(root);
     }
 
     private void UpdateRootSize()
@@ -195,7 +220,7 @@ public partial class Main : Node
         var card = new Panel();
         root.AddChild(card);
         card.AnchorLeft = 0; card.AnchorTop = 0; card.AnchorRight = 0; card.AnchorBottom = 0;
-        card.OffsetLeft = 12; card.OffsetTop = 10; card.OffsetRight = 12 + 240; card.OffsetBottom = 10 + 98;
+        card.OffsetLeft = 12; card.OffsetTop = 10; card.OffsetRight = 12 + 240; card.OffsetBottom = 10 + 112;
         card.AddThemeStyleboxOverride("panel", Ui.PanelBox());
 
         var margin = new MarginContainer();
@@ -230,6 +255,11 @@ public partial class Main : Node
         _yearSub.AddThemeFontSizeOverride("font_size", 12);
         _yearSub.AddThemeColorOverride("font_color", Ui.FadedSub);
         vb.AddChild(_yearSub);
+
+        _guardLabel = new Label { Visible = false, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
+        _guardLabel.AddThemeFontSizeOverride("font_size", 11);
+        _guardLabel.AddThemeColorOverride("font_color", Ui.Gold);
+        vb.AddChild(_guardLabel);
     }
 
     private void BuildFeed(Control root)
@@ -336,6 +366,10 @@ public partial class Main : Node
         _dramaBtn.Pressed += () => { _dramaticPacing = !_dramaticPacing; RestyleToggles(); };
         timeRow.AddChild(_dramaBtn);
 
+        _guardBtn = new Button { TooltipText = "Focus guard — pause when fate touches what you follow: off / ★ followed / all major events" };
+        _guardBtn.Pressed += () => { _guardMode = (GuardMode)(((int)_guardMode + 1) % 3); RestyleToggles(); };
+        timeRow.AddChild(_guardBtn);
+
         // --- Lens group: zoom + camera ---
         var lensRow = DockGroup(hb, "Lens");
 
@@ -381,6 +415,13 @@ public partial class Main : Node
     {
         Ui.StyleButton(_dramaBtn, _dramaticPacing);
         Ui.StyleButton(_camBtn, _map.CameraFollow);
+        _guardBtn.Text = _guardMode switch
+        {
+            GuardMode.Followed => "⛨ guard: ★",
+            GuardMode.All => "⛨ guard: all",
+            _ => "⛨ guard: off",
+        };
+        Ui.StyleButton(_guardBtn, _guardMode != GuardMode.Off);
     }
 
     private void RestyleSpeedButtons()
@@ -395,8 +436,8 @@ public partial class Main : Node
         root.AddChild(_inspectorPanel);
         _inspectorPanel.AnchorLeft = 0; _inspectorPanel.AnchorTop = 0;
         _inspectorPanel.AnchorRight = 0; _inspectorPanel.AnchorBottom = 0;
-        _inspectorPanel.OffsetLeft = 12; _inspectorPanel.OffsetTop = 118;
-        _inspectorPanel.OffsetRight = 12 + 330; _inspectorPanel.OffsetBottom = 118 + 400;
+        _inspectorPanel.OffsetLeft = 12; _inspectorPanel.OffsetTop = 132;
+        _inspectorPanel.OffsetRight = 12 + 330; _inspectorPanel.OffsetBottom = 132 + 400;
         _inspectorPanel.AddThemeStyleboxOverride("panel", Ui.PanelBox());
 
         var margin = new MarginContainer();
@@ -555,9 +596,15 @@ public partial class Main : Node
             bool yours = IsYours(e);
             int imp = Scoring.ImportanceFast(e, _world, _consCount);
             if (yours) imp += YoursBoost;
+            // The guard trigger runs before the chattiness gate: a follow is an explicit ask,
+            // so a followed soul's fate registers even when the feed is quiet.
+            MaybeArmGuard(e, yours, imp);
             if (imp < threshold) continue;
 
             var row = AddFeedRow(e, imp, yours);
+            // Last-seen memory records only what was actually shown (this row, or a guard
+            // card — see ShowGuardCard), so "you last saw…" never cites an undisplayed event.
+            if (yours && row is not null) RememberSeen(e);
             // Yours always gets the spotlight; otherwise a high importance bar (well above
             // chattiness) catches divine/war/founding and ignores routine births/deaths.
             if (row is not null && (yours || imp >= NotableBar))
@@ -795,6 +842,187 @@ public partial class Main : Node
         }
     }
 
+    // ------------------------------------------------------------- focus guard
+
+    // Decide whether this event interrupts. A followed soul's death always cards (the player
+    // asked to be told); otherwise a major event (imp >= NotableBar, boosted) cards when it's
+    // YOURS, or for any event in "all" mode. First trigger in a tick wins, except a death,
+    // which outranks an earlier recap.
+    private void MaybeArmGuard(Event e, bool yours, int imp)
+    {
+        if (_guardMode == GuardMode.Off) return;
+
+        if (yours && (e.Type is "death" or "murder"))
+            foreach (var pid in e.Participants)
+                if (_marked.Contains(pid) && _world.People.TryGetValue(pid, out var dp) && !dp.Alive)
+                {
+                    // Known limit: two followed deaths in one tick — the first keeps the
+                    // card, the second remains a feed row.
+                    if (_pendingGuardEventId is null || !_pendingGuardIsDeath)
+                        ArmGuard(e, pid, isDeath: true);
+                    return;
+                }
+
+        if (_pendingGuardEventId is not null || imp < NotableBar) return;
+        if (yours || _guardMode == GuardMode.All)
+            ArmGuard(e, FirstMarked(e), isDeath: false);
+    }
+
+    private void ArmGuard(Event e, int? focusPid, bool isDeath)
+    {
+        _pendingGuardEventId = e.Id;
+        _pendingGuardFocusPid = focusPid;
+        _pendingGuardIsDeath = isDeath;
+        _pendingGuardPrevSeen = focusPid is int pid ? _lastSeenEvent.GetValueOrDefault(pid, -1) : -1;
+    }
+
+    private int? FirstMarked(Event e)
+    {
+        foreach (var pid in e.Participants)
+            if (_marked.Contains(pid)) return pid;
+        return null;
+    }
+
+    private void RememberSeen(Event e)
+    {
+        foreach (var pid in e.Participants)
+            if (_marked.Contains(pid)) _lastSeenEvent[pid] = e.Id;
+    }
+
+    // Consume the armed trigger: pause the world and show the card. The sim is untouched —
+    // _running only gates whether _Process keeps calling Tick().
+    private void ShowGuardCard()
+    {
+        if (_pendingGuardEventId is not int eid) return;
+        var e = _world.Chronicle.Get(eid);
+        int? focusPid = _pendingGuardFocusPid;
+        bool isDeath = _pendingGuardIsDeath;
+        int prevSeen = _pendingGuardPrevSeen;
+        _pendingGuardEventId = null;
+        _pendingGuardFocusPid = null;
+        _pendingGuardIsDeath = false;
+        _pendingGuardPrevSeen = -1;
+
+        _running = false;
+        _guardEventId = eid;
+        _guardTitle.Text = isDeath ? "Their Tale Ends" : "Focus Guard";
+
+        var cls = Ui.ClassOf(e.Type);
+        var sb = new StringBuilder();
+        string lead = isDeath ? "a followed tale closes"
+            : focusPid is not null ? "fate touches what you follow"
+            : "a great deed marks the age";
+        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]{lead} — the world waits[/color]");
+        sb.AppendLine();
+        string where = e.RegionId is int rid && _world.RegionName(rid) is string rn
+            ? $"  [color=#{Ui.Hex(Ui.Faded)}]· in {rn}[/color]" : "";
+        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color]  [color=#{Ui.Hex(cls.Color)}]{cls.Glyph} {cls.Label.ToUpperInvariant()}[/color]  [b]{e.Text}[/b]{where}");
+
+        if (focusPid is int pid && _world.People.TryGetValue(pid, out var p))
+        {
+            if (isDeath)
+            {
+                int died = p.DeathYear ?? e.Year;
+                sb.AppendLine();
+                sb.AppendLine(SectionCap("The record"));
+                sb.AppendLine($"{p.Name} — born Yr {p.BirthYear}, died Yr {died}, age {died - p.BirthYear}");
+                if (ReputationDisplay(p.Reputation) is (string repText, string repColor))
+                    sb.AppendLine($"[color=#{repColor}]{repText}[/color]");
+                sb.AppendLine($"children: {p.Children.Count}");
+                sb.AppendLine();
+                sb.AppendLine(SectionCap("Their tale"));
+                // One-shot scan on a card open — same cost class as a person-inspector click,
+                // never per-tick.
+                var theirs = _world.Chronicle.Events.Where(t => t.Participants.Contains(pid)).TakeLast(6).ToList();
+                foreach (var t in theirs)
+                {
+                    var tc = Ui.ClassOf(t.Type);
+                    sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {t.Year}[/color] [color=#{Ui.Hex(tc.Color)}]{tc.Glyph}[/color] {Link("e:" + t.Id, t.Text)}");
+                }
+            }
+            sb.AppendLine();
+            if (prevSeen >= 0 && prevSeen != eid)
+            {
+                var ls = _world.Chronicle.Get(prevSeen);
+                sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]you last saw {p.Name}: Yr {ls.Year} —[/color] {Link("e:" + ls.Id, ls.Text)}");
+            }
+            else
+                sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]nothing of {p.Name} has crossed the saga since you began to follow[/color]");
+        }
+
+        _guardBody.Text = sb.ToString();
+        _guardPanel.Visible = true;
+        RememberSeen(e);   // the card itself is a sighting
+    }
+
+    private void BuildGuardCard(Control root)
+    {
+        _guardPanel = new Panel { Visible = false };
+        root.AddChild(_guardPanel);
+        _guardPanel.AnchorLeft = 0.5f; _guardPanel.AnchorRight = 0.5f;
+        _guardPanel.AnchorTop = 0.5f; _guardPanel.AnchorBottom = 0.5f;
+        _guardPanel.OffsetLeft = -280; _guardPanel.OffsetRight = 280;
+        _guardPanel.OffsetTop = -200; _guardPanel.OffsetBottom = 200;
+        var box = Ui.PanelBox();
+        box.BorderColor = Ui.Gold;   // gold marks the player's thread, per the style bible
+        box.SetBorderWidthAll(2);
+        _guardPanel.AddThemeStyleboxOverride("panel", box);
+
+        var margin = new MarginContainer();
+        margin.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        foreach (var s in new[] { "left", "right", "top", "bottom" })
+            margin.AddThemeConstantOverride($"margin_{s}", 14);
+        _guardPanel.AddChild(margin);
+
+        var vb = new VBoxContainer();
+        vb.AddThemeConstantOverride("separation", 8);
+        margin.AddChild(vb);
+
+        var hb = new HBoxContainer();
+        hb.AddThemeConstantOverride("separation", 8);
+        vb.AddChild(hb);
+        _guardTitle = new Label { Text = "Focus Guard", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _guardTitle.AddThemeFontOverride("font", Ui.SerifBold);
+        _guardTitle.AddThemeFontSizeOverride("font_size", 21);
+        _guardTitle.AddThemeColorOverride("font_color", Ui.InkDeep);
+        hb.AddChild(_guardTitle);
+        var close = new Button { Text = "✕", CustomMinimumSize = new Vector2(28, 28), TooltipText = "Close (stay paused)" };
+        Ui.StyleButton(close);
+        close.Pressed += () => _guardPanel.Visible = false;
+        hb.AddChild(close);
+
+        var rule = new HSeparator();
+        rule.AddThemeStyleboxOverride("separator", new StyleBoxFlat { BgColor = Ui.RowBorder, ContentMarginTop = 1 });
+        vb.AddChild(rule);
+
+        var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
+        vb.AddChild(scroll);
+        _guardBody = new RichTextLabel
+        {
+            BbcodeEnabled = true,
+            FitContent = true,
+            ScrollActive = false,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(508, 0),
+        };
+        _guardBody.AddThemeColorOverride("default_color", Ui.Ink);
+        _guardBody.AddThemeFontOverride("bold_font", Ui.SerifBold);
+        _guardBody.MetaClicked += meta => { _guardPanel.Visible = false; OnInspectorLink(meta.AsString()); };
+        scroll.AddChild(_guardBody);
+
+        var btns = new HBoxContainer();
+        btns.AddThemeConstantOverride("separation", 8);
+        vb.AddChild(btns);
+        var resume = new Button { Text = "▶ Resume" };
+        Ui.StyleButton(resume, active: true);
+        resume.Pressed += () => { _guardPanel.Visible = false; _running = true; };
+        btns.AddChild(resume);
+        var trace = new Button { Text = "How We Got Here" };
+        Ui.StyleButton(trace);
+        trace.Pressed += () => { _guardPanel.Visible = false; if (_guardEventId >= 0) OpenCatchup(_guardEventId); };
+        btns.AddChild(trace);
+    }
+
     // -------------------------------------------------------------- inspectors
 
     private void OpenCatchup(int eventId)
@@ -845,6 +1073,7 @@ public partial class Main : Node
         if (!p.Alive || p.Cursed) return;
         _world.PlantCurse(p);
         StreamNewHeadlines();        // surface the divine act immediately
+        if (_pendingGuardEventId is not null) ShowGuardCard();
         _curseBtn.Visible = false;
         OnPersonPicked(id);          // re-render with CURSED state
     }
@@ -924,6 +1153,11 @@ public partial class Main : Node
         sb.AppendLine($"faith: {faith}");
         sb.AppendLine($"spouse: {spouse}");
         sb.AppendLine($"children: {p.Children.Count}");
+        if (_marked.Contains(id) && _lastSeenEvent.TryGetValue(id, out var lsId))
+        {
+            var ls = _world.Chronicle.Get(lsId);
+            sb.AppendLine($"last seen in the saga: [color=#{Ui.Hex(Ui.Faded)}]Yr {ls.Year}[/color] — {Link("e:" + ls.Id, ls.Text)}");
+        }
         sb.AppendLine();
         sb.AppendLine(SectionCap("Their thread"));
         var theirs = _world.Chronicle.Events.Where(e => e.Participants.Contains(id)).TakeLast(8).ToList();
@@ -1082,6 +1316,15 @@ public partial class Main : Node
     {
         _yearBig.Text = $"Year {_world.Year}";
         _yearSub.Text = $"{_world.LivingCount} souls · {_world.Chronicle.Events.Count} tales";
+        bool guardActive = _guardMode != GuardMode.Off && (_seedPeople.Count > 0 || _markedFactions.Count > 0);
+        _guardLabel.Visible = guardActive;
+        if (guardActive)
+        {
+            var parts = new List<string>();
+            if (_seedPeople.Count > 0) parts.Add($"{_seedPeople.Count} bloodline{(_seedPeople.Count == 1 ? "" : "s")}");
+            if (_markedFactions.Count > 0) parts.Add($"{_markedFactions.Count} people{(_markedFactions.Count == 1 ? "" : "s")}");
+            _guardLabel.Text = "⛨ guard watches " + string.Join(" · ", parts);
+        }
         _playBtn.Text = _running ? "❚❚ Pause" : "▶ Play";
         _chatLabel.Text = $"chattiness ≥ {(int)_chatSlider.Value}";
     }

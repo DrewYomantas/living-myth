@@ -67,8 +67,9 @@ player cares about, only what the importance engine says is loud.
 When the player follows a subject — a soul's bloodline, a people, later a region — the
 game protects that thread: major events on followed subjects can pause the world, drop
 a recap card, and remember what the player last saw. Focus Time is personal where Drama
-Time is ambient. It exists today only as the YOURS channel (weight boost + gold rows +
-cyan rings); pause/recap/memory are this model's main new surface.
+Time is ambient. Exists today as the YOURS channel (weight boost + gold rows + cyan
+rings) plus, since the focus-guard slice, pause-on-drama with recap cards, "you last
+saw…" memory, and the followed-death card.
 
 ### 4. Chronicle Replay Time (retrospective — how the player understands)
 
@@ -94,8 +95,8 @@ device speaks the same language:
 |---|---|---|---|
 | **Background** | < chattiness threshold (default 60) | `_chatSlider` default, `Main.cs` | Recorded, not surfaced live. Visible in catch-up Full thread and inspectors. |
 | **Notable** | ≥ threshold, < 100 | the feed gate | A feed row. No drama devices. |
-| **Major** | ≥ 100 (`NotableBar`), or any YOURS row | `Main.cs:80` | Row flash + region pulse + dramatic auto-slow; candidate for Focus pause when YOURS. |
-| **Turning point** | echo anchor clearing the significance bar (80 on full `Importance`), or consequence-rich majors | `EchoSignificanceBar`, `Main.cs:95` | Echo card today; numbered beats in future replay; chapter-recap headline. |
+| **Major** | ≥ 100 (`NotableBar`), or any YOURS row | `NotableBar`, `Main.cs` | Row flash + region pulse + dramatic auto-slow; focus-guard pause when YOURS *and* ≥ the bar (a followed soul's death cards at any weight). |
+| **Turning point** | echo anchor clearing the significance bar (80 on full `Importance`), or consequence-rich majors | `EchoSignificanceBar`, `Main.cs` | Echo card today; numbered beats in future replay; chapter-recap headline. |
 
 Notes for implementers:
 - Two scoring paths exist on purpose: `ImportanceFast` (streaming, incremental
@@ -138,7 +139,7 @@ The followable subjects, with honesty status:
 
 | Subject | Status | Basis |
 |---|---|---|
-| **Soul / bloodline** | SHIPPED | `Follow` on person inspector; directed lineage (`Feed.Bloodline`), viral growth at birth (`Main.cs:552`) |
+| **Soul / bloodline** | SHIPPED | `Follow` on person inspector; directed lineage (`Feed.Bloodline`), viral growth at birth (`Main.cs`, `StreamNewHeadlines`) |
 | **People (faction)** | SHIPPED | `Follow` on faction inspector; `_markedFactions` |
 | **Region** | Viewer-ready | `RegionActivity` already indexes anchored events; follow = YOURS treatment for events whose `RegionId` matches. Coverage caveat: only territory/culture/rumor events carry `RegionId` today, so a followed region is honest but quiet until the anchoring **[sim contract]** lands. Say so in the lens, like the existing not-modeled notes. |
 | **Faith** | Needs audit | `ReligionId` on people and religion lineage exist; most faith events name participants, not the faith. Audit event coverage before promising it. |
@@ -146,27 +147,29 @@ The followable subjects, with honesty status:
 
 Mechanics, in dependency order:
 
-1. **Pause on drama (the focus guard).** A toggle beside the drama toggle, three
-   states: *off / followed / all turning points*. In *followed*, when a Major+ YOURS
-   event surfaces, finish the tick, pause, and show a recap card: the event row, its
-   band, one line of context, and two actions — *Resume* and *How We Got Here*. Pausing
-   between ticks is already safe (`_running` gate); the card is a parchment panel like
-   catch-up. Default for new players: *followed* — this is the single highest-leverage
-   investment feature in the model.
-2. **"You last saw…" memory.** The viewer keeps, per followed person id, the last YOURS
-   event id it surfaced (O(1) dictionary, updated in the stream loop). The recap card
-   and the person inspector then honestly say: *"last seen Yr 412 — wed Edda of the
-   Shorefolk."* Same trick per followed faction ("this people has changed: 2 regions
-   lost since you last looked") and later per followed region ("this region remembers").
-   All of it is chronicle-derived; none of it is new sim state.
+1. **Pause on drama (the focus guard) — SHIPPED.** A toggle beside the drama toggle,
+   three states: *off / ★ followed / all*. In *followed*, when a Major+ YOURS event
+   surfaces (or a followed soul dies — that triggers below the chattiness threshold
+   too, because a follow is an explicit ask), the tick finishes, the world pauses, and
+   a gold-bordered card shows the event, context, and two actions — *Resume* and *How
+   We Got Here*. A death outranks a recap within the same tick. The year card shows a
+   "⛨ guard watches…" signal while the guard is armed and something is followed.
+   Default: *followed* — the single highest-leverage investment feature in the model.
+2. **"You last saw…" memory — SHIPPED (per soul).** The viewer keeps, per followed
+   person id, the last YOURS event *actually shown to the player* — a rendered feed
+   row or a guard card, never a filtered or cap-displaced event (O(1) dictionary
+   updates). The guard card and the person inspector honestly say: *"you last saw
+   Maia: Yr 412 — wed Edda of the Shorefolk."* Still to come: the per-faction variant
+   ("this people has changed: 2 regions lost since you last looked") and later per
+   followed region ("this region remembers"). All chronicle-derived; no new sim state.
 3. **Notifications without pause.** In *off* mode, YOURS Major+ events still deserve
    more than a gold row: a brief toast anchored to the year card ("◆ Your bloodline:
    Maia was murdered — click to pause & trace"). Quietly skippable, never modal.
-4. **Death of a followed soul is a chapter beat.** When a followed person dies, offer
-   their thread (the existing per-person event filter, `Main.cs:929`) as a "their tale
-   ends" card — born, wed, children, deeds, death, all real events. This is the
-   emotional payoff loop for following, and it costs nothing the chronicle doesn't
-   already know.
+4. **Death of a followed soul is a chapter beat — SHIPPED.** When a followed person
+   dies, the guard shows "Their Tale Ends": born–died years, reputation, children,
+   their last deeds (the existing per-person event filter, one-shot on card open), and
+   the last-seen line — all real events. This is the emotional payoff loop for
+   following, and it costs nothing the chronicle doesn't already know.
 
 ## Chapter recaps (defining "era recap" at last)
 
@@ -218,7 +221,7 @@ Shipped: catch-up modal (Quick beats / Full thread), region anchors shown when k
 | Drama Time: ladder | 0.25–16× buttons, `BaseInterval` 1.2 | Unnamed paces (tooltips shipped this pass); beats don't scale with speed; no quiet-years acceleration. |
 | Drama Time: beats | Auto-slow 1.6 s → 0.15×, re-armed; pulse 1.2 s; camera lean ≤ pulse life, last-writer-wins | Beat too short to read; pulses anonymous; camera steals/abandons. |
 | Drama Time: rationing | Chattiness slider; YOURS cap 60% of window; echo cooldown/bar/cap | Healthy. Bands formalize what these already do. |
-| Focus Time: follow | Bloodline + faction follow, viral growth, YOURS boost +70, cyan rings | No region/faith follow; no pause, no recap, no last-seen memory, no death cards, no toasts. |
+| Focus Time: follow | Bloodline + faction follow, viral growth, YOURS boost +70, cyan rings; focus guard (pause off/★/all, recap + death cards, per-soul last-seen, year-card signal) | No region/faith follow; no per-faction last-seen deltas; no toasts in *off* mode. |
 | Chapter recaps | Nothing (undesigned until this doc) | Aggregator + card; arc-closure detection for followed subjects. |
 | Replay Time | Catch-up modal Quick/Full; region line when anchored | No beat numbering, no visual path, no scrub; alternate paths impossible (correctly absent). |
 | Subjects the sim can't support yet | — | Region-anchored personal events, person homes, sites, prophecies, near-misses: all **[sim contract]**, below. |
@@ -227,10 +230,11 @@ Shipped: catch-up modal (Quick beats / Full thread), region anchors shown when k
 
 1. **Pace-tier tooltips + doc anchor** — SHIPPED this pass (`Main.cs`). Validates the
    vocabulary at zero risk.
-2. **Focus guard slice:** pause-on-drama toggle (off/followed/all) + recap card + "you
-   last saw" memory + followed-death card. One pass in `Main.cs`; reuses parchment
-   panels and the existing stream loop. This is the recommended next implementation
-   pass.
+2. **Focus guard slice** — SHIPPED: pause-on-drama toggle (off/★ followed/all) + guard
+   recap card + per-soul "you last saw" memory (card + inspector) + "Their Tale Ends"
+   followed-death card + year-card guard signal. One pass in `Main.cs`, parchment
+   panels and the existing stream loop reused. Remaining from this slice: toasts in
+   *off* mode, per-faction last-seen deltas.
 3. **Chapter recap slice:** the 25-shown-year aggregator + recap card + arc-closure
    triggers. Subsumes the deferred "era recap."
 4. **Followed regions (viewer-only):** Follow on the Region Lens; YOURS treatment for
