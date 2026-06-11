@@ -33,7 +33,15 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       foundation slice — parchment map place tags (zoom-gated, always-on for the selected region),
       framed bottom dock groups, warmed atlas palette + shallows rim, medallion feed chips, shared
       gold/ember accents single-sourced in UiTheme. verify unchanged 884/699/567/706.
-- [ ] Later — visual/UX pass (surface culture + gossip in the viewer); echo packs; timeline scrubbing. ← NEXT
+- [x] Time & story pacing model (docs-first): `docs/TIME_AND_STORY_PACING.md` — the four-clocks
+      hybrid time model (World / Drama / Focus / Replay), event weight bands mapped onto the
+      existing thresholds, focus-guard + chapter-recap designs (finally defining "era recap"),
+      honest follow-subject table (prophecies forbidden until modeled), timeline-scrub
+      feasibility notes, staged roadmap + later sim contracts. Viewer slice: pace-tier tooltips
+      on the speed ladder + doc-anchor TODO at the Drama Time constants in `Main.cs`.
+      verify unchanged 884/699/567/706.
+- [ ] Later — focus guard slice (roadmap 2 in docs/TIME_AND_STORY_PACING.md); visual/UX pass
+      (surface culture + gossip in the viewer); echo packs; timeline scrubbing. ← NEXT
 
 ## Session log
 - [2026-06-07] Session: built M0→M2 + longevity pass (carrying capacity + perf refactor, proven
@@ -93,6 +101,21 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
   brighter chip glyphs. Sim untouched; verify green at 884/699/567/706. Next visual milestone:
   Atlas Composition Pass (roadmap 2 in docs/VISUAL_STYLE.md).
 
+- [2026-06-10] Session: time & story pacing model (docs-first milestone). Audited the whole
+  time surface — sim clock (one Tick == one year, no sub-year unit), viewer pacing consts,
+  importance thresholds, follow/catch-up loops — and measured the core problem: at 1× a full
+  human life passes in ~84 wall-clock seconds and a war resolves in ~2.4 s, so the chronicle is
+  legible after the fact but not followable as it happens. Wrote `docs/TIME_AND_STORY_PACING.md`:
+  the four clocks (World Time sim truth / Drama Time shown pace / Focus Time protected attention /
+  Chronicle Replay Time), event weight bands named over the existing thresholds (background <
+  chattiness 60 / notable / major ≥ NotableBar 100 / turning point ≥ echo bar 80), focus-guard
+  design (pause-on-drama, "you last saw…" memory, followed-death cards), chapter recaps (25 shown
+  years or arc closure — "era recap" finally defined), quiet-years acceleration, replay/scrub
+  feasibility (scrub is chronicle reconstruction, one audit hole: historical faction membership),
+  alternate-path ghosts ruled forbidden until near-misses are modeled. Tiny viewer slice: pace-tier
+  tooltips on the speed buttons (linger/watch/unfold/drift/hasten/sweep/ages) + doc-anchor TODO.
+  Sim untouched; verify green at 884/699/567/706.
+
 ## Region Lens — data contracts still missing (design notes, not promises)
 The viewer-side lens is honest about these; each needs a deliberate sim-side milestone because all
 of them move the verify baseline (new RNG draws and/or new ordered iteration):
@@ -116,7 +139,11 @@ the dramatic auto-slow the right depth/length (`BaseInterval`, `SlowdownWindow`/
 `Main.cs`); do echoes now feel like punctuation (`EchoArchetypeCooldown`/`EchoSignificanceBar`/
 `EchoWindowCap`); does zoom/pan feel right and does the drama-camera lean in without yanking
 (`FollowZoom`, `ManualCamCooldownSecs` in `MapView.cs`). Adjust consts by feel, rebuild, commit.
-Then — the remaining Phase A item — **timeline scrubbing + era recap** (explicitly deferred from pass 1).
+Then the recommended implementation pass: the **focus guard slice** — pause-on-drama toggle
+(off/followed/all), recap card, "you last saw…" memory, followed-death card (roadmap 2 in
+`docs/TIME_AND_STORY_PACING.md`, viewer-only). Chapter recaps (the old "era recap" item, now
+designed) follow as roadmap slice 3; timeline scrubbing per that doc's Replay design (item 3)
+once the historical-faction-membership audit hole is closed.
 
 ### Backlog (after Phase A)
 **More pressure engines, then richer surfacing.** The three core loops (watch → mark → trace) are done.

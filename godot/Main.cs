@@ -18,8 +18,22 @@ using LivingMyth.Sim;
 public partial class Main : Node
 {
     private const int Seed = 7;
+    // Drama Time constants — see docs/TIME_AND_STORY_PACING.md (the four clocks). Wall-clock
+    // presentation only; they never change Tick() count or order. TODO(focus-time): the next
+    // pacing slice is the focus guard — pause-on-drama + "you last saw" recap cards (roadmap 2).
     private const float BaseInterval = 1.2f;   // real seconds per sim-year at 1×
     private static readonly float[] SpeedLadder = { 0.25f, 0.5f, 1f, 2f, 4f, 8f, 16f };
+    // Pace names per docs/TIME_AND_STORY_PACING.md — the ladder in lives, not factors.
+    private static readonly string[] PaceNames =
+    {
+        "linger — a followed life unfolds over minutes",
+        "watch — slow enough to know the names",
+        "unfold — the chronicle's natural pace",
+        "drift — lives pass in under a minute",
+        "hasten — a generation in moments",
+        "sweep — a century in a quarter minute",
+        "ages — centuries sweep past",
+    };
     private const int FeedWidth = 320;
     private const int BottomH = 96;
 
@@ -309,10 +323,10 @@ public partial class Main : Node
         _playBtn.Pressed += TogglePlay;
         timeRow.AddChild(_playBtn);
 
-        foreach (var s in SpeedLadder)
+        for (int i = 0; i < SpeedLadder.Length; i++)
         {
-            var b = new Button { Text = $"{s:0.##}×", CustomMinimumSize = new Vector2(40, 0) };
-            float sp = s;
+            float sp = SpeedLadder[i];
+            var b = new Button { Text = $"{sp:0.##}×", CustomMinimumSize = new Vector2(40, 0), TooltipText = PaceNames[i] };
             b.Pressed += () => SetSpeed(sp);
             timeRow.AddChild(b);
             _speedBtns.Add((b, sp));
