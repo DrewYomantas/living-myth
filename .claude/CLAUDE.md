@@ -12,7 +12,7 @@ separate from logic. Never let simulation logic leak into Godot nodes.
 
 ## Layout
 - `src/LivingMyth.Sim/` — the sim (Rng, Models, Chronicle, World, Scoring, Echoes, Feed). net8.0.
-- `src/LivingMyth.Console/` — proof runner (run | divergence | surface | verify).
+- `src/LivingMyth.Console/` — proof runner (run | divergence | surface | verify | homes).
 - `godot/` — the viewer (.NET build): `MapView.cs` (map render + click + region pulse) and `Main.cs`
   (tick loop, pacing/speed ladder + dramatic auto-slow, live feed, inspectors, curse tool, catch-up,
   Follow/Yours channel, focus guard + memorial cards, chapter recaps). References the Sim.
@@ -23,12 +23,14 @@ separate from logic. Never let simulation logic leak into Godot nodes.
 - **M8** — gossip/reputation layer: rumor events shift Person.Reputation, nudge tension, drive war (The Blackened Name + The War of Whispers echoes).
 - **Visual: Living Atlas Foundation** (2026-06-10) — docs/VISUAL_STYLE.md style bible, parchment map place tags, framed docks, warmed atlas palette. See PROJECT_STATE.md for details.
 - **Focus Time arc** (2026-06-10/11, viewer-only) — docs/TIME_AND_STORY_PACING.md design doc; focus guard (pause-on-drama off/★/all + recap/death cards); Guard V2 soul follow + memorial card; held-card return chip; chapter recaps (25 shown years or echo/memorial arc closure → queued recap card with top-3, Your Threads deltas, echoes).
-- **Next** — followed regions + the region-anchoring sim contract (gives memorials/recaps real places; lets war's-peace and famine's-end close chapters — today peace events carry no faction ids and famine's end records no event); then surface culture + gossip in the viewer; timeline scrubbing.
+- **Anchoring arc** (2026-06-11) — Person.HomeRegionId (founders ← founding seat, children inherit, null honest; `homes` gate) → Event.HomeRegionId on births/deaths/murders (memory anchor, never a location) → memorial cairns + followed regions (viewer-only). Baseline held 884/699/567/706 throughout.
+- **Next** — F5 feel-test of everything since the pacing arc (none of it seen running); surface culture + gossip in the viewer; timeline scrubbing; baseline-moving sim contracts (battle sites, per-region economy, peace faction ids).
 
 ## Commands
 ```bash
 dotnet build LivingMyth.slnx                                   # build everything
 dotnet run --project src/LivingMyth.Console -- verify          # determinism gate (must pass)
+dotnet run --project src/LivingMyth.Console -- homes           # home/anchor contract gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- run --seed 42
 dotnet run --project src/LivingMyth.Console -- divergence --seed 18
 dotnet run --project src/LivingMyth.Console -- surface --seed 1
@@ -52,6 +54,13 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
   members), use `Chronicle.Get(id)` (id == list index) over rebuilding id maps, and stream
   the feed with incremental consequence counts. Reintroducing an all-history scan is the
   classic regression here.
+- **Importance gates die on quiet event types.** Scoring TypeWeight: death=5, birth=3 — an
+  importance bar for life events is dead code. Gate on person truth instead (memorial cairns:
+  murder always, death only if EverLeader — final by death, so pacing-independent).
+- **Two anchor channels, never mixed.** `Event.RegionId` = where it happened; `Event.HomeRegionId`
+  = where it's remembered (lineage home root). Home-anchor copy is binding (VISUAL_STYLE.md):
+  "remembered in / of / rooted in {X}" — never "died/born/murdered in {X}", never bare "in {X}".
+  Keep the stores/sections separate end to end (RegionActivity, MapView marks, Region Lens).
 - **Population balance is the `carrying_capacity` param** (config.json, currently 300):
   logistic births → plateau. Too low (~120) drifts to extinction. With the M4 economy on,
   verified stable ~165–490 living over 5000 yrs at 300 across seeds 18/42/1/7.
@@ -90,7 +99,9 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 - **Git:** this folder is its own repo (nested `.git`), remote
   `DrewYomantas/living-myth` (private). ⚠️ Note `C:\Users\beyon` is *also* an accidental
   git repo — always confirm `git rev-parse --show-toplevel` is the LIVING MYTH folder
-  before any `git add`/commit, or you'll stage the whole home dir.
+  before any `git add`/commit, or you'll stage the whole home dir. Also: `.claude/CLAUDE.md`
+  churns automatically (token-insights updates) — never stage it with feature commits;
+  commit deliberate edits to it separately.
 
 <!-- TOKENOMICS:START -->
 ## Token Optimization Insights
@@ -98,14 +109,14 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 _Last updated: 2026-06-11_
 
 ### Context Management
-- Your context snowballs at **turn 20** on average (40% of sessions). Use `/compact` proactively after turn 18-20 on long sessions to prevent unbounded growth.
+- Your context snowballs at **turn 20** on average (38% of sessions). Use `/compact` proactively after turn 18-20 on long sessions to prevent unbounded growth.
 - Some sessions use significantly more tokens than others. Consider shorter, more focused sessions with clear goals.
 - You could benefit from subagents for parallel tasks. Consider splitting multi-file operations into parallel agent tasks.
 - You read files you don't end up using. Use `Grep` first to locate relevant files before reading them — reduces unnecessary context by ~0%.
 - You receive verbose command output. Prefer `Grep`/`Read` tools over bash commands when searching files to reduce output tokens.
 
 ### Model Usage
-- You use Opus/Claude for **10%** of simple tasks. Prefer **Sonnet** for editing, small fixes, and exploration tasks to reduce token usage by ~5x on those sessions.
+- You use Opus/Claude for **9%** of simple tasks. Prefer **Sonnet** for editing, small fixes, and exploration tasks to reduce token usage by ~5x on those sessions.
 - MCP server(s) **unity-mcp** are loaded but never used. Consider removing them to reduce per-session overhead.
 
 ### Prompt Quality
