@@ -219,8 +219,8 @@ but invisible · ✖ not modeled, forbidden to render):
   are the only voice. Partly a sim-contract question.
 - ✎ Quiet vs storied — anchored-tale counts live in the Region Lens text only.
 - ◐ Scarred by events — Place Memory V1 (below): founding stones, war scars, cairns,
-  culture ribbons from truly anchored events. Deaths/battles/famine wait on the
-  anchoring contract.
+  culture ribbons from truly anchored events; memorial cairns for cairn-worthy lives
+  remembered at home (V2 first slice). Battles/famine wait on the anchoring contract.
 
 **Events**
 - ✅ Anchored events — expanding gold region pulse + feed row flash + dramatic
@@ -247,8 +247,10 @@ but invisible · ✖ not modeled, forbidden to render):
 - ✅ Followed bloodline — cyan rings + gold YOURS rows (cool kin-mark vs the warm
   soul-mark, deliberately distinct).
 - ◐ Followed people — feed + signal only (no map voice).
-- ✖ Followed region / prophecy — future; region is viewer-ready but quiet until the
-  anchoring contract, prophecy needs a sim system.
+- ✅ Followed land (region) — quiet persistent gold ring on the map (fainter and
+  tighter than the lens ring), ★ state in the lens; events surface as YOURS through
+  the two honest channels (tales anchored here, lives remembered here).
+- ✖ Followed prophecy — future; needs a sim system.
 
 ## Place Memory V1 — SHIPPED (2026-06-11, viewer-only)
 
@@ -273,9 +275,30 @@ capped at 4 per region (the oldest yields), drawn beneath place markers and labe
 the land" section lists the real event behind every mark as a catch-up link, and says
 "unmarked" honestly when nothing recorded has scarred a place.
 
-Deferred to the event-anchoring **sim contract** (PROJECT_STATE.md): murder/death
-cairns, battle scars at the battlefield, prophecy omens, plenty/famine land mood —
-none of those events carry a `RegionId` yet, so they may not mark.
+Deferred to the event-anchoring **sim contract** (PROJECT_STATE.md): battle scars at
+the battlefield, prophecy omens, plenty/famine land mood — none of those events carry
+a `RegionId` yet, so they may not mark. (Murder/death cairns shipped 2026-06-11 as
+**memorial cairns** on the separate home-memory channel — see below.)
+
+### Memorial cairns — SHIPPED (2026-06-11, viewer-only, Place Memory V2 first slice)
+
+The first home-memory mark: **a cairn-worthy life is remembered at the home of its
+line** (`Event.HomeRegionId`), never at an invented death place. The gate is person
+truth, not scoring: murders always raise a cairn (violent grief is carried home);
+deaths only of those who `EverLeader` (a plain death never marks, so cairns stay rare
+enough to read); births never mark — a cairn is a memorial. As built:
+
+- Separate channel end to end: `MapView._homeMarks` (own store, `AddHomeMark`), fed
+  from `HomeRegionId` only — structurally impossible to mix with true place marks.
+- Visually apart: three deliberately stacked stones with a small gold remembrance
+  light at the top, drawn at the **rim** of the home lands (radius 0.78 vs 0.55,
+  own slot angles) — warm and intentional where the abandon cairn (`∴`, scattered
+  round stones) is cold ruin. Capped 3 per region (oldest yields), same deterministic
+  sim-year fade as V1 marks, no RNG.
+- Verbally apart: Region Lens lists cairns inside "Lives rooted here" (`∆ memorial
+  cairn`, gold-brown), under the existing not-where-it-happened caption — never in
+  "Marks upon the land". The death guard card adds "a memorial cairn is raised in
+  {X}, the home of their line" **only when the mark truly stands**.
 
 ### Place Memory V2 readiness (anchoring audit, 2026-06-11)
 
@@ -286,7 +309,7 @@ below waits on a deliberate, baseline-moving sim contract:
 
 | Future mark | Blocked on |
 |---|---|
-| death / murder cairn | **data shipped 2026-06-11**: `Person.HomeRegionId` + `Event.HomeRegionId` on births/deaths/murders (Life Memory Home Anchors V1). Remaining: a *home-memory* mark kind, visually and verbally distinct from true place marks — a cairn from a home anchor means "remembered here", never "died here" |
+| death / murder cairn | **SHIPPED 2026-06-11** as the memorial cairn (home-memory channel, above) — "remembered here", never "died here" |
 | battle scar at the battlefield | battle-site contract (battles aren't events at all today) |
 | famine / drought / plenty land mood | per-region economy (prosperity is per-faction; drought unmodeled) |
 | peace ribbon | faction ids on peace events + a treaty-site convention |
@@ -315,8 +338,9 @@ Life events (births, deaths, murders) carry `Event.HomeRegionId` — where the l
   where-line distinguishes "in {X}" (true place) from "remembered in {X}" (home),
   and the Region Lens keeps "Lives rooted here" (with a not-where-it-happened
   caption) apart from "Tales anchored here".
-- Place Memory map marks read `RegionId` only — home anchors never scar the land
-  until a visually distinct home-memory mark kind exists (deferred).
+- Place Memory map marks read `RegionId` only. Home anchors mark the land solely
+  through the visually distinct **memorial cairn** channel (shipped 2026-06-11,
+  above) — never through the place-mark store, never with place-event language.
 
 ## Sim-truth honesty contract (restated, binding)
 

@@ -56,6 +56,8 @@ public partial class Main : Node
     private readonly HashSet<int> _marked = new();          // their full bloodline, expanded
     private readonly HashSet<string> _markedFactions = new();
     private readonly HashSet<int> _followedSouls = new();   // souls followed as individuals — never expanded into kin
+    private readonly HashSet<int> _followedRegions = new(); // lands watched as places — tales anchored here and lives remembered here are YOURS
+    private Button _regionBtn = null!;
     private const int YoursBoost = 70;                      // weight added to a marked-bloodline event
     private const int FeedWindow = 60;                      // rolling feed holds this many rows
     private const float YoursCapFraction = 0.6f;            // YOURS may fill at most this share of the window
@@ -185,6 +187,7 @@ public partial class Main : Node
         _map.World = _world;
         _map.Marked = _marked;       // same HashSet, mutated in place — map sees follows live
         _map.Souls = _followedSouls;
+        _map.FollowedRegions = _followedRegions;
         StreamNewHeadlines();
         if (_pendingGuardEventId is not null) ShowGuardCard();   // unreachable today; hardening
         StartChapter(0);   // chapter one opens on the founding events themselves
@@ -551,6 +554,12 @@ public partial class Main : Node
         _lensFactionBtn.Pressed += () => { if (_lensFactionId is string fid) OnFactionPicked(fid); };
         vb.AddChild(_lensFactionBtn);
 
+        _regionBtn = new Button { Text = "☆ Follow this land", Visible = false,
+            TooltipText = "Watch this place — tales anchored here and lives remembered here surface as yours" };
+        Ui.StyleButton(_regionBtn);
+        _regionBtn.Pressed += OnFollowRegionPressed;
+        vb.AddChild(_regionBtn);
+
         // Fate verbs pinned at the bottom: the curse tool (a living, not-yet-cursed person only)
         // and the Yours channel (follow this one soul / a bloodline / a people).
         _soulBtn = new Button { Text = "☆ Follow this soul", Visible = false,
@@ -794,6 +803,10 @@ public partial class Main : Node
             // Place memory: a truly anchored event of a marking kind scars its region.
             if (events[i].RegionId is int mrid && ClassifyMark(events[i]) is MapView.MarkKind mk)
                 _map.AddPlaceMark(mrid, mk, events[i].Year, events[i].Id);
+            // Life memory: a cairn-worthy life raises a memorial cairn at the home of its line
+            // (Event.HomeRegionId) — remembered there, never a claim of where it happened.
+            if (events[i].HomeRegionId is int hrid && IsCairnWorthy(events[i]))
+                _map.AddHomeMark(hrid, events[i].Year, events[i].Id);
         }
 
         for (int i = _lastEventCount; i < events.Count; i++)
@@ -844,6 +857,18 @@ public partial class Main : Node
         return notableSeen;
     }
 
+    // Which remembered lives raise a memorial cairn at home (Life Memory marks). Murders always —
+    // violent grief is carried home; deaths only of those who ever led, so cairns stay rare enough
+    // to read (a plain death never clears the bar). Births never mark — a cairn is a memorial.
+    // EverLeader is final by death, so the gate never depends on playback pacing.
+    private bool IsCairnWorthy(Event e) => e.Type switch
+    {
+        "murder" => true,
+        "death" => e.Participants.Count > 0
+            && _world.People.TryGetValue(e.Participants[0], out var p) && p.EverLeader,
+        _ => false,
+    };
+
     // Which anchored events scar the land (Place Memory V1). Rumors carry a RegionId too but
     // deliberately don't mark — gossip is social, not a physical scar on a place.
     private static MapView.MarkKind? ClassifyMark(Event e) => e.Type switch
@@ -873,8 +898,15 @@ public partial class Main : Node
             if (_markedFactions.Count > 0 && _world.People.TryGetValue(pid, out var p)
                 && _markedFactions.Contains(p.FactionId)) return true;
         }
-        return false;
+        return RegionYours(e);
     }
+
+    // A followed land claims its own story through the two honest channels only: tales truly
+    // anchored here (RegionId) and lives remembered here (HomeRegionId) — never inference.
+    private bool RegionYours(Event e)
+        => _followedRegions.Count > 0
+        && ((e.RegionId is int rid && _followedRegions.Contains(rid))
+            || (e.HomeRegionId is int hrid && _followedRegions.Contains(hrid)));
 
     // One Saga row, per the handoff anatomy: event-class chip → small-caps label + faded year
     // → one-to-two-line body. Hover warms the border; the whole row opens "How We Got Here".
@@ -1176,6 +1208,7 @@ public partial class Main : Node
         string lead = memorial ? "a soul you followed has died — the world holds its breath"
             : isDeath ? "a tale of a bloodline you follow closes — the world waits"
             : focusPid is not null ? "fate touches what you follow — the world waits"
+            : RegionYours(e) ? "fate touches a land you watch — the world waits"
             : "a great deed marks the age — the world waits";
         sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]{lead}[/color]");
         sb.AppendLine();
@@ -1189,6 +1222,13 @@ public partial class Main : Node
                 : $"remembered in {hrn}, the home of their line")}[/color]"
             : memorial ? $"  [color=#{Ui.Hex(Ui.Faded)}]· the chronicle records no place for this passing[/color]" : "";
         sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color]  [color=#{Ui.Hex(cls.Color)}]{cls.Glyph} {cls.Label.ToUpperInvariant()}[/color]  [b]{e.Text}[/b]{where}");
+        // Said only when the mark truly stands (cairn-worthy lives only — a follow alone never
+        // raises one): home-memory language, never a death place. A murder's cairn belongs to
+        // the slain's line — the card's focus may be the killer, so "their" would misattribute.
+        if (e.HomeRegionId is int cairnRid && _map.HasHomeMark(cairnRid, eid)
+            && _world.RegionName(cairnRid) is string cairnName)
+            sb.AppendLine($"[color=#8a5d12]∆ a memorial cairn is raised in {cairnName}, "
+                + $"the home of {(e.Type == "murder" ? "the slain's line" : "their line")}[/color]");
 
         if (focusPid is int pid && _world.People.TryGetValue(pid, out var p))
         {
@@ -1448,6 +1488,10 @@ public partial class Main : Node
         var scored = new List<(int Score, Event E)>();
         int births = 0;
         var lost = new List<Event>();
+        // Followed lands, the chapter's two honest channels counted apart: tales anchored
+        // here (RegionId) vs lives remembered here (HomeRegionId) — never merged.
+        var landTales = new System.Collections.Generic.Dictionary<int, int>();
+        var landLives = new System.Collections.Generic.Dictionary<int, int>();
         for (int i = snap.StartEventId; i < snap.EndEventId; i++)
         {
             var e = events[i];
@@ -1456,6 +1500,13 @@ public partial class Main : Node
             if ((e.Type is "death" or "murder")
                 && e.Participants.Any(pid => _marked.Contains(pid) || _followedSouls.Contains(pid)))
                 lost.Add(e);
+            if (_followedRegions.Count > 0)
+            {
+                if (e.RegionId is int trid && _followedRegions.Contains(trid))
+                    landTales[trid] = landTales.GetValueOrDefault(trid) + 1;
+                if (e.HomeRegionId is int lrid && _followedRegions.Contains(lrid))
+                    landLives[lrid] = landLives.GetValueOrDefault(lrid) + 1;
+            }
         }
         scored.Sort((a, b) => b.Score.CompareTo(a.Score));
 
@@ -1471,7 +1522,8 @@ public partial class Main : Node
             sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color] [color=#{Ui.Hex(cls.Color)}]{cls.Glyph}[/color] {Link("e:" + e.Id, e.Text)}");
         }
 
-        if (_followedSouls.Count > 0 || _seedPeople.Count > 0 || _markedFactions.Count > 0)
+        if (_followedSouls.Count > 0 || _seedPeople.Count > 0 || _markedFactions.Count > 0
+            || _followedRegions.Count > 0)
         {
             sb.AppendLine();
             sb.AppendLine(SectionCap("Your threads"));
@@ -1508,6 +1560,16 @@ public partial class Main : Node
                 int was = snap.RegionBase[fid];
                 if (now == was) continue;
                 sb.AppendLine($"{_world.Factions[fid].Name} — {was} → {now} regions {(now > was ? "(gained)" : "(lost)")}");
+                any = true;
+            }
+            foreach (var rid in _followedRegions.OrderBy(r => r))
+            {
+                int tales = landTales.GetValueOrDefault(rid), lives = landLives.GetValueOrDefault(rid);
+                if (tales == 0 && lives == 0) continue;
+                var channels = new List<string>();
+                if (tales > 0) channels.Add($"{tales} tale{(tales == 1 ? "" : "s")} anchored here");
+                if (lives > 0) channels.Add($"{lives} {(lives == 1 ? "life" : "lives")} remembered here");
+                sb.AppendLine($"{Link("r:" + rid, _world.Regions[rid].Name)} — {string.Join(" · ", channels)}");
                 any = true;
             }
             if (!any) sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]your threads passed the age quietly[/color]");
@@ -1699,6 +1761,18 @@ public partial class Main : Node
         OnPersonPicked(pid);
     }
 
+    // Follow a land, not a people: the place itself becomes the player's mark. Only the two
+    // honest channels speak for it — tales truly anchored here and lives remembered here —
+    // the chronicle is never asked to invent more.
+    private void OnFollowRegionPressed()
+    {
+        int rid = _map.SelectedRegionId;
+        if (rid < 0 || rid >= _world.Regions.Count) return;
+        if (!_followedRegions.Remove(rid)) _followedRegions.Add(rid);
+        _map.QueueRedraw();
+        OnRegionPicked(rid);
+    }
+
     // Rebuild the followed bloodline from the explicit marks. The pedigree graph is permanent,
     // so re-expanding the seeds always yields every descendant born so far; future births then
     // extend it incrementally in StreamNewHeadlines. Only runs on a follow/unfollow press.
@@ -1734,6 +1808,7 @@ public partial class Main : Node
         _map.SelectedRegionId = -1;
         _glimpsePanel.Visible = false;
         _lensFactionBtn.Visible = false;
+        _regionBtn.Visible = false;
         _curseBtn.Visible = p.Alive && !p.Cursed;
         bool soulFollowed = _followedSouls.Contains(id);
         _soulBtn.Visible = p.Alive || soulFollowed;   // a dead soul can still be let go
@@ -1821,11 +1896,16 @@ public partial class Main : Node
         _lensFactionId = holder?.Id;
         _lensFactionBtn.Visible = holder is not null;
         if (holder is not null) _lensFactionBtn.Text = $"⚑ Inspect {holder.Name}";
+        bool landFollowed = _followedRegions.Contains(regionId);
+        _regionBtn.Visible = true;
+        _regionBtn.Text = landFollowed ? "★ Following this land — unfollow" : "☆ Follow this land";
+        Ui.StyleButton(_regionBtn, landFollowed);
 
         _inspectorTitle.Text = region.Name;
         _inspectorSub.Text = $"{region.TerrainType} · {(holder is null ? "wilderness" : $"held by {holder.Name}")}";
 
         var sb = new StringBuilder();
+        if (landFollowed) sb.AppendLine($"[color=#8a5d12][b]★ you are watching this land[/b][/color]\n");
         sb.AppendLine(SectionCap("The land"));
         sb.AppendLine($"terrain: {region.TerrainType}");
         sb.AppendLine(holder is null
@@ -1856,11 +1936,18 @@ public partial class Main : Node
         sb.AppendLine(SectionCap("Lives rooted here")
             + (homeTotal > 0 ? $" [color=#{Ui.Hex(Ui.Faded)}]({homeTotal} remembered)[/color]" : ""));
         sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]home memory of lines rooted in this place — not where these moments happened[/color]");
+        var cairns = _map.HomeMarksFor(regionId);
+        for (int i = cairns.Count - 1; i >= 0; i--)   // newest first
+        {
+            var ce = _world.Chronicle.Get(cairns[i].eventId);
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {cairns[i].year}[/color] [color=#8a5d12]∆ memorial cairn[/color] — {Link("e:" + ce.Id, ce.Text)}");
+        }
         var homeRecent = _regionActivity.HomeRecentFor(regionId);
         if (homeRecent.Count == 0)
             sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]no lives are yet remembered here[/color]");
         for (int i = homeRecent.Count - 1; i >= 0; i--)   // newest first
         {
+            if (_map.HasHomeMark(regionId, homeRecent[i])) continue;   // already shown as its cairn row
             var he = _world.Chronicle.Get(homeRecent[i]);
             var hcls = Ui.ClassOf(he.Type);
             sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {he.Year}[/color] [color=#{Ui.Hex(hcls.Color)}]{hcls.Glyph}[/color] {Link("e:" + he.Id, he.Text)}");
@@ -1882,6 +1969,7 @@ public partial class Main : Node
         sb.AppendLine(SectionCap("Not yet in the record"));
         sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]people are not yet site-anchored — the atlas scatters each people across their lands[/color]");
         sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]settlements are not modeled yet — the place marker is a map hint only[/color]");
+        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]much of history carries no place anchor yet — a followed land speaks only when tales are anchored here or lives are remembered here[/color]");
 
         _inspector.Text = sb.ToString();
         _inspectorPanel.Visible = true;
@@ -1903,6 +1991,7 @@ public partial class Main : Node
         _map.SelectedRegionId = -1;
         _glimpsePanel.Visible = false;
         _lensFactionBtn.Visible = false;
+        _regionBtn.Visible = false;
         _curseBtn.Visible = false;
         _soulBtn.Visible = false;
         _followBtn.Visible = true;
@@ -1968,7 +2057,8 @@ public partial class Main : Node
         _yearBig.Text = $"Year {_world.Year}";
         _yearSub.Text = $"{_world.LivingCount} souls · {_world.Chronicle.Events.Count} tales";
         bool guardActive = _guardMode != GuardMode.Off
-            && (_followedSouls.Count > 0 || _seedPeople.Count > 0 || _markedFactions.Count > 0);
+            && (_followedSouls.Count > 0 || _seedPeople.Count > 0 || _markedFactions.Count > 0
+                || _followedRegions.Count > 0);
         _guardLabel.Visible = guardActive;
         if (guardActive)
         {
@@ -1976,6 +2066,7 @@ public partial class Main : Node
             if (_followedSouls.Count > 0) parts.Add($"{_followedSouls.Count} soul{(_followedSouls.Count == 1 ? "" : "s")}");
             if (_seedPeople.Count > 0) parts.Add($"{_seedPeople.Count} bloodline{(_seedPeople.Count == 1 ? "" : "s")}");
             if (_markedFactions.Count > 0) parts.Add($"{_markedFactions.Count} people{(_markedFactions.Count == 1 ? "" : "s")}");
+            if (_followedRegions.Count > 0) parts.Add($"{_followedRegions.Count} land{(_followedRegions.Count == 1 ? "" : "s")}");
             _guardLabel.Text = "⛨ guard watches " + string.Join(" · ", parts);
             // The tooltip names up to two watched souls, so a hover recalls who you are
             // waiting on. Sorted by id for a stable order; souls are always few.

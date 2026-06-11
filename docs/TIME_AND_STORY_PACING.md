@@ -141,7 +141,7 @@ The followable subjects, with honesty status:
 |---|---|---|
 | **Soul / bloodline** | SHIPPED (verbs split in Guard V2) | Two verbs on the person inspector: *Follow this soul* — one person, a per-soul set never expanded into kin — and *Follow this bloodline* — directed lineage (`Feed.Bloodline`), viral growth at birth (`Main.cs`, `StreamNewHeadlines`) |
 | **People (faction)** | SHIPPED | `Follow` on faction inspector; `_markedFactions` |
-| **Region** | Viewer-ready | `RegionActivity` already indexes anchored events; follow = YOURS treatment for events whose `RegionId` matches. Coverage caveat: only territory/culture/rumor events carry `RegionId` today, so a followed region is honest but quiet until the anchoring **[sim contract]** lands. Say so in the lens, like the existing not-modeled notes. |
+| **Region** | SHIPPED (2026-06-11) | *Follow this land* on the Region Lens; `_followedRegions`; YOURS treatment through the two honest channels — tales truly anchored here (`RegionId`: territory/culture/rumor) and lives remembered here (`HomeRegionId`: births/deaths/murders of rooted lines, Life Memory V1). Guard lead "fate touches a land you watch"; recap Your-Threads land deltas count the channels apart; quiet gold map ring; the lens says plainly that much of history carries no place anchor yet. |
 | **Faith** | Needs audit | `ReligionId` on people and religion lineage exist; most faith events name participants, not the faith. Audit event coverage before promising it. |
 | **Prophecy** | **FORBIDDEN until modeled** | The sim has prophet *events*, not prophecies-as-promises (no fulfillment conditions, no open/closed state). A followed prophecy before that system exists would be fake. **[sim contract]** |
 
@@ -275,8 +275,10 @@ Shipped: catch-up modal (Quick beats / Full thread), region anchors shown when k
    truly include a watched soul. Remaining presence work: Place Memory V1, mythic glosses /
    entity links, relationship constellation, local site tableaus, memorial tableau upgrade —
    the place-bound pieces wait on the region-anchoring **[sim contract]**.
-4. **Followed regions (viewer-only):** Follow on the Region Lens; YOURS treatment for
-   region-anchored events; honest "quiet until anchored" copy.
+4. **Followed regions (viewer-only) — SHIPPED 2026-06-11:** Follow on the Region Lens;
+   YOURS treatment for region-anchored events *and* home-memory anchors (Life Memory V1
+   made followed lands speak much sooner than this roadmap expected); honest
+   "much of history carries no place anchor yet" copy.
 5. **Drama polish:** speed-scaled beats, identity-carrying pulses, camera dwell queue,
    quiet-years acceleration (off by default until feel-tested).
 6. **Replay step 1:** numbered turning points in catch-up; then the visual path per

@@ -57,6 +57,27 @@ public partial class MapView : Control
         => _placeMarks.TryGetValue(regionId, out var list) ? list
            : Array.Empty<(MarkKind kind, int year, int eventId)>();
 
+    // Life memory (Place Memory V2): a remembered life raises a memorial cairn at the home of
+    // its line — fed from Event.HomeRegionId only, never a death place. Its own store, slots,
+    // and shape keep home memory visually apart from the true place marks above.
+    private readonly Dictionary<int, List<(int year, int eventId)>> _homeMarks = new();
+    private const int HomeMarksPerRegion = 3;
+    private static readonly float[] HomeMarkAngles = { 0.35f, 2.95f, 4.45f };   // rim slots, clear of MarkAngles
+
+    public void AddHomeMark(int regionId, int year, int eventId)
+    {
+        if (!_homeMarks.TryGetValue(regionId, out var list)) { list = new(); _homeMarks[regionId] = list; }
+        list.Add((year, eventId));
+        if (list.Count > HomeMarksPerRegion) list.RemoveAt(0);
+    }
+
+    public IReadOnlyList<(int year, int eventId)> HomeMarksFor(int regionId)
+        => _homeMarks.TryGetValue(regionId, out var list) ? list
+           : Array.Empty<(int year, int eventId)>();
+
+    public bool HasHomeMark(int regionId, int eventId)
+        => _homeMarks.TryGetValue(regionId, out var list) && list.Any(m => m.eventId == eventId);
+
     // Camera: zoom (1 = fit-to-view) + pan (screen-space offset), folded into the draw transform
     // so hit-testing — which records post-transform positions during _Draw — stays correct for free.
     private float _zoom = 1f;
@@ -96,6 +117,7 @@ public partial class MapView : Control
 
     public string? SelectedFactionId;   // set by Main while a faction inspector is open — label emphasis only
     public int SelectedRegionId = -1;   // set by Main while the Region Lens is open — gold lens ring only
+    public HashSet<int>? FollowedRegions;   // shared with Main, mutated in place — lands the player watches
 
     // Place-seed marker palette: timber/thatch/stone/dirt, per DESIGN.md ("ancient, not generic").
     private static readonly Color Timber = new("6e5639");
@@ -271,6 +293,16 @@ public partial class MapView : Control
             DrawArc(P(sr.X, sr.Y), regionR + 3f, 0, Mathf.Tau, 48, Ui.LensGold with { A = 0.85f }, 2.5f);
         }
 
+        // 7c. followed lands — a quiet persistent gold ring, the player's standing mark on a
+        // place (fainter and tighter than the lens ring, steady unlike a pulse).
+        if (FollowedRegions is { Count: > 0 })
+            foreach (var rid in FollowedRegions)
+            {
+                if (rid < 0 || rid >= World.Regions.Count) continue;
+                var fr = World.Regions[rid];
+                DrawArc(P(fr.X, fr.Y), regionR + 1.5f, 0, Mathf.Tau, 48, Ui.Gold with { A = 0.45f }, 1.6f);
+            }
+
         var placed = DrawFactionLabels(P, font);                            // 8. labels
         DrawPlaceTags(P, regionR, placed);
         DrawSoulTags(placed);
@@ -356,6 +388,34 @@ public partial class MapView : Control
                 DrawMemoryMark(c, s, marks[i].kind, a);
             }
         }
+
+        // Memorial cairns sit at the rim of the home lands, farther out than the place marks —
+        // a remembered life, never "it happened here".
+        foreach (var (rid, marks) in _homeMarks)
+        {
+            if (rid < 0 || rid >= World!.Regions.Count) continue;
+            var r = World.Regions[rid];
+            var center = P(r.X, r.Y);
+            float s = Mathf.Clamp(regionR * 0.16f, 4f, 13f);
+            for (int i = 0; i < marks.Count; i++)
+            {
+                float age = World.Year - marks[i].year;
+                float a = Mathf.Lerp(0.85f, 0.30f, Mathf.Clamp(age / 250f, 0f, 1f));
+                var c = center + new Vector2(Mathf.Cos(HomeMarkAngles[i]), Mathf.Sin(HomeMarkAngles[i]))
+                        * regionR * 0.78f;
+                DrawMemorialCairn(c, s, a);
+            }
+        }
+    }
+
+    // A memorial cairn: stones stacked with intent, a small remembrance light kept at the top —
+    // deliberately apart from the abandon cairn's scattered round stones, warm where ruin is cold.
+    private void DrawMemorialCairn(Vector2 c, float s, float a)
+    {
+        DrawRect(new Rect2(c.X - s * 0.34f, c.Y + s * 0.05f, s * 0.68f, s * 0.22f), StoneMark with { A = a });
+        DrawRect(new Rect2(c.X - s * 0.22f, c.Y - s * 0.18f, s * 0.44f, s * 0.2f), StoneMark.Lightened(0.08f) with { A = a });
+        DrawRect(new Rect2(c.X - s * 0.11f, c.Y - s * 0.38f, s * 0.22f, s * 0.18f), StoneMark.Lightened(0.16f) with { A = a });
+        DrawCircle(c + new Vector2(0, -s * 0.52f), Mathf.Max(1.2f, s * 0.1f), Ui.Gold with { A = a * 0.9f });
     }
 
     private void DrawMemoryMark(Vector2 c, float s, MarkKind kind, float a)

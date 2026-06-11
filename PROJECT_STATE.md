@@ -126,14 +126,35 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       Region Lens "Lives rooted here" section (separate from "Tales anchored here", with its own
       not-where-it-happened caption) off a second incremental RegionActivity channel. Full
       anchor-semantics table below ("Life Memory — anchor contract").
+- [x] Memorial cairns (2026-06-11, viewer-only, Place Memory V2 first slice): cairn-worthy lives
+      now mark the map at the home of their line. Gate is person truth, not scoring: murders
+      always (violent grief is carried home); deaths only of those who EverLeader (plain deaths
+      never mark, so cairns stay rare enough to read); births never (a cairn is a memorial).
+      Separate channel end to end — MapView._homeMarks fed from Event.HomeRegionId only,
+      structurally unmixable with the V1 place-mark store; capped 3/region (oldest yields), own
+      rim slot angles (0.78 radius vs 0.55), same deterministic sim-year fade, no RNG. Visual:
+      three deliberately stacked stones + a small gold remembrance light — warm and intentional
+      where the abandon cairn is cold ruin. Region Lens lists cairns inside "Lives rooted here"
+      ("∆ memorial cairn", with catch-up link); death guard cards add "a memorial cairn is
+      raised in {X}, the home of their line" only when the mark truly stands. verify unchanged
+      884/699/567/706 (viewer-only).
+- [x] Followed regions (2026-06-11, viewer-only, TIME_AND_STORY_PACING roadmap 4): a land can
+      now be followed like a soul or a people. "Follow this land" on the Region Lens
+      (_followedRegions, session-only like all follows); events become YOURS through the two
+      honest channels only — tales truly anchored here (Event.RegionId) and lives remembered
+      here (Event.HomeRegionId) — via RegionYours() in IsYours, so feed gold rows, the YoursBoost,
+      and guard arming all inherit it. Guard card gains the lead "fate touches a land you watch"
+      (region-yours events without a marked participant); time-bar guard signal counts lands;
+      chapter recaps add Your-Threads land deltas with the channels counted apart ("N tales
+      anchored here · M lives remembered here"); map draws a quiet persistent gold ring (fainter
+      + tighter than the lens ring). Lens states honestly that much of history carries no place
+      anchor yet. verify unchanged 884/699/567/706 (viewer-only).
 - [ ] Later — battle sites and per-region
       economy (add events/RNG and move the verify baseline; together they extend place memory to
-      battles/famine and let war's-peace / famine's-end close chapters); home-memory cairn marks
-      on the map (Place Memory V2 — the data now exists; needs a mark kind that reads
-      HomeRegionId and is visually distinct from true place marks); followed regions (roadmap 4 in
-      docs/TIME_AND_STORY_PACING.md); mythic glosses / entity links; relationship constellation;
-      local site/tableau visuals; memorial tableau upgrade; visual/UX pass (surface culture +
-      gossip in the viewer); echo packs; timeline scrubbing. ← NEXT
+      battles/famine and let war's-peace / famine's-end close chapters); mythic glosses / entity
+      links; relationship constellation; local site/tableau visuals; memorial tableau upgrade;
+      visual/UX pass (surface culture + gossip in the viewer); echo packs; timeline scrubbing;
+      followed-faith audit. ← NEXT
 
 ## Session log
 - [2026-06-07] Session: built M0→M2 + longevity pass (carrying capacity + perf refactor, proven
@@ -328,6 +349,28 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
   life events, text-never-names-anchor, double-run anchor determinism). Viewer: memorial
   where-line + pulse fallback, Region Lens "Lives rooted here" via a second incremental
   RegionActivity channel — all O(new events), no history scans.
+- [2026-06-11] Session: Memorial cairns — Place Memory V2's first slice (viewer-only; Main.cs,
+  MapView.cs). The home-memory data finally scars the land, on its own channel:
+  `MapView._homeMarks` (AddHomeMark/HomeMarksFor/HasHomeMark) is a separate store from the V1
+  place marks, fed only from `Event.HomeRegionId` in the existing O(new events) stream loop —
+  mixing the channels is structurally impossible. Gate deliberately person-truth instead of
+  importance (a plain death scores 5; an importance bar would have been dead code): murders
+  always, deaths only of EverLeader souls, births never. EverLeader is final by death, so marks
+  never depend on playback pacing. Drawn as stacked stones + a gold remembrance light at the
+  region rim (own slots, radius 0.78), cap 3/region, V1's deterministic fade. Lens cairn rows
+  live inside "Lives rooted here"; the death guard card claims a cairn only after
+  `HasHomeMark` confirms it stands. Language audit clean: "remembered/raised at the home of
+  their line", never died-here. verify 884/699/567/706 exact.
+- [2026-06-11] Session: followed regions — the fourth followable subject (viewer-only; Main.cs,
+  MapView.cs). The pacing doc's "honest but quiet" caveat aged well: Life Memory V1 means a
+  followed land now speaks through TWO honest channels (anchored tales + remembered lives), not
+  one. Implementation rides the existing yours machinery: RegionYours() folded into IsYours, so
+  gold rows, YoursBoost, guard arming, and "born into what you follow" recap counts all inherit
+  region follows for free; no new code path can disagree with the old ones. Death guard cards
+  still require a followed *person* — a stranger's death remembered in a watched land can
+  surface as a generic guard card ("fate touches a land you watch") but never fakes a memorial. Recap land
+  deltas count the two channels apart and never merge them. Map: persistent quiet gold ring
+  (Ui.Gold A=0.45 at r+1.5 vs the lens ring's LensGold A=0.85 at r+3). verify 884/699/567/706.
 
 ### Life Memory — anchor contract (2026-06-11)
 
