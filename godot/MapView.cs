@@ -15,6 +15,7 @@ public partial class MapView : Control
     public HashSet<int>? Marked;            // followed bloodline — ringed cyan
     public HashSet<int>? Souls;             // souls followed as individuals — ringed warm gold (the player's mark)
     public Action<int>? PersonPicked;
+    public Action<int, Vector2>? SoulPicked;   // a followed soul's marker clicked — Main opens the glimpse
     public Action<string>? FactionPicked;
     public Action<int>? RegionPicked;       // region id — Main decides faction vs. unclaimed
 
@@ -28,6 +29,14 @@ public partial class MapView : Control
     // off real time. region id -> seconds remaining.
     private readonly Dictionary<int, float> _regionPulses = new();
     private const float PulseDuration = 1.2f;
+
+    // Followed-soul presence (the divine bookmark): a breathing halo so a watched life reads
+    // as alive, plus a brief flare when a newly shown saga event names the soul. Pure
+    // rendering over the existing deterministic scatter — no new position precision implied.
+    private readonly Dictionary<int, float> _soulPulses = new();
+    private const float SoulPulseDuration = 1.4f;
+    private float _breath;
+    private readonly List<(Vector2 pos, int id)> _soulScreen = new();   // souls drawn this frame, for name tags
 
     // Camera: zoom (1 = fit-to-view) + pan (screen-space offset), folded into the draw transform
     // so hit-testing — which records post-transform positions during _Draw — stays correct for free.
@@ -89,6 +98,8 @@ public partial class MapView : Control
     // Parchment place tags — the atlas pill under each place marker (region name + place kind).
     private static readonly StyleBoxFlat PlaceTag = Ui.ParchmentTag();
     private static readonly StyleBoxFlat PlaceTagSelected = Ui.ParchmentTag(selected: true);
+    // Watched-soul name tag — gold-bordered, the player's mark made legible at any zoom.
+    private static readonly StyleBoxFlat SoulNameTag = Ui.ParchmentTag(selected: true);
     private static StyleBoxFlat MakeTag(Color bg, Color? border)
     {
         var sb = new StyleBoxFlat { BgColor = bg };
@@ -105,16 +116,25 @@ public partial class MapView : Control
         if (CameraFollow && _manualCamCooldown <= 0f) _easeTargetRegion = regionId;
     }
 
+    public void PulseSoul(int personId) => _soulPulses[personId] = SoulPulseDuration;
+
     public override void _Process(double delta)
     {
         float dt = (float)delta;
         if (_manualCamCooldown > 0f) _manualCamCooldown -= dt;
+        _breath = Mathf.Wrap(_breath + dt, 0f, Mathf.Tau);
 
         foreach (var id in _regionPulses.Keys.ToList())
         {
             float v = _regionPulses[id] - dt;
             if (v <= 0f) _regionPulses.Remove(id);
             else _regionPulses[id] = v;
+        }
+        foreach (var id in _soulPulses.Keys.ToList())
+        {
+            float v = _soulPulses[id] - dt;
+            if (v <= 0f) _soulPulses.Remove(id);
+            else _soulPulses[id] = v;
         }
 
         // Drama camera: lean toward the pulsing region while its pulse lives, unless the player
@@ -170,12 +190,13 @@ public partial class MapView : Control
     // Draw order (fixed): 1 water → 2 shallows rim + land/coast (+ faint adjacency) →
     // 3 territory tint → 4 roads → 5 place-seed markers → 6 people dots → 7 follow/leader
     // highlights (inside DrawPeople) + region lens ring → 8 labels (faction tags → parchment
-    // place tags → hover tag) → 9 event pulses.
+    // place tags → watched-soul tags → hover tag) → 9 event pulses.
     // New layers slot into this order deliberately; pulses stay topmost so drama always reads.
     public override void _Draw()
     {
         _dots.Clear();
         _regionHits.Clear();
+        _soulScreen.Clear();
         DrawRect(new Rect2(Vector2.Zero, Size), Sea);                       // 1. water
         var font = GetThemeDefaultFont();
         if (World is null || font is null) return;
@@ -232,6 +253,7 @@ public partial class MapView : Control
 
         var placed = DrawFactionLabels(P, font);                            // 8. labels
         DrawPlaceTags(P, regionR, placed);
+        DrawSoulTags(placed);
 
         if (_hoverRegion >= 0 && _hoverRegion < World.Regions.Count)
             DrawHoverTag(P, regionR, font);
@@ -433,6 +455,26 @@ public partial class MapView : Control
             HorizontalAlignment.Center, w, 11, Ui.RowBorder);
     }
 
+    // 8b. watched-soul name tags: at most a handful of souls are ever followed, so this stays
+    // O(followed) per frame. Overlap-skip against the label rects already placed — a watched
+    // name dodging a place tag beats two unreadable tags.
+    private void DrawSoulTags(List<Rect2> placed)
+    {
+        foreach (var (pos, id) in _soulScreen)
+        {
+            if (!World!.People.TryGetValue(id, out var p)) continue;
+            string name = "★ " + p.Name;
+            float w = Ui.SmallCaps.GetStringSize(name, HorizontalAlignment.Left, -1, 10).X;
+            var rect = new Rect2(pos.X - w / 2f - 6, pos.Y + 15f, w + 12, 17);
+            if (placed.Any(pr => pr.Intersects(rect))) rect.Position += new Vector2(0, 19);
+            if (placed.Any(pr => pr.Intersects(rect))) continue;
+            placed.Add(rect);
+            SoulNameTag.Draw(GetCanvasItem(), rect);
+            DrawString(Ui.SmallCaps, rect.Position + new Vector2(6, 12), name,
+                HorizontalAlignment.Left, -1, 10, Ui.InkDeep);
+        }
+    }
+
     private void DrawPeople(Func<float, float, Vector2> P, float regionR, Font font)
     {
         // Each faction's regions, in id order, so person-to-region placement is deterministic.
@@ -464,11 +506,26 @@ public partial class MapView : Control
             var dot = p.Cursed ? Ui.Ember : (p.Sex == "f" ? col.Lightened(0.28f) : col);
             DrawCircle(pos, r, dot);
             if (p.IsLeader) DrawArc(pos, r + 2.5f, 0, Mathf.Tau, 20, Ui.LensGold, 1.6f);
+            float hitR = Mathf.Max(r, 6f);
             if (Souls is not null && Souls.Contains(p.Id))
-                DrawArc(pos, r + 4.5f, 0, Mathf.Tau, 24, Ui.GoldGlow, 2.4f);
+            {
+                // The divine bookmark: a gold halo that never shrinks below findable at fit
+                // zoom, breathing softly while the soul lives; a saga sighting flares it.
+                float halo = Mathf.Max(r + 4.5f, 10f);
+                DrawArc(pos, halo, 0, Mathf.Tau, 24, Ui.GoldGlow, 2.4f);
+                float breathe = 0.20f + 0.16f * Mathf.Sin(_breath * 2.2f + p.Id);
+                DrawArc(pos, halo + 3.5f, 0, Mathf.Tau, 24, Ui.GoldGlow with { A = breathe }, 1.6f);
+                if (_soulPulses.TryGetValue(p.Id, out float sp))
+                {
+                    float t = sp / SoulPulseDuration;
+                    DrawArc(pos, halo + (1f - t) * 10f, 0, Mathf.Tau, 24, Ui.GoldGlow with { A = t * 0.9f }, 2.2f);
+                }
+                _soulScreen.Add((pos, p.Id));
+                hitR = Mathf.Max(hitR, halo);
+            }
             else if (Marked is not null && Marked.Contains(p.Id))
                 DrawArc(pos, r + 4.5f, 0, Mathf.Tau, 24, new Color("7fc8d8"), 2f);
-            _dots.Add((pos, Mathf.Max(r, 6f), p.Id));
+            _dots.Add((pos, hitR, p.Id));
         }
     }
 
@@ -567,7 +624,14 @@ public partial class MapView : Control
             float dist = pos.DistanceTo(d.pos);
             if (dist <= d.r + 3 && dist < bestD) { bestD = dist; bestId = d.id; }
         }
-        if (bestId >= 0) { PersonPicked?.Invoke(bestId); return; }
+        if (bestId >= 0)
+        {
+            // A watched soul's marker opens the lighter glimpse card; everyone else the inspector.
+            if (Souls is not null && Souls.Contains(bestId) && SoulPicked is not null)
+                SoulPicked(bestId, pos);
+            else PersonPicked?.Invoke(bestId);
+            return;
+        }
 
         int region = NearestRegion(pos);
         if (region >= 0) RegionPicked?.Invoke(region);

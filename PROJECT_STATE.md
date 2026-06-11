@@ -65,10 +65,26 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       gained/lost — measured from chapter start or follow, whichever later), echoes carded; every
       line links into catch-up; only the latest unread chapter is kept; the return chip also
       covers the recap. verify unchanged 884/699/567/706.
+- [x] Living Diorama V1 — watched souls made visible (viewer-only; Main.cs, MapView.cs): a
+      followed soul reads as a marked life in the diorama before death asks the player to mourn.
+      Map: "divine bookmark" — gold halo with a minimum findable screen size at fit zoom,
+      soft breathing pulse (alive cue), flare when a newly shown saga event names the soul,
+      gold-bordered ★-name tag at any zoom (overlap-skip); placement is still the existing
+      deterministic scatter, no new precision implied. Clicking the marker opens a living soul
+      glimpse — a small non-modal parchment card (never pauses, memorial always outranks it):
+      name/faction/leader-or-once-leader, alive·age·born, reputation band, children count,
+      "you last saw…" (real shown-event memory), last 3 recorded deeds as catch-up links;
+      thread / the record / unfollow buttons. Saga rows whose participants truly include a
+      watched soul carry a 4px gold side rule + tooltip note. Alive cues: guard-line tooltip
+      names up to 2 watched souls; inspector says "★ you are watching this soul".
+      Docs: Visual Storytelling Doctrine ("the sim should be seen before it is read") + per-
+      subject visibility audit (✅/◐/✎/⛭/✖) + Place Memory V1 spec (documented, not built) in
+      docs/VISUAL_STYLE.md. verify unchanged 884/699/567/706.
 - [ ] Later — followed regions (roadmap 4 in docs/TIME_AND_STORY_PACING.md); region-anchoring
       sim contract (would also let memorials and recaps name real places, and let war's-peace /
-      famine's-end close chapters); visual/UX pass (surface culture + gossip in the viewer);
-      echo packs; timeline scrubbing. ← NEXT
+      famine's-end close chapters); Place Memory V1; mythic glosses / entity links; relationship
+      constellation; local site/tableau visuals; memorial tableau upgrade; visual/UX pass
+      (surface culture + gossip in the viewer); echo packs; timeline scrubbing. ← NEXT
 
 ## Session log
 - [2026-06-07] Session: built M0→M2 + longevity pass (carrying capacity + perf refactor, proven
@@ -193,6 +209,24 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
   chip at Yr 25/50/…, auto-open on pause, link→catch-up→return loop, guard card outranking a
   queued recap, Your Threads with 41 births + 14→10 regions on a followed people. Sim untouched;
   verify green 884/699/567/706.
+
+- [2026-06-11] Session: Living Diorama V1 — watched souls made visible (viewer-only; Main.cs,
+  MapView.cs). Drew's lead-dev verdict after recaps: enough cards and text — the player must
+  witness a followed soul living in the diorama before the game asks them to mourn. Map presence:
+  the soul halo gained a minimum screen radius (findable at fit zoom where dots are 4px), a
+  breathing outer ring (sin on a wall-clock accumulator — O(followed) per frame), a flare via
+  `MapView.PulseSoul` when a displayed saga row truly names the soul, and a gold-bordered ★-name
+  tag drawn in the label layer with overlap-skip; soul hit radius widened to the halo. Clicking a
+  watched soul's dot routes to `SoulPicked` → the living soul glimpse: a small parchment card
+  positioned near the marker (clamped to the map area), non-modal, never touches `_running`;
+  every line is a real field (faction, IsLeader/EverLeader, age/born, reputation band, children
+  count, `_lastSeenEvent` memory, last-3 deeds one-shot scan — inspector cost class); closes
+  whenever an inspector, guard card, or recap opens (memorial precedence unchanged — guard
+  backdrop is also built later, so it draws above). Saga: rows with a watched-soul participant
+  get `BorderWidthLeft = 4` gold + tooltip prefix, computed O(participants) only when souls are
+  followed. Honesty: nothing new is invented — no homes, routines, or locations; the glimpse
+  states absence plainly ("nothing of them has crossed the saga…"). Sim untouched; verify green
+  884/699/567/706.
 
 ## Region Lens — data contracts still missing (design notes, not promises)
 The viewer-side lens is honest about these; each needs a deliberate sim-side milestone because all

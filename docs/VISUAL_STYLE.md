@@ -94,6 +94,7 @@ All UI styling routes through `godot/UiTheme.cs` (`Ui.*`). Components and their 
 | Buttons | `Ui.StyleButton(b, active, activeBg)` | Parchment face, gold when active, ember for the curse tool |
 | Event classes | `Ui.ClassOf(type)` | 22 event types → (label, color, glyph); the chronicle's icon language |
 | Soft dark map tag | `MapView.LabelTag` | Faction tags + hover tag — dark backing for text over open terrain (kept distinct from parchment pills on purpose: cloth-and-ink for peoples, parchment for places) |
+| Watched-soul mark | `MapView` soul halo + `SoulNameTag` | The divine bookmark: breathing gold halo (min findable size at fit zoom), saga-sighting flare, gold-bordered ★-name pill; clicking opens the living soul glimpse card (Main) |
 
 Composition rules:
 - Hierarchy through tone and border, never size jumps or drop-shadow stacks.
@@ -169,6 +170,101 @@ mono Godot editor and compare these states against the named reference:
    legible, tags not dominating the diorama.
 7. **Bottom docks** — three framed groups, toggles restyle (gold) correctly.
 
+## Visual Storytelling Doctrine — the sim should be seen before it is read
+
+The Living Diorama north star: a player looking at the map should begin to understand
+**who matters, what changed, where memory lives, and which lives are being watched**
+before opening a single text card. Cards, tooltips, catch-up, and replay exist to
+*explain visual facts the player has already noticed* — they must never be the only
+way the player learns the sim exists. When a sim truth has no visual voice, that is a
+named gap in the audit below, not a permanent arrangement.
+
+The vocabulary, per subject (status: ✅ shipped · ◐ partial · ✎ text-only · ⛭ modeled
+but invisible · ✖ not modeled, forbidden to render):
+
+**Souls / people**
+- ✅ Normal soul — faction-colored dot (women lightened), deterministic scatter inside
+  their people's lands (disclosed as presentation, not homes).
+- ✅ Watched soul — the **divine bookmark**: breathing warm-gold halo with a minimum
+  findable screen size at fit zoom, gold-bordered ★-name tag (overlap-skip), a flare
+  when a newly shown saga row truly names them, the living glimpse card on click.
+- ✅ Leader — larger dot + thin `LensGold` ring (distinct from the halo by weight and
+  steadiness: leader rings are thin and constant; the bookmark breathes).
+- ✅ Cursed — ember-colored dot.
+- ⛭ Elder / child / youth — age is real sim data but the dot doesn't show it.
+  Candidate future slice (honest: derived from `BirthYear`).
+- ⛭ Prophet — `IsProphet` is real but undrawn. Candidate glyph slice.
+- ✎ Dead / remembered soul — exists only in cards and the chronicle; grave markers
+  wait on Place Memory V1 + the event-anchoring sim contract.
+- ✎ Killer / victim — real event context (`KillerId`, `Murdered`, `Avenged`) told in
+  text only.
+- ✖ Omen-marked souls — no omen/prophecy-as-promise system; forbidden.
+
+**Peoples / factions**
+- ✅ Color identity — muted banner colors (cloth, never paint spills).
+- ✅ Banners/pennants on held regions; territory tint + ring; faction label tag with
+  population + leader name.
+- ◐ Leader presence — the leader's dot is ringed, but nothing links dot ↔ label
+  visually.
+- ◐ Faction follow attention — gold YOURS rows in the feed and the guard signal, but
+  the *map* shows nothing for a followed people. Gap.
+- ✎ Dominant faith / customs — real sim state, inspector text only.
+
+**Regions / places**
+- ✅ Wild (neutral, faint) vs held (tint + banner).
+- ✅ Place-kind identity — deterministic `PlaceSeeds` markers + parchment tags,
+  disclosed as viewer hints.
+- ◐ Contested — war exists but no per-region contested state; territory-change pulses
+  are the only voice. Partly a sim-contract question.
+- ✎ Quiet vs storied — anchored-tale counts live in the Region Lens text only.
+- ✖ Scarred by events — no persistent marks yet; Place Memory V1 (below).
+
+**Events**
+- ✅ Anchored events — expanding gold region pulse + feed row flash + dramatic
+  auto-slow + drama camera lean.
+- ◐ Pulses are anonymous (class color/glyph lives only on the feed chip) — known gap,
+  also flagged in the pacing doc ("pulses should carry identity").
+- ✅ Unanchored events — feed/cards only, honestly: no invented locations, ever.
+
+**Memory**
+- Temporary: pulses (~1.2 s), feed-row flash, the rolling saga window.
+- Persistent today: territory tint changes, leader rings moving, customs appearing in
+  text — all current-state, not scars.
+- ✖ Persistent event marks need true `Event.RegionId` anchors — see Place Memory V1.
+
+**Attention (the player's divine gaze, in rank order)**
+1. **Memorial** (followed soul's death) — dimmed world, ceremonial frame. Outranks all.
+2. **Guard card** — gold-bordered pause card.
+3. **Chapter recap** — queued chip, never interrupts a guard card.
+4. **Living glimpse / soul halo / saga side rule / pulses** — ambient, non-modal,
+   never pause, never compete with the above.
+- ✅ Followed soul — divine bookmark + glimpse + gold saga side rule.
+- ✅ Followed bloodline — cyan rings + gold YOURS rows (cool kin-mark vs the warm
+  soul-mark, deliberately distinct).
+- ◐ Followed people — feed + signal only (no map voice).
+- ✖ Followed region / prophecy — future; region is viewer-ready but quiet until the
+  anchoring contract, prophecy needs a sim system.
+
+## Place Memory V1 (next visual milestone — documented, NOT built)
+
+The first persistent-memory slice: **real anchored events leave subtle marks on the
+place where they happened.** Only events that truly carry `Event.RegionId` may mark a
+region; unanchored events cannot scar anything — no exceptions, no inference.
+
+| Anchored event | Mark (subtle, parchment-atlas language) |
+|---|---|
+| murder / death | small cairn / dark stain near the place marker |
+| war / battle | broken banner / scorch scar |
+| prophecy / omen | faint omen glyph — only if prophet events gain anchors |
+| founding / ritual | standing stone / ribbon / shrine mark |
+| plenty / famine / drought | land mood tint, aged off slowly |
+
+Constraints: marks age/fade deterministically (no RNG), capped per region (the oldest
+yields), drawn beneath labels, and the Region Lens lists the real events behind every
+mark. **Coverage caveat:** today only territory/culture/rumor events carry `RegionId`,
+so Place Memory V1 is mostly gated on the event-anchoring **sim contract**
+(PROJECT_STATE.md) — build the viewer slice against what's honestly anchored first.
+
 ## Sim-truth honesty contract (restated, binding)
 
 The viewer may *derive* presentation (place kinds, scatter positions, road kinks, island
@@ -200,7 +296,14 @@ was touched by accident — stop and investigate, never re-baseline silently.
    features, people-at-site, and settlement populations — everything in the
    "forbidden" list above graduates to "honest" only through this gate.
 
-## Current viewer audit (2026-06-10, post-foundation-slice)
+## Current viewer audit (2026-06-11, post-Living-Diorama-V1)
+
+Per-subject visibility statuses now live in the Visual Storytelling Doctrine above
+(✅/◐/✎/⛭/✖). Headline reading: followed souls are now fully visible in the diorama;
+bloodlines visible (cyan); factions and regions are identity-visible but their *state
+changes* are still text-first; events pulse but anonymously; persistent memory does
+not exist on the map yet (Place Memory V1, gated on event anchoring). The notes below
+predate the diorama pass but remain accurate.
 
 **Already strong:** centralized `UiTheme` (almost no hardcoded styling left in Main.cs — a
 handful of pre-existing inline colors remain, candidates for roadmap item 1 cleanup); parchment

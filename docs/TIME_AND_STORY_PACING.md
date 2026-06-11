@@ -268,6 +268,13 @@ Shipped: catch-up modal (Quick beats / Full thread), region anchors shown when k
    arc-closure triggers (echo carding, followed-soul memorial), queued-chip delivery.
    Subsumes the deferred "era recap." Remaining: war's-peace / famine's-end closures
    (**[sim contract]**).
+   **Living Diorama V1 — SHIPPED:** a followed soul is present in the world *before* the
+   memorial — breathing gold halo with a minimum findable size at fit zoom + ★-name tag on
+   the map, a flare when a shown saga row names them, a non-modal living soul glimpse card
+   (real fields only, never pauses, memorial outranks it), gold side rule on saga rows that
+   truly include a watched soul. Remaining presence work: Place Memory V1, mythic glosses /
+   entity links, relationship constellation, local site tableaus, memorial tableau upgrade —
+   the place-bound pieces wait on the region-anchoring **[sim contract]**.
 4. **Followed regions (viewer-only):** Follow on the Region Lens; YOURS treatment for
    region-anchored events; honest "quiet until anchored" copy.
 5. **Drama polish:** speed-scaled beats, identity-carrying pulses, camera dwell queue,

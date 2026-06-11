@@ -142,6 +142,18 @@ public partial class Main : Node
     private readonly System.Collections.Generic.Dictionary<int, int> _chapterRepBase = new();      // followed soul -> reputation when the chapter (or the follow) began
     private readonly System.Collections.Generic.Dictionary<string, int> _chapterRegionBase = new();// followed people -> region count when the chapter (or the follow) began
     private readonly List<(string Archetype, string Label, int Anchor)> _chapterEchoes = new();
+    // Living soul glimpse (Living Diorama V1): a small parchment card for a watched soul,
+    // opened by clicking their map marker. Non-modal and never pauses — the memorial always
+    // outranks it (guard card + backdrop are built later, so they draw above).
+    private Panel _glimpsePanel = null!;
+    private Label _glimpseTitle = null!;
+    private Label _glimpseSub = null!;
+    private RichTextLabel _glimpseBody = null!;
+    private Button _glimpseThreadBtn = null!;
+    private int _glimpsePid = -1;
+    private int _glimpseThreadEvent = -1;
+    private static readonly Vector2 GlimpseSize = new(280, 270);
+
     private RecapSnapshot? _queuedRecap;
     private Panel _recapPanel = null!;
     private Label _recapSub = null!;
@@ -242,7 +254,7 @@ public partial class Main : Node
 
         var root = _root;
 
-        _map = new MapView { PersonPicked = OnPersonPicked, FactionPicked = OnFactionPicked, RegionPicked = OnRegionPicked };
+        _map = new MapView { PersonPicked = OnPersonPicked, SoulPicked = OnSoulGlimpse, FactionPicked = OnFactionPicked, RegionPicked = OnRegionPicked };
         root.AddChild(_map);
         _map.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         _map.OffsetRight = -FeedWidth;
@@ -253,6 +265,7 @@ public partial class Main : Node
         BuildYearCard(root);
         BuildInspector(root);
         BuildCatchup(root);
+        BuildGlimpse(root);
         BuildRecap(root);
         BuildGuardCard(root);   // last: the guard card (and its return chip) sits above everything
     }
@@ -619,6 +632,146 @@ public partial class Main : Node
         scroll.AddChild(_catchup);
     }
 
+    // ------------------------------------------------------- living soul glimpse
+
+    private void BuildGlimpse(Control root)
+    {
+        _glimpsePanel = new Panel { Visible = false, Size = GlimpseSize };
+        root.AddChild(_glimpsePanel);
+        var box = Ui.PanelBox();
+        box.BorderColor = Ui.Gold;
+        _glimpsePanel.AddThemeStyleboxOverride("panel", box);
+
+        var margin = new MarginContainer();
+        margin.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        foreach (var s in new[] { "left", "right", "top", "bottom" })
+            margin.AddThemeConstantOverride($"margin_{s}", 12);
+        _glimpsePanel.AddChild(margin);
+
+        var vb = new VBoxContainer();
+        vb.AddThemeConstantOverride("separation", 4);
+        margin.AddChild(vb);
+
+        var hdr = new HBoxContainer();
+        vb.AddChild(hdr);
+        var cap = Ui.SectionLabel("★ a soul you watch");
+        cap.AddThemeColorOverride("font_color", Ui.Gold);
+        cap.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        hdr.AddChild(cap);
+        var close = new Button { Text = "✕", CustomMinimumSize = new Vector2(24, 24) };
+        Ui.StyleButton(close);
+        close.Pressed += () => _glimpsePanel.Visible = false;
+        hdr.AddChild(close);
+
+        _glimpseTitle = new Label { Text = "" };
+        _glimpseTitle.AddThemeFontOverride("font", Ui.SerifBold);
+        _glimpseTitle.AddThemeFontSizeOverride("font_size", 18);
+        _glimpseTitle.AddThemeColorOverride("font_color", Ui.InkDeep);
+        vb.AddChild(_glimpseTitle);
+        _glimpseSub = new Label { Text = "" };
+        _glimpseSub.AddThemeFontSizeOverride("font_size", 12);
+        _glimpseSub.AddThemeColorOverride("font_color", Ui.FadedSub);
+        vb.AddChild(_glimpseSub);
+
+        var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
+        vb.AddChild(scroll);
+        _glimpseBody = new RichTextLabel
+        {
+            BbcodeEnabled = true,
+            FitContent = true,
+            ScrollActive = false,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(232, 0),
+        };
+        _glimpseBody.AddThemeFontSizeOverride("normal_font_size", 13);
+        _glimpseBody.AddThemeColorOverride("default_color", Ui.Ink);
+        _glimpseBody.AddThemeFontOverride("bold_font", Ui.SerifBold);
+        _glimpseBody.MetaClicked += meta => { _glimpsePanel.Visible = false; OnInspectorLink(meta.AsString()); };
+        scroll.AddChild(_glimpseBody);
+
+        var btns = new HBoxContainer();
+        btns.AddThemeConstantOverride("separation", 6);
+        vb.AddChild(btns);
+        _glimpseThreadBtn = new Button { Text = "thread", TooltipText = "How We Got Here, from their latest tale" };
+        Ui.StyleButton(_glimpseThreadBtn);
+        _glimpseThreadBtn.Pressed += () =>
+        {
+            if (_glimpseThreadEvent < 0) return;
+            _glimpsePanel.Visible = false;
+            OpenCatchup(_glimpseThreadEvent);
+        };
+        btns.AddChild(_glimpseThreadBtn);
+        var record = new Button { Text = "the record", TooltipText = "Open the full inspector" };
+        Ui.StyleButton(record);
+        record.Pressed += () =>
+        {
+            if (_glimpsePid < 0) return;
+            _glimpsePanel.Visible = false;
+            OnPersonPicked(_glimpsePid);
+        };
+        btns.AddChild(record);
+        var unfollow = new Button { Text = "★ unfollow" };
+        Ui.StyleButton(unfollow);
+        unfollow.Pressed += () =>
+        {
+            if (_glimpsePid >= 0 && _followedSouls.Remove(_glimpsePid)) _map.QueueRedraw();
+            _glimpsePanel.Visible = false;
+        };
+        btns.AddChild(unfollow);
+    }
+
+    // The glimpse answers, from real fields only: who is this, are they alive, whose are
+    // they, what has the saga shown me of them. The deeds list is a one-shot scan on click —
+    // inspector cost class, never per-tick.
+    private void OnSoulGlimpse(int pid, Vector2 mapPos)
+    {
+        if (!_world.People.TryGetValue(pid, out var p)) return;
+        _glimpsePid = pid;
+        var fac = _world.Factions[p.FactionId];
+        _glimpseTitle.Text = p.Name;
+        _glimpseSub.Text = $"of {fac.Name}"
+            + (p.IsLeader ? " · leader" : p.EverLeader ? " · once their leader" : "");
+
+        var sb = new StringBuilder();
+        sb.AppendLine(p.Alive
+            ? $"alive · age {p.Age(_world.Year)} · born Yr {p.BirthYear}"
+            : $"died Yr {p.DeathYear}");
+        if (ReputationDisplay(p.Reputation) is (string repText, string repColor))
+            sb.AppendLine($"[color=#{repColor}]{repText}[/color]");
+        if (p.Children.Count > 0)
+            sb.AppendLine($"{p.Children.Count} {(p.Children.Count == 1 ? "child" : "children")}");
+        sb.AppendLine();
+        if (_lastSeenEvent.TryGetValue(pid, out var lsId))
+        {
+            var ls = _world.Chronicle.Get(lsId);
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]you last saw them: Yr {ls.Year} —[/color] {Link("e:" + ls.Id, ls.Text)}");
+        }
+        else
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]nothing of them has crossed the saga since you began to follow[/color]");
+
+        var deeds = _world.Chronicle.Events.Where(e => e.Participants.Contains(pid)).TakeLast(3).ToList();
+        _glimpseThreadEvent = deeds.Count > 0 ? deeds[^1].Id : -1;
+        _glimpseThreadBtn.Visible = _glimpseThreadEvent >= 0;
+        if (deeds.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine(SectionCap("Their recent deeds"));
+            foreach (var e in deeds)
+            {
+                var cls = Ui.ClassOf(e.Type);
+                sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color] [color=#{Ui.Hex(cls.Color)}]{cls.Glyph}[/color] {Link("e:" + e.Id, e.Text)}");
+            }
+        }
+        _glimpseBody.Text = sb.ToString();
+
+        // Near the marker, clamped to the map area so the card never covers the feed or dock.
+        var pos = mapPos + new Vector2(18, -GlimpseSize.Y / 2f);
+        pos.X = Mathf.Clamp(pos.X, 8, Mathf.Max(8, _map.Size.X - GlimpseSize.X - 8));
+        pos.Y = Mathf.Clamp(pos.Y, 8, Mathf.Max(8, _map.Size.Y - GlimpseSize.Y - 8));
+        _glimpsePanel.Position = pos;
+        _glimpsePanel.Visible = true;
+    }
+
     // -------------------------------------------------------------- live feed
 
     // Returns true if any *notable* event (high importance, or yours) was surfaced this call —
@@ -656,10 +809,20 @@ public partial class Main : Node
             MaybeArmGuard(e, yours, imp);
             if (imp < threshold) continue;
 
-            var row = AddFeedRow(e, imp, yours);
+            // A specifically watched soul in the tale earns the row a gold side rule and
+            // flares their map halo — only when they truly are a participant.
+            bool soul = false;
+            if (_followedSouls.Count > 0)
+                foreach (var pid in e.Participants)
+                    if (_followedSouls.Contains(pid)) { soul = true; break; }
+
+            var row = AddFeedRow(e, imp, yours, soul);
             // Last-seen memory records only what was actually shown (this row, or a guard
             // card — see ShowGuardCard), so "you last saw…" never cites an undisplayed event.
             if (yours && row is not null) RememberSeen(e);
+            if (soul && row is not null)
+                foreach (var pid in e.Participants)
+                    if (_followedSouls.Contains(pid)) _map.PulseSoul(pid);
             // Yours always gets the spotlight; otherwise a high importance bar (well above
             // chattiness) catches divine/war/founding and ignores routine births/deaths.
             if (row is not null && (yours || imp >= NotableBar))
@@ -669,6 +832,11 @@ public partial class Main : Node
                 if (e.RegionId is int rid) _map.PulseRegion(rid);
             }
         }
+        // An open glimpse is a snapshot; if its soul died this tick (e.g. guard off, no
+        // memorial to close it), retire it rather than keep asserting "alive". O(1).
+        if (_glimpsePanel.Visible && _glimpsePid >= 0
+            && _world.People.TryGetValue(_glimpsePid, out var gp) && !gp.Alive)
+            _glimpsePanel.Visible = false;
         _lastEventCount = events.Count;
         return notableSeen;
     }
@@ -696,16 +864,18 @@ public partial class Main : Node
 
     // One Saga row, per the handoff anatomy: event-class chip → small-caps label + faded year
     // → one-to-two-line body. Hover warms the border; the whole row opens "How We Got Here".
-    private Control BuildFeedRowControl(Event e, int imp, bool yours)
+    private Control BuildFeedRowControl(Event e, int imp, bool yours, bool soul)
     {
         var cls = Ui.ClassOf(e.Type);
         var row = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Stop };
         var normal = Ui.RowBox(yours ? Ui.RowBgWarm : Ui.RowBg, yours ? Ui.Gold : Ui.RowBorder);
-        var hover = Ui.RowBox(Ui.RowBgWarm, Ui.RowBorderHover);
+        var hover = Ui.RowBox(Ui.RowBgWarm, soul ? Ui.Gold : Ui.RowBorderHover);
+        // A watched soul's tale carries a gold side rule — quieter than a card, louder than gold trim.
+        if (soul) { normal.BorderWidthLeft = 4; hover.BorderWidthLeft = 4; }
         row.AddThemeStyleboxOverride("panel", normal);
         row.MouseEntered += () => row.AddThemeStyleboxOverride("panel", hover);
         row.MouseExited += () => row.AddThemeStyleboxOverride("panel", normal);
-        row.TooltipText = $"weight {imp} — click: how we got here";
+        row.TooltipText = (soul ? "a watched soul is in this tale — " : "") + $"weight {imp} — click: how we got here";
         int eventId = e.Id;
         row.GuiInput += ev =>
         {
@@ -767,7 +937,7 @@ public partial class Main : Node
         return row;
     }
 
-    private Control? AddFeedRow(Event e, int imp, bool yours)
+    private Control? AddFeedRow(Event e, int imp, bool yours, bool soul = false)
     {
         // YOURS cap: a +70-boosted bloodline can otherwise flood the window. Non-YOURS rows
         // always get in (they already cleared the threshold). A YOURS row past the cap displaces
@@ -792,7 +962,7 @@ public partial class Main : Node
             }
         }
 
-        var row = BuildFeedRowControl(e, imp, yours);
+        var row = BuildFeedRowControl(e, imp, yours, soul);
         _feedList.AddChild(row);
         _feedList.MoveChild(row, 0);   // newest on top
         _feedVis.Insert(0, new FeedVisRow { Node = row, Yours = yours, Weight = imp });
@@ -974,6 +1144,7 @@ public partial class Main : Node
         _pendingGuardPrevSeen = -1;
 
         _running = false;
+        _glimpsePanel.Visible = false;   // the moment outranks a living glimpse
         _guardEventId = eid;
         _guardWasMemorial = memorial;
         _guardReturnable = true;
@@ -1244,6 +1415,7 @@ public partial class Main : Node
         if (_queuedRecap is not RecapSnapshot snap) return;
         _queuedRecap = null;
         _running = false;
+        _glimpsePanel.Visible = false;
         _guardReturnable = true;
         _returnIsRecap = true;
         _guardReturnBtn.Text = "↩ Return to the chapter";
@@ -1419,6 +1591,7 @@ public partial class Main : Node
 
     private void OpenCatchup(int eventId)
     {
+        _glimpsePanel.Visible = false;   // the glimpse z-orders above the catch-up card
         _catchupEventId = eventId;
         _catchupQuick = true;
         _catchupPanel.Visible = true;
@@ -1538,6 +1711,7 @@ public partial class Main : Node
         _selectedFactionId = null;
         _map.SelectedFactionId = null;
         _map.SelectedRegionId = -1;
+        _glimpsePanel.Visible = false;
         _lensFactionBtn.Visible = false;
         _curseBtn.Visible = p.Alive && !p.Cursed;
         bool soulFollowed = _followedSouls.Contains(id);
@@ -1558,6 +1732,7 @@ public partial class Main : Node
 
         var sb = new StringBuilder();
         if (p.Cursed) sb.AppendLine($"[color=#{Ui.Hex(Ui.Ember)}][b]✳ CURSED[/b] — a god's mark lies on this bloodline[/color]\n");
+        if (soulFollowed) sb.AppendLine($"[color=#8a5d12][b]★ you are watching this soul[/b][/color]\n");
         if (ReputationDisplay(p.Reputation) is (string repText, string repColor))
         {
             sb.AppendLine(SectionCap("Reputation"));
@@ -1615,6 +1790,7 @@ public partial class Main : Node
         _selectedFactionId = null;
         _map.SelectedFactionId = null;
         _map.SelectedRegionId = regionId;
+        _glimpsePanel.Visible = false;
         _curseBtn.Visible = false;
         _followBtn.Visible = false;
         _soulBtn.Visible = false;
@@ -1668,6 +1844,7 @@ public partial class Main : Node
         _selectedFactionId = fid;
         _map.SelectedFactionId = fid;
         _map.SelectedRegionId = -1;
+        _glimpsePanel.Visible = false;
         _lensFactionBtn.Visible = false;
         _curseBtn.Visible = false;
         _soulBtn.Visible = false;
@@ -1743,6 +1920,17 @@ public partial class Main : Node
             if (_seedPeople.Count > 0) parts.Add($"{_seedPeople.Count} bloodline{(_seedPeople.Count == 1 ? "" : "s")}");
             if (_markedFactions.Count > 0) parts.Add($"{_markedFactions.Count} people{(_markedFactions.Count == 1 ? "" : "s")}");
             _guardLabel.Text = "⛨ guard watches " + string.Join(" · ", parts);
+            // The tooltip names up to two watched souls, so a hover recalls who you are
+            // waiting on. Sorted by id for a stable order; souls are always few.
+            if (_followedSouls.Count > 0)
+            {
+                var names = _followedSouls.OrderBy(i => i).Take(2)
+                    .Select(i => _world.People.TryGetValue(i, out var sp) ? sp.Name : null)
+                    .Where(n => n is not null);
+                _guardLabel.TooltipText = "watched souls: " + string.Join(", ", names)
+                    + (_followedSouls.Count > 2 ? $" — and {_followedSouls.Count - 2} more" : "");
+            }
+            else _guardLabel.TooltipText = "";
         }
         _playBtn.Text = _running ? "❚❚ Pause" : "▶ Play";
         _chatLabel.Text = $"chattiness ≥ {(int)_chatSlider.Value}";
