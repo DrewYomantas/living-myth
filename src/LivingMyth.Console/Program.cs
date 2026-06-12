@@ -20,8 +20,9 @@ switch (cmd)
     case "verify": VerifyCmd(); break;
     case "homes": HomesCmd(Years(120)); break;
     case "story": StoryCmd(Years(120)); break;
+    case "canon": CanonCmd(); break;
     default:
-        Console.WriteLine("commands: run | divergence | surface | verify | homes | story");
+        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon");
         break;
 }
 return;
@@ -486,6 +487,145 @@ void StoryCmd(int years)
     }
     Console.WriteLine(failures == 0 ? "\nSTORY GRAMMAR HOLDS." : $"\n{failures} SEED(S) BROKE THE GRAMMAR.");
     Environment.Exit(failures == 0 ? 0 : 1);
+}
+
+// -------------------------------------------------------------------------- canon
+
+// Proof gate for the player-canon contract (PROJECT_STATE.md "Truth model V1"): notes
+// roundtrip through save/load, attach to the right entity keys, vanish when emptied,
+// go dormant (not stale) when their entity hasn't been re-simulated yet, quarantine on
+// identity drift instead of misattaching, never destroy an unreadable file — and the
+// sim provably cannot see the store at all.
+void CanonCmd()
+{
+    Console.WriteLine("Canon contract gate: player tellings persist, attach honestly, and the sim never reads them.");
+    var bad = new List<string>();
+    void Check(string name, bool ok, string? detail = null)
+    {
+        Console.WriteLine($"  {name}: {(ok ? "OK" : "FAIL")}{(ok || detail is null ? "" : "  " + detail)}");
+        if (!ok) bad.Add(name);
+    }
+
+    string path = Path.Combine(Path.GetTempPath(), $"lm_canon_gate_{Guid.NewGuid():N}.json");
+    try
+    {
+        var (cfg, names) = Load();
+        var w = new World(7, cfg, names); w.Run(120);          // the world notes are written against
+        var (cfgB, namesB) = Load();
+        var wOther = new World(1, cfgB, namesB); wOther.Run(120);   // a different world — identity must not carry
+        var (cfgC, namesC) = Load();
+        var wYoung = new World(7, cfgC, namesC); wYoung.Run(10);    // same world, earlier — notes must lie dormant
+
+        // 1. Missing file → empty writable store, no warning, and no file conjured.
+        var (s0, warn0) = PlayerCanonStore.LoadOrNew(path, 7);
+        Check("load-missing", s0.Count == 0 && warn0 is null && !File.Exists(path) && !s0.ReadOnly);
+
+        // 2. Roundtrip: write one of each note shape, save, reload, deep-compare.
+        var person = w.People.Values.Where(p => !p.Alive && p.EverLeader).OrderBy(p => p.Id).Last();
+        var ev = w.Chronicle.Events.Last(e => e.Type == "prophet");   // late enough to be unborn in a 10-yr run
+        string fid = w.Config.Factions[0].Id;
+        s0.Upsert($"p:{person.Id}", CanonNoteType.Telling, "She counted the gulls each dawn.", w, "2026-06-11T00:00:01Z");
+        s0.Upsert($"p:{person.Id}", CanonNoteType.Inscription, "The hills keep her name.", w, "2026-06-11T00:00:02Z");
+        s0.Upsert($"e:{ev.Id}", CanonNoteType.ChroniclerNote, "Some say a drowned bell rang that night.", w, "2026-06-11T00:00:03Z");
+        s0.Upsert("r:3", CanonNoteType.PlaceLegend, "No boats beach here after dusk.", w, "2026-06-11T00:00:04Z");
+        s0.Upsert($"f:{fid}", CanonNoteType.PeopleSay, "They bury their dead facing the sea.", w, "2026-06-11T00:00:05Z");
+        s0.Save();
+        var (s1, warn1) = PlayerCanonStore.LoadOrNew(path, 7);
+        bool same = warn1 is null && s1.Count == s0.Count;
+        foreach (var key in new[] { ($"p:{person.Id}", CanonNoteType.Telling), ($"p:{person.Id}", CanonNoteType.Inscription),
+                                    ($"e:{ev.Id}", CanonNoteType.ChroniclerNote), ("r:3", CanonNoteType.PlaceLegend),
+                                    ($"f:{fid}", CanonNoteType.PeopleSay) })
+        {
+            var a = s0.Get(key.Item1, key.Item2);
+            var b = s1.Get(key.Item1, key.Item2);
+            same &= a is not null && b is not null && a.Text == b.Text && a.CreatedYear == b.CreatedYear
+                 && a.UpdatedUtc == b.UpdatedUtc && a.Source == b.Source
+                 && a.Snapshot.Count == b.Snapshot.Count
+                 && a.Snapshot.All(kv => b.Snapshot.TryGetValue(kv.Key, out var v) && v == kv.Value);
+        }
+        Check("roundtrip", same);
+
+        // 3. Empty text deletes; the deletion survives save/reload.
+        s1.Upsert("r:3", CanonNoteType.PlaceLegend, "   \n ", w);
+        s1.Save();
+        var (s2, _) = PlayerCanonStore.LoadOrNew(path, 7);
+        Check("empty-deletes", s1.Get("r:3", CanonNoteType.PlaceLegend) is null
+                            && s2.Get("r:3", CanonNoteType.PlaceLegend) is null);
+
+        // 4. Dormant, never stale: against the same seed not yet re-simulated that far,
+        //    notes on a later-born soul and a later event wait — they are not quarantined.
+        var noteP = s2.Get($"p:{person.Id}", CanonNoteType.Telling)!;
+        var noteE = s2.Get($"e:{ev.Id}", CanonNoteType.ChroniclerNote)!;
+        bool dormantP = person.Id >= wYoung.People.Count
+            ? s2.StateOf(noteP, wYoung) == CanonNoteState.Dormant
+            : true;   // person already existed by year 10 — dormancy not testable on this id
+        Check("dormant", dormantP
+            && ev.Id >= wYoung.Chronicle.Events.Count
+            && s2.StateOf(noteE, wYoung) == CanonNoteState.Dormant
+            && s2.StateOf(noteP, w) == CanonNoteState.Active
+            && s2.StateOf(noteE, w) == CanonNoteState.Active);
+
+        // 5. Quarantine on identity drift: a tampered snapshot (the stand-in for sim-build
+        //    drift) never renders against the wrong entity — and never deletes the note.
+        //    Cross-world, the same ids must never read Active either.
+        var probeEv = w.Chronicle.Events.First(e => e.Type == "war");
+        s2.Upsert($"e:{probeEv.Id}", CanonNoteType.ChroniclerNote, "Probe.", w, "2026-06-11T00:00:06Z");
+        var probe = s2.Get($"e:{probeEv.Id}", CanonNoteType.ChroniclerNote)!;
+        probe.Snapshot["text"] = "a different telling of this event";
+        bool quarantined = s2.StateOf(probe, w) == CanonNoteState.Quarantined;
+        var stP = s2.StateOf(noteP, wOther);
+        var stE = s2.StateOf(noteE, wOther);
+        s2.Save();
+        var (s3, _) = PlayerCanonStore.LoadOrNew(path, 7);
+        Check("quarantine", quarantined && stP != CanonNoteState.Active && stE != CanonNoteState.Active
+                          && s3.Get($"e:{probeEv.Id}", CanonNoteType.ChroniclerNote) is not null,
+              $"probe={s2.StateOf(probe, w)} person={stP} event={stE}");
+
+        // 6. Corrupt file: empty read-only store + warning; the bad bytes stay untouched.
+        File.WriteAllText(path, "{ this is not json");
+        var (sBad, warnBad) = PlayerCanonStore.LoadOrNew(path, 7);
+        bool upsertThrew = false;
+        try { sBad.Upsert("r:3", CanonNoteType.PlaceLegend, "x", w); }
+        catch (InvalidOperationException) { upsertThrew = true; }
+        Check("corrupt-file", sBad.Count == 0 && warnBad is not null && sBad.ReadOnly && !sBad.FutureSchema
+                           && upsertThrew && File.ReadAllText(path) == "{ this is not json");
+
+        // 7. Future schema: preserved untouched, read-only, flagged as from-the-future.
+        File.WriteAllText(path, "{\"schema_version\": 99, \"seed\": 7, \"notes\": []}");
+        var (sFut, warnFut) = PlayerCanonStore.LoadOrNew(path, 7);
+        Check("future-schema", sFut.Count == 0 && warnFut is not null && sFut.ReadOnly && sFut.FutureSchema);
+
+        // 8. Type↔key contract: a telling cannot attach to a place.
+        bool threw = false;
+        try { s2.Upsert("r:3", CanonNoteType.Telling, "wrong home", w); }
+        catch (ArgumentException) { threw = true; }
+        Check("type-key-contract", threw);
+
+        // 9. Sim-blind, by reflection: no sim type holds a canon-typed member anywhere.
+        var canonTypes = new[] { typeof(PlayerCanonStore), typeof(CanonNote), typeof(CanonFile) };
+        var simTypes = new[] { typeof(World), typeof(Chronicle), typeof(Event), typeof(Person),
+                               typeof(Faction), typeof(Religion), typeof(Region), typeof(Rng) };
+        bool Touches(Type t) => canonTypes.Contains(t)
+            || (t.IsGenericType && t.GetGenericArguments().Any(Touches));
+        const System.Reflection.BindingFlags all =
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic |
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static;
+        bool blind = simTypes.All(t =>
+            t.GetFields(all).All(f => !Touches(f.FieldType)) &&
+            t.GetProperties(all).All(p => !Touches(p.PropertyType)));
+        // …and by behavior: a run with a populated store in scope is byte-identical.
+        var (cfg2, names2) = Load();
+        var w2 = new World(7, cfg2, names2); w2.Run(120);
+        Check("sim-blind", blind && w.Chronicle.Render() == w2.Chronicle.Render());
+    }
+    finally
+    {
+        if (File.Exists(path)) File.Delete(path);
+        if (File.Exists(path + ".tmp")) File.Delete(path + ".tmp");
+    }
+
+    Console.WriteLine(bad.Count == 0 ? "\nCANON CONTRACT HOLDS." : $"\n{bad.Count} CHECK(S) BROKE THE CONTRACT.");
+    Environment.Exit(bad.Count == 0 ? 0 : 1);
 }
 
 // ------------------------------------------------------------------------- verify
