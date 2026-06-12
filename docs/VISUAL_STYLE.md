@@ -65,8 +65,10 @@ Each image mixes three kinds of content. Read them with this discipline:
 - Year + souls + tales card (top-left) — `World.Year`, `LivingCount`, chronicle count.
 - The Saga feed with event-class chips, small-caps category labels, year stamps.
 - Region names (`Region.Name`), terrain types, holders, adjacency — sim truth.
-- Place-kind tags ("sacred grove", "hill fort") — deterministic viewer hints
-  (`PlaceSeeds`), already disclosed as such in the Region Lens.
+- Place tags on local sites ("sacred grove", "hill fort") — REAL places since Sites V1
+  (2026-06-12): the sim's deterministic site read-model (`Sites.cs`), each a named,
+  typed, terrain-honest position on the land. The old `PlaceSeeds` viewer hints are
+  retired from the map.
 - Inspect / Follow / Curse tools; speed ladder; drama toggle.
 - Catch-up causal threads ("How We Got Here" text view) — real `Event.Causes` chains.
 
@@ -77,8 +79,8 @@ Each image mixes three kinds of content. Read them with this discipline:
   scrubber (real events + cause-links only; replay is a renderer for the chronicle).
 - A named world ("The Mossenwild") — needs a deliberate world-naming pass (authored
   name pools, deterministic), not faked before that.
-- Site/feature lists, settlement populations, regional resources — need sim contracts
-  (see PROJECT_STATE.md "Region Lens — data contracts still missing").
+- Settlement populations, named buildings/features, regional resources — still need sim
+  contracts (site LISTS shipped with Sites V1; what stands AT a site did not).
 
 **Forbidden to render until truly modeled (the honesty contract):**
 - Resource counts (stone/wood/grain/iron/herbs) — no economy at that granularity.
@@ -100,8 +102,8 @@ The four scales from `DESIGN.md`, with current status:
 2. **Region Lens** — SHIPPED as inspector + gold ring + always-on parchment tag for the
    selected region. Future: V3 gazetteer card, then local terrain once region polygons
    exist.
-3. **Local / site** — NOT BUILT. Blocked on the settlement/site sim contract. Do not
-   fake it.
+3. **Local / site** — DATA SHIPPED (Sites V1: real sites, markers, tags, Site Cards);
+   the immersive site-scale VIEW is still not built. Do not fake what stands at a site.
 4. **Chronicle Replay** — text-only today (catch-up modal). The visual path is a major
    future feature; prototype only with real events and cause-links.
 
@@ -239,8 +241,8 @@ but invisible · ✖ not modeled, forbidden to render):
 
 **Regions / places**
 - ✅ Wild (neutral, faint) vs held (tint + banner).
-- ✅ Place-kind identity — deterministic `PlaceSeeds` markers + parchment tags,
-  disclosed as viewer hints.
+- ✅ Place identity — Sites V1: real named sites with terrain-honest types, marker
+  silhouettes, zoom-gated name tags, Site Cards (no longer viewer hints).
 - ◐ Contested — war exists but no per-region contested state; territory-change pulses
   are the only voice. Partly a sim-contract question.
 - ✎ Quiet vs storied — anchored-tale counts live in the Region Lens text only.
@@ -356,10 +358,10 @@ Three binding properties:
 MapView renders the surface as one nearest-filtered pixel texture (2 texels per cell,
 hash speckle, two-tone forest canopy, elevation shading, restrained banner-cloth
 territory wash at 0.13) rebuilt **only** when `Surface.Version` bumps or territory
-changes hands — never per frame. Retired: the island polygon, the adjacency web, and the
-flat region-circle tint (the old "abstract circles as dominant map language"). Held
-places now read as small hut clusters (1–2 satellite huts at stable hash angles —
-viewer identity only; sim sites remain a future contract).
+changes hands — never per frame. Retired: the island polygon, the adjacency web, the
+flat region-circle tint (the old "abstract circles as dominant map language"), and —
+since Sites V1 — the `PlaceSeeds` hint markers/hut clusters: every structure on the map
+is now a real site from the sim's read-model.
 
 Terrain palette (warm, per DESIGN.md guardrails): forest `3f5230`/`36482a` two-tone,
 plains `5d5e38`, highland `6a665a`, wetland `495843`, river/lake `3a6a74`, coast sand
@@ -558,12 +560,34 @@ was touched by accident — stop and investigate, never re-baseline silently.
 5. **Terrain Geometry / Diorama Exploration** — viewer-side region polygons (Voronoi
    or authored bands) so the atlas reads as landforms; gateway to diorama rendering.
    Viewer-only, deterministic from seed.
-6. **Site/Settlement Data Contract** — sim-side: 3–7 deterministic sites per region,
-   broader `Event.RegionId` coverage (see PROJECT_STATE.md). (`Person.HomeRegionId`
-   shipped 2026-06-11 and proved baseline-safe — not every sim contract moves verify.)
-   **Sites and event coverage likely move the verify baseline; deliberate sim milestone.** Unlocks honest buildings,
-   features, people-at-site, and settlement populations — everything in the
-   "forbidden" list above graduates to "honest" only through this gate.
+6. **Site/Settlement Data Contract** — ◐ FIRST HALF SHIPPED (Sites V1, 2026-06-12):
+   3–7 deterministic, terrain-honest sites per region as a baseline-inert read-model
+   (pure hashes off the pristine surface, never read by the tick — verify did not
+   move), rendered as markers/tags/Site Cards/Region-Lens place lists. STILL FUTURE:
+   `Event.SiteId` (deliberately deferred — the `sites` gate asserts the field is
+   absent), people-at-site, settlement populations, buildings/features. Those need
+   the tick to know sites — a deliberate baseline-moving milestone; everything in the
+   "forbidden" list above graduates to "honest" only through that gate.
+
+### Sites V1 surface (binding, as built 2026-06-12)
+
+What a site may claim, and the map/card payoff for each:
+
+| Claim | Source of truth | Surface |
+|---|---|---|
+| name, type, seat-ness | `SiteIndex` (deterministic at world seed) | marker silhouette + zoom-gated name tag (name 11 / type sub 9), Region Lens "Places of this land" rows, Site Card title |
+| position | a real surface cell inside its own region | the marker stands on that cell; clicks hit it before the land |
+| ground it stands on | `Surface.TerrainAt(cell)` | Site Card "stands on {terrain} ground" |
+| holder | DERIVED live from the region's `ControllingFactionId` | seat banner on the map; "held, with all {region}, by {people}" on the card |
+| tales | NONE of its own — events anchor to LANDS | card shows the region's anchored tales labeled as the land's, or "no recorded tales here yet" |
+
+Forbidden on any site surface until modeled: population, named dwellers,
+buildings/stores, daily life, loyalty/defense values, site-anchored events. The Site
+Card says these plainly under "Not yet in the record". Site name tags appear at
+`SiteTagZoom` (2.4) and always for the inspected land's sites; overlap-skip applies.
+Roads run seat-to-seat between same-faction neighbours; fainter local paths run from
+each seat to its region's other sites. The inspected site gets a small `LensGold` ring
+(beside, never replacing, the region lens ring).
 
 ## Current viewer audit (2026-06-11, post-Living-Diorama-V1)
 

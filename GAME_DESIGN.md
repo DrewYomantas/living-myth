@@ -166,17 +166,20 @@ Do not jump straight into a giant settlement sim. Build this in slices.
    - Design the region view, local feed, site inspector, transition language, local-time UI, and replay concept.
    - Must be Godot-implementable using shapes, text, tints, icons, panels, and simple pulses.
 
-3. **Region Lens V1: visual/prototype only**
-   - Deterministically generate 3–7 local sites per existing region.
-   - Show site nodes in a deeper region view.
-   - Allow click-to-enter and zoom-to-enter behavior.
-   - Filter the feed to selected region.
-   - No major sim coupling yet.
+3. **Region Lens V1: visual/prototype only** — ✅ SHIPPED as **Sites V1** (2026-06-12),
+   stronger than prototyped: the 3–7 sites per region are a SIM read-model (`Sites.cs`,
+   baseline-inert, gate-proven), not viewer hints. Site nodes render on the island view
+   with name tags, click-to-inspect Site Cards, seat banners, and local paths; the
+   Region Lens lists the land's places. (A deeper dedicated region view remains future.)
 
-4. **Event anchoring slice**
-   - Add optional site/settlement ids to events.
-   - Let existing events attach to local sites where appropriate.
-   - Show replay paths between event anchors.
+4. **Event anchoring slice** — DEFERRED DELIBERATELY (the `sites` gate asserts
+   `Event.SiteId` does not exist yet, so no fake anchor can ship by accident).
+   - Add optional site/settlement ids to events — needs the tick to know sites, a
+     baseline-moving milestone with per-event-type anchoring conventions documented
+     up front (founding→seat, customs→seat/grove/shrine, rumors→market are candidate
+     conventions, not commitments).
+   - Replay groundwork shipped: `Replay.BeatsFor` emits replay-ready beats
+     (event/region/participants/proven connector/cause) with SiteId honestly null.
 
 5. **Local memory slice**
    - Sites remember important events, rumors, faith changes, deaths, migrations, and conflicts.
@@ -214,8 +217,20 @@ The island's renderable skin is a deterministic, editable cell grid (`WorldSurfa
 sim library): terrain classes, elevation, vegetation, rivers/lakes, and a bridge to the
 sim's regions. Regions stay the sim's spatial truth; the surface is what the viewer paints
 and the god-hand terraforms. Terraforming is journaled cell edits plus recorded events —
-never a repainted picture. Sites/settlements remain a future sim contract; the viewer's
-hut clusters and place markers are disclosed identity hints until then.
+never a repainted picture. Since Sites V1 (2026-06-12) the markers on the surface are
+real sites from the sim's read-model; what stands AT a site (population, buildings,
+daily life) remains a future sim contract and is never claimed.
+
+## Persistence (V1 shipped 2026-06-12)
+
+The world save is an **input journal**, never a snapshot: every divine act with its year
+and target snapshot, the follows, and the attention state (`user://world_seed{N}.json`).
+On launch the deterministic sim fast-forwards to the saved year, re-applying each act at
+its recorded year — the player-shaped world returns exactly, edits and Fate Ledger
+included, because the acts are the only player input the sim ever feels. Drifted targets
+quarantine (kept in the file, never misapplied); corrupt files are preserved, not
+destroyed. The sim never reads the store — the `save` gate proves a loaded-but-unapplied
+journal leaves a clean run byte-identical.
 
 ## Design Handoff Rule
 

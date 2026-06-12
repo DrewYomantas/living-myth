@@ -236,14 +236,60 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       16×, ledger + BUT-connector verified on a real blessed death (lived to 72), terrain
       edits visible immediately. Save/persistence of pressures + edits is session-only — the
       documented deferral.
-- [ ] Later — battle sites and per-region
-      economy (add events/RNG and move the verify baseline; together they extend place memory to
-      battles/famine and let war's-peace / famine's-end close chapters); mythic glosses / entity
-      links; relationship constellation; local site/tableau visuals; memorial tableau upgrade;
-      visual/UX pass (surface culture + gossip in the viewer); echo packs; timeline scrubbing;
-      followed-faith audit. ← NEXT
+- [x] Persistence + Sites V1 (2026-06-12, sim + viewer + two new gates): the player-shaped
+      world survives relaunch, and places became real data. **Persistence** (`PlayerWorld.cs`,
+      canon-store pattern): the world save is an INPUT JOURNAL at `user://world_seed{N}.json` —
+      never a snapshot — holding every divine act (kind/target/year + identity snapshot), the
+      follows (souls/bloodlines/peoples/lands with person snapshots), last-seen attention
+      state, and the resume year; on launch the deterministic sim fast-forwards to the resume
+      year with each act re-applied at its recorded year (`ApplyDue`), so the same world
+      returns byte-identically — edits, Fate Ledger, follows, and all. Drifted targets
+      quarantine (kept in file, never misapplied); corrupt preserved read-only; future schema
+      preserved untouched; atomic writes; the sim never reads the store. Viewer saves on every
+      act / follow change / settle-into-pause / autosave heartbeat / window close; replayed
+      history feeds every index but never cards, pulses, or introduces; resumed worlds start
+      paused. **Sites V1** (`Sites.cs`): 3–7 named, terrain-honest sites per region — a SITE
+      READ-MODEL (not a sim contract): pure hashes off seed + regions + the PRISTINE surface
+      (built in the same breath as WorldSurface, so no terraform edit can precede it), never
+      read by the tick, type honesty cell-checked (ford by the river, dock on the shore, fort
+      on the heights; seats typed from their own cell), names from authored fragments in
+      data/names.json, holder derived live from the region. **Event.SiteId deliberately
+      DEFERRED** — the `sites` gate asserts the field is ABSENT, so a fake anchor is
+      structurally impossible. **Replay prep** (`Replay.cs`): replay-ready beats over
+      StoryGrammar.Annotate (SiteId honestly null). **Viewer**: site markers replace the
+      PlaceSeeds hints (every structure on the map is now a real place; seat banners, local
+      paths, seat-to-seat roads), zoom-gated site name tags, site click targets + gold ring,
+      the Site Card (honest holder/ground/the-land's-tales/not-modeled lines), Region Lens V2
+      "Places of this land", faction lands name their seats. New gates `save` + `sites`
+      green; verify held EXACTLY 884/699/567/706 (read-models + replay of the player's own
+      inputs). Live-driven feel-check: followed a land + called a spring, killed the viewer,
+      relaunched — resumed paused at Yr 242 with the spring replayed, the follow restored,
+      and the Fate Ledger intact.
+- [ ] Later — Event.SiteId anchoring conventions (baseline-moving, documented above); battle
+      sites and per-region economy (add events/RNG and move the verify baseline; together they
+      extend place memory to battles/famine and let war's-peace / famine's-end close chapters);
+      a fresh-world/new-seed affordance (today: delete `user://world_seed{N}.json`); mythic
+      glosses / entity links; relationship constellation; local site-scale view; memorial
+      tableau upgrade; visual/UX pass (surface culture + gossip in the viewer); echo packs;
+      timeline scrubbing; followed-faith audit. ← NEXT
 
 ## Session log
+- [2026-06-12] Session: Persistence + Sites V1 (four commits). (1) PlayerWorldStore — the
+  world save as an input journal (acts + follows + attention + resume year), viewer
+  journaling/fast-forward/restore, the `save` gate (11 checks: roundtrip, byte-identical
+  replay of chronicle+ledger+surface, unapplied-inert, follow/act quarantine, corrupt/future
+  preservation, canon separation). (2) Sites.cs — 3–7 terrain-honest sites per region as a
+  baseline-inert read-model off the pristine surface; Replay.cs replay-ready beats; the
+  `sites` gate (determinism incl. an edited-world run, cell-in-region, per-cell type honesty,
+  unique names, Event.SiteId asserted ABSENT, replay-beat honesty). (3) Viewer: site markers
+  replace PlaceSeeds hints, site tags + click targets + Site Card + Region Lens V2 places +
+  seat roads/paths/banners. (4) Docs. verify held exactly 884/699/567/706 throughout; all
+  eight gates green (verify/homes/story/canon/divine/save/sites + Godot build). Feel-checked
+  live by driving the running game: zoomed site tags, opened the Dun Cairns site card, opened
+  Greyspire's lens (places listed, seat marked), followed the land, called a spring, killed
+  the process, relaunched — resumed paused at Yr 242, spring replayed and on the ledger as
+  wrought, "guard watches 1 land" restored. Test save deleted afterwards so Drew's first F5
+  starts on his own world.
 - [2026-06-12] Session: Living Atlas Surface + God-Hand V1 (three commits). (1) WorldSurface
   cell grid in the Sim + MapView pixel-diorama texture render (island polygon/circles retired,
   surface-cell hit-testing). (2) DivinePressure ledger + seven god-hand verbs with
@@ -615,15 +661,56 @@ historical event text always renders the original names (it is also the verify c
 so it cannot change). Any future rename feature is display-layer only — the canon schema
 reserves `display_name_override` (documented, not built). No rename UI exists in V1.
 
+## The world save — schema V1 (binding, shipped 2026-06-12)
+
+`user://world_seed{N}.json`, schema_version 1, written atomically (.tmp then move):
+
+```json
+{
+  "schema_version": 1, "seed": 7, "app_note": "…", "resume_year": 242,
+  "acts": [{ "seq": 0, "kind": "spring", "target_type": "region", "target_id": "10",
+             "year": 242, "snapshot": { "name": "Greyspire", "terrain": "highland" } }],
+  "follows": { "souls": [], "bloodlines": [], "peoples": [], "lands": [10],
+               "snapshots": { "p:12": { "name": "…", "birth_year": "…" } } },
+  "last_seen": { "12": 5012 }
+}
+```
+
+Rules: an input JOURNAL, never sim state — replaying it against the same seed reproduces
+the world because the acts are the only player input the sim feels. Act kinds: bless |
+curse | protect | doom | omen | forest | spring. Snapshots are identity claims (person
+name/birth_year, faction name, region name) — a mismatch on replay QUARANTINES the act
+(skipped, kept in the file); dropped follows are warned and removed on the next save.
+Corrupt file → preserved, store read-only, viewer sets it aside as .bak; future schema →
+preserved untouched, read-only. The sim never reads the store (`save` gate: reflection +
+a loaded-but-unapplied journal leaves a clean run byte-identical). Known semantics: the
+resumed feed rebuilds only the recent rows (~70) of replayed history; chapter recaps and
+echo cards restart at the resume year (replayed echoes are primed as already-seen).
+
+## Sites V1 — the site contract (binding, shipped 2026-06-12)
+
+What a site IS: a stable id (index order), a region id, an authored-fragment name
+(unique island-wide), a type the terrain honestly supports (cell-checked), a real
+surface cell inside its own region, and a seat flag (first site, nearest the region's
+heart, typed from its own cell). Holder is DERIVED live from the region — never stored.
+What a site may NOT claim until modeled: population, named dwellers, buildings, stores,
+daily life, loyalty/defense, or events of its own. **Event.SiteId is deferred** — the
+`sites` gate asserts the field does not exist, so nothing can assign a fake site anchor;
+when the contract ships it must come with per-event-type anchoring conventions and a
+deliberate baseline move. `RegionId` still means where an event happened; `HomeRegionId`
+still means where a life is remembered; sites add no third anchor channel yet.
+Site types V1: market village, watch post, sacred grove, old barrow, river ford,
+farmstead, hill fort, fishing dock, shrine, cairn field, wilderness camp.
+
 ## Region Lens — data contracts still missing (design notes, not promises)
-The viewer-side lens is honest about these; each needs a deliberate sim-side milestone because all
-of them move the verify baseline (new RNG draws and/or new ordered iteration):
-- **Person ↔ site anchoring.** People have no home region/site; the atlas scatter (p.Id % regions)
-  is presentation only. Contract: a Person.HomeRegionId assigned at birth/migration, deterministic.
-- **Settlement/site state.** No sites exist in the sim. Contract per GAME_DESIGN.md slice 3: 3–7
-  deterministic sites per region (id, kind, position), then optional Event.SiteId.
-- **Terrain geography.** Regions are points (X/Y + radius circles). Contract: deterministic region
-  polygons/bands so the atlas can read as landforms instead of circles.
+The viewer-side lens is honest about these; each needs a deliberate sim-side milestone because
+they move the verify baseline (new RNG draws and/or new ordered iteration):
+- **Person ↔ site anchoring.** People have no home site; the atlas scatter (p.Id % regions)
+  is presentation only. (Person.HomeRegionId shipped; the SITE granularity did not.)
+- **Event ↔ site anchoring.** Sites exist (read-model) but events anchor only to lands;
+  Event.SiteId is the deferred contract above.
+- **Terrain geography.** Region POLYGONS are no longer needed (the WorldSurface cell bridge
+  ships real landforms); what remains is making famous-shape worlds data (`maps/*.json`).
 
 ## Playtest verdict (2026-06-12, Drew — the F5 feel-test happened)
 The causal arc landed: following a region, a bloodline, and a soul is much easier, and
@@ -640,6 +727,17 @@ close to the shipped causal grammar) — pending placement in `Visual references
 with the same honest/aspirational/forbidden discipline as Batch 1.
 
 ## Next session starts with
+**Drew's F5 feel-test of Persistence + Sites V1** (new this session): start a world, follow
+things, bless/curse/terraform, quit mid-story, relaunch — does the resume feel like *your*
+world returning (paused at the saved year, ledger intact, follows alive)? Do the site
+markers and tags make the land read as a place without cluttering fit zoom (SiteTagZoom
+2.4 — too eager/too shy)? Does the Site Card feel worth clicking? Does the Region Lens
+places list invite exploring? Known liveable limits to judge: resume replays the world
+from year 0 (a long game = a few seconds of fast-forward), the feed rebuilds only recent
+rows, chapters/echoes restart at the resume year, and a fresh world needs the save file
+deleted by hand (`%APPDATA%\Godot\app_userdata\Living Myth\world_seed7.json`).
+
+Then the previous sitting's checklist (still valid):
 **F5 feel-test of The Cast** (shipped 2026-06-12, not yet watched): follow a soul + a land
 + a people, then judge — does the cast panel make names stick? do sigils read at a glance
 (and never read as event chips)? do thread cards introduce at the right rate (too chatty /
