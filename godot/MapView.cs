@@ -20,10 +20,14 @@ public partial class MapView : Control
     public Action<int>? RegionPicked;       // region id — Main decides faction vs. unclaimed
 
     private readonly List<(Vector2 pos, float r, int id)> _dots = new();
-    private readonly List<(Vector2 pos, float r, int id)> _regionHits = new();
-    private List<Vector2>? _islandNorm;     // island outline in normalized [0,1] space, built once
-    private List<Vector2>? _shallowsNorm;   // island outline scaled out slightly — the shallows rim
     private int _hoverRegion = -1;
+
+    // The living-atlas skin: WorldSurface rendered once into a nearest-filtered pixel
+    // texture (2×2 texels per cell, hash-speckled), rebuilt only when the surface Version
+    // bumps (a terraform edit) or territory changes hands — never per frame.
+    private ImageTexture? _surfaceTex;
+    private int _texSurfaceVersion = -1;
+    private string _texTerritorySig = "";
 
     // Transient gold rings on regions where a notable event just landed — pure rendering, aged
     // off real time. region id -> seconds remaining.
@@ -156,7 +160,11 @@ public partial class MapView : Control
         return sb;
     }
 
-    public override void _Ready() => MouseFilter = MouseFilterEnum.Stop;
+    public override void _Ready()
+    {
+        MouseFilter = MouseFilterEnum.Stop;
+        TextureFilter = TextureFilterEnum.Nearest;   // crisp pixel-diorama cells, never smeared
+    }
 
     public void PulseRegion(int regionId)
     {
@@ -291,7 +299,6 @@ public partial class MapView : Control
     public override void _Draw()
     {
         _dots.Clear();
-        _regionHits.Clear();
         _soulScreen.Clear();
         DrawRect(new Rect2(Vector2.Zero, Size), Sea);                       // 1. water
         var font = GetThemeDefaultFont();
@@ -306,35 +313,28 @@ public partial class MapView : Control
         Vector2 P(float nx, float ny) => (origin + new Vector2(nx, ny) * side - camCenter) * _zoom + camCenter + _pan;
         float regionR = RegionRadiusNorm * side * _zoom;
 
-        BuildIsland();                                                      // 2. land
-        if (_islandNorm is not null)
+        // 2+3. land: the WorldSurface skin — terrain cells, rivers, lakes, and the
+        // territory wash baked into one pixel texture (rebuilt only on change).
+        EnsureSurfaceTexture();
+        if (_surfaceTex is not null)
         {
-            if (_shallowsNorm is not null)                                  // shallows rim under the coast
-                DrawColoredPolygon(_shallowsNorm.Select(p => P(p.X, p.Y)).ToArray(), Shallows);
-            var poly = _islandNorm.Select(p => P(p.X, p.Y)).ToArray();
-            DrawColoredPolygon(poly, Land);
-            DrawPolyline(poly.Append(poly[0]).ToArray(), Coast, 2f, true);
+            var tl = P(0, 0);
+            DrawTextureRect(_surfaceTex, new Rect2(tl, P(1, 1) - tl), false);
         }
 
-        // Faint adjacency graph beneath the territories — the connective tissue of the island.
-        foreach (var a in World.Regions)
-            foreach (var bid in a.AdjacentRegionIds)
-                if (bid > a.Id)
-                    DrawLine(P(a.X, a.Y), P(World.Regions[bid].X, World.Regions[bid].Y),
-                             new Color(1, 1, 1, 0.035f), 1f);
-
-        // 3. territory tint: a banner-cloth hint, deliberately subordinate to markers and labels.
-        // The selected people's ring firms up so their lands read while their inspector is open.
-        foreach (var r in World.Regions)
+        // The hovered region breathes a faint ring (recognition, not paint); the selected
+        // people's lands firm up while their inspector is open.
+        if (_hoverRegion >= 0 && _hoverRegion < World.Regions.Count)
         {
-            var c = P(r.X, r.Y);
-            var col = RegionColor(r);
-            bool sel = r.ControllingFactionId is string f && f == SelectedFactionId;
-            DrawCircle(c, regionR, col with { A = r.ControllingFactionId is null ? 0.10f : 0.20f });
-            DrawArc(c, regionR, 0, Mathf.Tau, 40, col with { A = sel ? 0.85f : 0.40f },
-                    _hoverRegion == r.Id ? 3f : (sel ? 2.2f : 1.2f));
-            _regionHits.Add((c, regionR, r.Id));
+            var hr = World.Regions[_hoverRegion];
+            DrawArc(P(hr.X, hr.Y), regionR, 0, Mathf.Tau, 40,
+                    RegionColor(hr).Lightened(0.2f) with { A = 0.5f }, 2f);
         }
+        if (SelectedFactionId is string selFid)
+            foreach (var r in World.Regions)
+                if (r.ControllingFactionId == selFid)
+                    DrawArc(P(r.X, r.Y), regionR, 0, Mathf.Tau, 40,
+                            RegionColor(r) with { A = 0.8f }, 2.2f);
 
         DrawRoads(P);                                                       // 4. roads
         DrawPlaceMemory(P, regionR);                                        // 5a. place memory
@@ -416,10 +416,22 @@ public partial class MapView : Control
         foreach (var r in World!.Regions)
         {
             var (c, s) = MarkerAnchor(P, regionR, r);
-            DrawPlaceMarker(c, s, PlaceSeeds.KindOf(World, r));
-            if (r.ControllingFactionId is string fid)
+            // A held place reads as a small lived-in cluster, not one lone icon: 1–2
+            // satellite huts at stable hash angles (viewer identity only — no sim sites yet).
+            if (r.ControllingFactionId is string holder)
+            {
+                uint h = PlaceSeeds.Hash(World.Seed, r.Id, 5);
+                int extra = 1 + (int)(h % 2);
+                for (int i = 0; i < extra; i++)
+                {
+                    float ang = ((h >> (4 + i * 8)) & 0xff) / 255f * Mathf.Tau;
+                    var off = new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * s * (1.25f + 0.3f * i);
+                    DrawHut(c + off, s * 0.38f);
+                }
                 DrawBannerFlag(c + new Vector2(s * 0.85f, s * 0.5f), s,
-                               FactionColors.GetValueOrDefault(fid, Neutral));
+                               FactionColors.GetValueOrDefault(holder, Neutral));
+            }
+            DrawPlaceMarker(c, s, PlaceSeeds.KindOf(World, r));
         }
     }
 
@@ -753,27 +765,103 @@ public partial class MapView : Control
         return placed;
     }
 
-    private void BuildIsland()
-    {
-        if (_islandNorm is not null || World is null) return;
-        var rng = new Rng(World.Seed);          // own stream — never touches the sim's Rng
-        int pts = rng.RandInt(16, 24);
-        var list = new List<Vector2>(pts);
-        for (int i = 0; i < pts; i++)
-        {
-            float ang = i / (float)pts * Mathf.Tau;
-            float noise = 1f + (rng.RandInt(0, 100) / 100f - 0.5f) * 0.36f;   // ±18%
-            float rad = 0.47f * noise;
-            list.Add(new Vector2(0.5f + Mathf.Cos(ang) * rad, 0.5f + Mathf.Sin(ang) * rad));
-        }
-        _islandNorm = list;
+    // ---- the living-atlas skin ----
 
-        // Shallows rim: the same silhouette scaled slightly outward about its centroid — pure
-        // derived geometry, zero extra rng draws, so the island outline stays frame-identical.
-        var centroid = Vector2.Zero;
-        foreach (var p in list) centroid += p;
-        centroid /= list.Count;
-        _shallowsNorm = list.Select(p => centroid + (p - centroid) * 1.045f).ToList();
+    // Warm terrain palette per DESIGN.md guardrails (moss, dry grass, clay, stone, faded
+    // slate water): one base color per terrain class, hash-speckled per texel so the land
+    // reads as handmade pixel ground, never flat fill.
+    private static readonly Color TerForest = new("3f5230");
+    private static readonly Color TerForestDeep = new("36482a");
+    private static readonly Color TerPlains = new("5d5e38");
+    private static readonly Color TerHighland = new("6a665a");
+    private static readonly Color TerWetlandC = new("495843");
+    private static readonly Color TerRiver = new("3a6a74");
+    private static readonly Color TerCoastSand = new("6b6a48");
+
+    private static Color TerrainColor(SurfaceTerrain t) => t switch
+    {
+        SurfaceTerrain.Ocean => Sea,
+        SurfaceTerrain.Shallows => Shallows,
+        SurfaceTerrain.Coast => TerCoastSand,
+        SurfaceTerrain.Plains => TerPlains,
+        SurfaceTerrain.Forest => TerForest,
+        SurfaceTerrain.Highland => TerHighland,
+        SurfaceTerrain.Wetland => TerWetlandC,
+        SurfaceTerrain.River => TerRiver,
+        SurfaceTerrain.Lake => TerRiver,
+        _ => Land,
+    };
+
+    private static float Speckle(int x, int y)
+    {
+        unchecked
+        {
+            uint h = (uint)(x * 374761393 + y * 668265263);
+            h = (h ^ (h >> 13)) * 1274126177u;
+            return ((h ^ (h >> 16)) & 0xff) / 255f - 0.5f;
+        }
+    }
+
+    private string TerritorySignature()
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var r in World!.Regions) sb.Append(r.ControllingFactionId ?? ".").Append('|');
+        return sb.ToString();
+    }
+
+    // Rebuild the skin only when terrain was terraformed (Surface.Version) or a region
+    // changed hands. 192×192 texels — sub-millisecond, and never on the steady frame path.
+    private void EnsureSurfaceTexture()
+    {
+        var surface = World!.Surface;
+        string sig = TerritorySignature();
+        if (_surfaceTex is not null && _texSurfaceVersion == surface.Version && _texTerritorySig == sig)
+            return;
+        _texSurfaceVersion = surface.Version;
+        _texTerritorySig = sig;
+
+        const int TS = 2;   // texels per cell
+        int S = WorldSurface.Size * TS;
+        var img = Image.CreateEmpty(S, S, false, Image.Format.Rgba8);
+        for (int cy = 0; cy < WorldSurface.Size; cy++)
+            for (int cx = 0; cx < WorldSurface.Size; cx++)
+            {
+                var t = surface.TerrainAt(cx, cy);
+                var baseCol = TerrainColor(t);
+                float elev = surface.ElevationAt(cx, cy);
+                int rid = surface.RegionAt(cx, cy);
+                Color? cloth = null;
+                if (rid >= 0 && rid < World.Regions.Count
+                    && World.Regions[rid].ControllingFactionId is string fid
+                    && t is not (SurfaceTerrain.River or SurfaceTerrain.Lake))
+                    cloth = FactionColors.GetValueOrDefault(fid, Neutral);
+
+                for (int sy = 0; sy < TS; sy++)
+                    for (int sx = 0; sx < TS; sx++)
+                    {
+                        int px = cx * TS + sx, py = cy * TS + sy;
+                        // Forest speckles in two tones (clustered canopy, not flat green);
+                        // everything else gets a soft handmade grain + elevation shading.
+                        var col = t == SurfaceTerrain.Forest && Speckle(px * 7, py * 5) > 0.12f
+                            ? TerForestDeep : baseCol;
+                        float shade = 1f + Math.Clamp(elev - 0.18f, -0.2f, 0.6f) * 0.22f
+                                      + Speckle(px, py) * 0.085f;
+                        col = new Color(col.R * shade, col.G * shade, col.B * shade);
+                        if (cloth is Color cc) col = col.Lerp(cc, 0.13f);   // banner-cloth wash, restrained
+                        img.SetPixel(px, py, col);
+                    }
+            }
+        _surfaceTex = ImageTexture.CreateFromImage(img);
+    }
+
+    /// <summary>Inverse of the draw transform P — screen position back to normalized map space.</summary>
+    private Vector2 ScreenToNorm(Vector2 pos)
+    {
+        float side = MapSide();
+        var origin = new Vector2((Size.X - side) / 2f, (Size.Y - side) / 2f);
+        var center = Size / 2f;
+        var b = (pos - center - _pan) / _zoom + center;
+        return (b - origin) / side;
     }
 
     public override void _GuiInput(InputEvent @event)
@@ -827,15 +915,12 @@ public partial class MapView : Control
         if (region >= 0) RegionPicked?.Invoke(region);
     }
 
+    // Land clicks resolve through the surface itself: the cell under the cursor names its
+    // region (the WorldSurface bridge) — terrain is the hit target now, not abstract circles.
     private int NearestRegion(Vector2 pos)
     {
-        int best = -1;
-        float bestD = float.MaxValue;
-        foreach (var h in _regionHits)
-        {
-            float dist = pos.DistanceTo(h.pos);
-            if (dist <= h.r && dist < bestD) { bestD = dist; best = h.id; }
-        }
-        return best;
+        if (World is null) return -1;
+        var n = ScreenToNorm(pos);
+        return World.Surface.RegionAtNorm(n.X, n.Y);
     }
 }

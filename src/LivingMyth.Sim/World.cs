@@ -50,6 +50,13 @@ public sealed class World
     public List<Region> Regions { get; } = new();
     public string? RegionName(int id) => id >= 0 && id < Regions.Count ? Regions[id].Name : null;
 
+    /// <summary>The island's editable skin (WorldSurface.cs): generated lazily from the seed
+    /// and region layout via pure coordinate hashes — no Rng draws, never read by the tick,
+    /// so touching it can never move the verify baseline. The viewer renders it; the
+    /// god-hand terrain verbs edit it through recorded events.</summary>
+    private WorldSurface? _surface;
+    public WorldSurface Surface => _surface ??= new WorldSurface(Seed, Regions);
+
     private sealed class War
     {
         public (string, string) Pair;
