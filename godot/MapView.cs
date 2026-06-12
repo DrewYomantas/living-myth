@@ -358,6 +358,20 @@ public partial class MapView : Control
                 DrawArc(P(fr.X, fr.Y), regionR + 1.5f, 0, Mathf.Tau, 48, Ui.Gold with { A = 0.45f }, 1.6f);
             }
 
+        // 7d. omen marks — the eye of fate over a land: a violet star and a slow-breathing
+        // ring, deliberately apart from place scars (events past) and home cairns (memory).
+        foreach (var pr in World.DivinePressures)
+        {
+            if (pr.Kind != DivinePressureKind.Omen || !pr.IsActive(World)
+                || !int.TryParse(pr.TargetId, out int orid) || orid >= World.Regions.Count) continue;
+            var or = World.Regions[orid];
+            var oc = P(or.X, or.Y);
+            float oa = 0.45f + 0.25f * Mathf.Sin(_breath * 1.6f);
+            DrawArc(oc, regionR * 0.85f, 0, Mathf.Tau, 40, Ui.Violet with { A = oa * 0.6f }, 1.8f);
+            DrawString(font, oc + new Vector2(-7, -regionR * 0.85f - 6), "✶",
+                HorizontalAlignment.Left, -1, 16, Ui.Violet with { A = Mathf.Min(1f, oa + 0.3f) });
+        }
+
         var placed = DrawFactionLabels(P, font);                            // 8. labels
         DrawPlaceTags(P, regionR, placed);
         DrawSoulTags(placed);
@@ -727,6 +741,11 @@ public partial class MapView : Control
             }
             else if (Marked is not null && Marked.Contains(p.Id))
                 DrawArc(pos, r + 4.5f, 0, Mathf.Tau, 24, new Color("7fc8d8"), 2f);
+            // The blessed mark: a thin steady pale-gold ring — quieter than the breathing
+            // follow halo, paler than the leader's LensGold, deliberately apart from both.
+            if (p.Blessed)
+                DrawArc(pos, r + (p.IsLeader ? 4.4f : 2.6f), 0, Mathf.Tau, 20,
+                        new Color("f2e2b0") with { A = 0.85f }, 1.3f);
             _dots.Add((pos, hitR, p.Id));
         }
     }
@@ -761,6 +780,13 @@ public partial class MapView : Control
                 HorizontalAlignment.Center, w, 14, Ui.Parchment);
             DrawString(font, new Vector2(rect.Position.X + 7, rect.Position.Y + 29), sub,
                 HorizontalAlignment.Center, w, 11, col.Lightened(0.35f));
+            // Divine pressure as restrained cloth: a thin gold thread under a protected
+            // people's tag, an ember one under a doomed people's. Honest state, never paint.
+            var under = new Vector2(rect.Position.X + 4, rect.End.Y - 2);
+            if (fac.ProtectUntilYear > World.Year)
+                DrawLine(under, under + new Vector2(rect.Size.X - 8, 0), Ui.Gold with { A = 0.85f }, 1.6f);
+            else if (fac.DoomUntilYear > World.Year)
+                DrawLine(under, under + new Vector2(rect.Size.X - 8, 0), Ui.Ember with { A = 0.85f }, 1.6f);
         }
         return placed;
     }

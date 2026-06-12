@@ -203,6 +203,39 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       nowhere if null); manual pan/zoom cancels any automated lens move. Feel-checked live via
       window captures: toast → full card → thread escalation, side sheet, left dock, compact
       cast all verified in-game. verify exact 884/699/567/706 throughout.
+- [x] Living Atlas Surface + God-Hand V1 (2026-06-12, sim + viewer + new gate): the map became
+      a data-driven editable world skin and the game became playable through real divine verbs.
+      **Surface** (`WorldSurface.cs`, Godot-free): 96×96 deterministic cell grid — terrain
+      classes (ocean/shallows/coast/plains/forest/highland/wetland/river/lake), elevation,
+      vegetation, nearest-seat region bridge, gradient-descent rivers, journaled terraform
+      edits + StateHash; generated from pure coordinate hashes (zero Rng draws), never read by
+      the tick — provably baseline-inert. MapView renders it as ONE nearest-filtered pixel
+      texture (2 texels/cell, hash speckle, two-tone canopy, elevation shading, 0.13 banner
+      wash) rebuilt only on terraform/territory change; clicks resolve through surface cells;
+      island polygon + adjacency web + region-circle paint retired; held places read as hut
+      clusters. **God-hand** (`DivinePressure` ledger in World): BlessPerson / PlantCurse
+      (ledgered) / ProtectFaction / DoomFaction / SeedOmen / SeedForest / CallSpring — all
+      multipliers on EXISTING rolls (bless eases the death roll; protect/doom scale the famine
+      multiplier + bias the prosperity walk in self-expiring windows; omen is attention-only
+      by design; terrain acts mutate the surface), so zero new draws and verify held EXACTLY
+      884/699/567/706 — deliberate, the baseline did not move. Cause-links where mechanically
+      true: blessed death → BUT death-despite-blessing; famine under doom → THEREFORE
+      famine-under-doom; famine despite protection → BUT famine-despite-protection (ButRules
+      extended; StoryCopy voices all four authored phrases). **Viewer**: verbs live on their
+      target's inspector (bless/curse on souls, protect/doom on peoples, omen/forest/spring on
+      the Region Lens — no fake buttons anywhere); Fate Ledger right sheet (acts + state +
+      consequences traced via an incremental index); map payoff per the binding table in
+      VISUAL_STYLE.md (pale-gold blessed ring, gold/ember faction tag threads, violet omen
+      star, terrain changes are the terrain); Region Lens surfaces the holder's customs; cast
+      tooltips carry reputation bands. **Gate**: `divine` proves double-run determinism of
+      chronicle+ledger+surface hash, target validation, curse traceability, authored
+      classification of every divine edge, real terrain deltas, channel honesty (person acts
+      placeless, region acts anchored, nothing divine home-anchored), and canon-blindness.
+      (`surface` gate name was taken by the surfacing demo — surface proofs live in `divine`.)
+      Live-driven playtest: all seven verbs exercised in the running game, 576 shown years at
+      16×, ledger + BUT-connector verified on a real blessed death (lived to 72), terrain
+      edits visible immediately. Save/persistence of pressures + edits is session-only — the
+      documented deferral.
 - [ ] Later — battle sites and per-region
       economy (add events/RNG and move the verify baseline; together they extend place memory to
       battles/famine and let war's-peace / famine's-end close chapters); mythic glosses / entity
@@ -211,6 +244,19 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       followed-faith audit. ← NEXT
 
 ## Session log
+- [2026-06-12] Session: Living Atlas Surface + God-Hand V1 (three commits). (1) WorldSurface
+  cell grid in the Sim + MapView pixel-diorama texture render (island polygon/circles retired,
+  surface-cell hit-testing). (2) DivinePressure ledger + seven god-hand verbs with
+  multiplier-only mechanics, divine cause-links, two new authored BUT rules, and the `divine`
+  console gate (chronicle+ledger+surface determinism, validation, channel honesty,
+  canon-blindness). (3) Viewer verbs on inspectors, Fate Ledger sheet, StoryCopy divine
+  phrases, map payoff marks, culture/reputation surfacing, docs. verify held exactly
+  884/699/567/706 through all three (multipliers modulate existing rolls; surface draws no
+  Rng) — gates verify/homes/story/canon/divine all green; Godot build clean. Playtested live
+  by driving the running game: blessed Roesia (died at 72, thread voiced "but even the old
+  blessing could not hold them —"), cursed Roduin's line, protected the Highland Clans,
+  doomed the Wood Tribes, seeded omen + forest + two springs on the Tangled Wood II (terrain
+  visibly changed), ran 576 shown years at 16×, read the Fate Ledger end to end.
 - [2026-06-12] Session: Map-First Followability + Panel Economy V1 (viewer-only, 5 files:
   Main.cs, CastPanel.cs, CanonPanel.cs, MapView.cs, docs/VISUAL_STYLE.md). Audited every panel
   and found the structural stacking bug (cast + inspector both pinned at (12,132)); wrote the

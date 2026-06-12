@@ -296,6 +296,7 @@ in the classification table before it ships.
 | Person/Faction/Region inspector | side inspector | left column, under the folded cast |
 | How We Got Here (quick beats) | side sheet | right, 400px over the feed rail |
 | How We Got Here (full thread) | chronicle sheet | right, widened to 620px — the explicit deeper read |
+| Fate Ledger | side sheet | right, 420px — shares the reading slot with How We Got Here (each closes the other) |
 | Chapter recap | chronicle modal | center; only on an intentional pause or chip click |
 | Full Focus Guard card | chronicle modal | center; only via toast/return-chip click |
 | **Memorial** | ceremony modal | center + ink veil — the one earned interruption |
@@ -334,6 +335,65 @@ in the classification table before it ships.
   tighter than the lens ring), ★ state in the lens; events surface as YOURS through
   the two honest channels (tales anchored here, lives remembered here).
 - ✖ Followed prophecy — future; needs a sim system.
+
+## Living Atlas Surface V1 — SHIPPED (2026-06-12)
+
+The island finally has a **data-driven editable skin**: `src/LivingMyth.Sim/WorldSurface.cs`
+— a 96×96 deterministic cell grid (terrain class, elevation, vegetation, nearest-seat
+region bridge) generated from the world seed via pure coordinate hashes (no Rng stream at
+all), with gradient-descent rivers and small honest lakes. The sim's `Region` list remains
+spatial truth; cells are the renderable, terraformable world surface bridged onto it.
+Three binding properties:
+
+- **Baseline-inert by construction**: generation draws no Rng, the tick never reads a
+  cell, and the `divine` gate hashes the full state across double runs.
+- **Editable, journaled, replayable**: `SeedForestAt` / `CallSpringAt` mutate cells
+  deterministically, append to an edit journal, and bump `Version` — the viewer's only
+  rebuild signal. Terraforming later means more edit verbs, not repainting a picture.
+- **Honest hits**: map clicks resolve through `RegionAtNorm` (the cell under the cursor
+  names its region) — terrain itself is the hit target now, not abstract circles.
+
+MapView renders the surface as one nearest-filtered pixel texture (2 texels per cell,
+hash speckle, two-tone forest canopy, elevation shading, restrained banner-cloth
+territory wash at 0.13) rebuilt **only** when `Surface.Version` bumps or territory
+changes hands — never per frame. Retired: the island polygon, the adjacency web, and the
+flat region-circle tint (the old "abstract circles as dominant map language"). Held
+places now read as small hut clusters (1–2 satellite huts at stable hash angles —
+viewer identity only; sim sites remain a future contract).
+
+Terrain palette (warm, per DESIGN.md guardrails): forest `3f5230`/`36482a` two-tone,
+plains `5d5e38`, highland `6a665a`, wetland `495843`, river/lake `3a6a74`, coast sand
+`6b6a48`, sea/shallows unchanged.
+
+## God-Hand visual language (Divine Pressure V1 — SHIPPED 2026-06-12, binding)
+
+Every act of the player's hand is explicit sim state (`World.DivinePressures`) with a
+recorded chronicle event; the viewer may only show what the ledger holds. The marks,
+deliberately unmixable with place scars (RegionId), home cairns (HomeRegionId), and
+follow marks:
+
+| State | Map voice | Card voice |
+|---|---|---|
+| Blessed soul | thin steady pale-gold ring (`f2e2b0`) — quieter than the breathing follow halo, paler than the leader ring | `✦ BLESSED — fate leans kindly toward this soul` |
+| Cursed soul | ember dot (existing) | `✳ CURSED — a god's mark lies on this bloodline` |
+| Protected people | thin gold thread under the faction tag | `❧ UNDER PROTECTION — until Yr {X}` |
+| Doomed people | thin ember thread under the faction tag | `☄ UNDER A DOOM — until Yr {X}` |
+| Omen-marked land | violet ✶ + slow-breathing violet ring at the region (apart from scars/cairns) | `✶ an omen hangs over this land` |
+| Terrain act | the land itself changes (surface texture rebuild) | feed/ledger rows; the lens reads the new terrain |
+
+Copy rules: an omen is **attention, not mechanics** — its only effect is a viewer
+surfacing weight (+25) on tales truly anchored in the marked land; never claim more.
+Person-target acts (bless/curse) carry **no place anchor**; region-target acts anchor
+exactly where the hand touched; **no divine act ever carries a home anchor** (the
+`divine` gate enforces all three). Connector copy (authored, evidence-backed only):
+`the curse found another life — therefore,` · `the doom upon them bore down —
+therefore,` · `but even the old blessing could not hold them —` · `but even under the
+protection laid upon them —`.
+
+**The Fate Ledger** (right reading sheet, shares the slot with How We Got Here): every
+act with its target, year, state (holds / faded / wrought), a link to the recorded act,
+and up to two consequences the chronicle honestly traced back to it — a sacred record,
+not a debug table.
 
 ## Place Memory V1 — SHIPPED (2026-06-11, viewer-only)
 

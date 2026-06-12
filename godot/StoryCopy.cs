@@ -16,14 +16,21 @@ public static class StoryCopy
         ConnectorKind.UnresolvedUntil => link.GapYears >= 1
             ? $"the grievance lay unresolved for {link.GapYears} {YearWord(link.GapYears)}, until —"
             : "the grievance lay unresolved within the year, until —",
-        ConnectorKind.But => link.GapYears >= 3
-            ? $"{link.GapYears} years on — but"
-            : "but —",
-        _ => link.RuleId == "war-of-whispers"
-            ? "the whispers fed it — therefore,"
-            : link.GapYears >= 3
-                ? $"{link.GapYears} years passed — therefore,"
-                : "therefore —",
+        ConnectorKind.But => link.RuleId switch
+        {
+            // God-hand reversals: the pressure truly leaned on this very roll — the
+            // grammar proved it before this file is allowed to say it.
+            "death-despite-blessing" => "but even the old blessing could not hold them —",
+            "famine-despite-protection" => "but even under the protection laid upon them —",
+            _ => link.GapYears >= 3 ? $"{link.GapYears} years on — but" : "but —",
+        },
+        _ => link.RuleId switch
+        {
+            "war-of-whispers" => "the whispers fed it — therefore,",
+            "curse-death" => "the curse found another life — therefore,",
+            "famine-under-doom" => "the doom upon them bore down — therefore,",
+            _ => link.GapYears >= 3 ? $"{link.GapYears} years passed — therefore," : "therefore —",
+        },
     };
 
     // ---- the guard card's one "why" line (lead before the linked cause) ----
@@ -90,6 +97,10 @@ public static class StoryCopy
         ["memorial cairn"] = "stones raised at the home of a line, for a murdered or once-leading soul",
         ["guard"] = "the focus guard pauses time when fate touches what you follow",
         ["followed land"] = "a watched land: tales anchored here and lives remembered here become yours",
+        ["blessed"] = "fate leans gently toward this life — the death roll eases, never a guarantee",
+        ["protected"] = "while the protection holds, famine weighs lighter and fortune mends a little faster",
+        ["doomed"] = "while the doom holds, fortune runs thin and famine bites deeper",
+        ["omen"] = "the eye of fate: this land's tales surface louder while the omen hangs — no roll changes",
     };
 
     // Glossary values are dropped raw into [hint="…"] — they must never contain a double

@@ -7,6 +7,7 @@
 // Living-atlas foundation pass: framed dock groups, parchment map place tags, warmed atlas
 // palette — viewer styling only, per docs/VISUAL_STYLE.md.
 using Godot;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -54,6 +55,21 @@ public partial class Main : Node
     private Label _inspectorTitle = null!;
     private Label _inspectorSub = null!;
     private Button _curseBtn = null!;
+    // God-hand V1: the divine verbs live on the inspector of their target (bless/curse a
+    // soul, protect/doom a people, omen/forest/spring a land) — same pattern as the curse.
+    private Button _blessBtn = null!;
+    private Button _protectBtn = null!;
+    private Button _doomBtn = null!;
+    private Button _omenBtn = null!;
+    private Button _forestBtn = null!;
+    private Button _springBtn = null!;
+    private FateLedger _fateLedger = null!;
+    // Consequence index for the ledger: events whose causes name a divine act, maintained
+    // incrementally in StreamNewHeadlines — O(new events), never a history scan.
+    private readonly HashSet<int> _divineSources = new();
+    private readonly System.Collections.Generic.Dictionary<int, List<int>> _divineConsequences = new();
+    private static readonly List<int> NoConsequences = new();
+    private const int OmenBoost = 25;   // omen = attention, honestly: a surfacing weight, no roll changes
     private Button _followBtn = null!;
     private Button _soulBtn = null!;
     private Button _lensFactionBtn = null!;
@@ -337,6 +353,7 @@ public partial class Main : Node
         BuildLeftDock(root);    // cast + inspector share one left column — structurally unstackable
         BuildThreadCard(root);
         BuildCatchup(root);
+        BuildFateLedger(root);
         BuildGlimpse(root);
         BuildRecap(root);
         BuildGuardCard(root);   // last: the guard card (and its return chip) sits above everything
@@ -705,6 +722,18 @@ public partial class Main : Node
         _camBtn.Pressed += () => { _map.CameraFollow = !_map.CameraFollow; RestyleToggles(); };
         lensRow.AddChild(_camBtn);
 
+        // --- Fate group: the ledger of the player's hand ---
+        var fateRow = DockGroup(hb, "Fate");
+        var ledgerBtn = new Button { Text = "✦ ledger", TooltipText = "The Fate Ledger — every act of your hand, and what the chronicle traced to it" };
+        Ui.StyleButton(ledgerBtn);
+        ledgerBtn.Pressed += () =>
+        {
+            if (_fateLedger.Visible) { _fateLedger.Visible = false; return; }
+            _catchupPanel.Visible = false;   // one reading sheet at a time (panel economy)
+            _fateLedger.Open();
+        };
+        fateRow.AddChild(ledgerBtn);
+
         // --- Chronicle group: chattiness threshold ---
         var chronRow = DockGroup(hb, "Chronicle");
         _chatLabel = new Label();
@@ -840,6 +869,97 @@ public partial class Main : Node
         _curseBtn.AddThemeColorOverride("font_pressed_color", new Color("f2e9d2"));
         _curseBtn.Pressed += OnCursePressed;
         vb.AddChild(_curseBtn);
+
+        _blessBtn = new Button { Text = "✦ Lay Blessing on this soul", Visible = false,
+            TooltipText = "Fate leans gently toward this life — the death roll eases, never a guarantee" };
+        Ui.StyleButton(_blessBtn, active: true);
+        _blessBtn.Pressed += OnBlessPressed;
+        vb.AddChild(_blessBtn);
+
+        _protectBtn = new Button { Text = "❧ Protect this people", Visible = false,
+            TooltipText = "For a season of years, famine weighs lighter on them and fortune mends faster" };
+        Ui.StyleButton(_protectBtn, active: true);
+        _protectBtn.Pressed += () => OnFactionAct(fid => _world.ProtectFaction(fid));
+        vb.AddChild(_protectBtn);
+
+        _doomBtn = new Button { Text = "☄ Pronounce Doom on this people", Visible = false,
+            TooltipText = "For a season of years, their fortunes run thin and famine bites deeper" };
+        Ui.StyleButton(_doomBtn, active: true, activeBg: Ui.Ember);
+        _doomBtn.AddThemeColorOverride("font_color", new Color("f2e9d2"));
+        _doomBtn.AddThemeColorOverride("font_hover_color", new Color("f2e9d2"));
+        _doomBtn.AddThemeColorOverride("font_pressed_color", new Color("f2e9d2"));
+        _doomBtn.Pressed += () => OnFactionAct(fid => _world.DoomFaction(fid));
+        vb.AddChild(_doomBtn);
+
+        _omenBtn = new Button { Text = "✶ Seed an Omen here", Visible = false,
+            TooltipText = "The eye of fate turns here — this land's tales surface louder while the omen hangs" };
+        Ui.StyleButton(_omenBtn, active: true);
+        _omenBtn.Pressed += () => OnRegionAct(rid => _world.SeedOmen(rid));
+        vb.AddChild(_omenBtn);
+
+        _forestBtn = new Button { Text = "✿ Seed a Forest", Visible = false,
+            TooltipText = "Raise a forest across this land — real terrain, recorded as your act (rock and water refuse it)" };
+        Ui.StyleButton(_forestBtn, active: true);
+        _forestBtn.Pressed += () => OnRegionAct(rid => _world.SeedForest(rid));
+        vb.AddChild(_forestBtn);
+
+        _springBtn = new Button { Text = "≈ Call a Spring", Visible = false,
+            TooltipText = "Call water from the earth — a small lake and wetland, recorded as your act" };
+        Ui.StyleButton(_springBtn, active: true);
+        _springBtn.Pressed += () => OnRegionAct(rid => _world.CallSpring(rid));
+        vb.AddChild(_springBtn);
+    }
+
+    private void BuildFateLedger(Control root)
+    {
+        _fateLedger = new FateLedger();
+        root.AddChild(_fateLedger);
+        _fateLedger.Setup(() => _world,
+            srcId => _divineConsequences.TryGetValue(srcId, out var list) ? list : NoConsequences,
+            link => OnInspectorLink(link));
+    }
+
+    // One funnel for every divine act: ledger the source, surface the event immediately,
+    // and honor a guard trigger if the act itself crossed it.
+    private void RecordDivine(Event? ev)
+    {
+        if (ev is null) return;
+        _divineSources.Add(ev.Id);
+        StreamNewHeadlines();
+        if (_pendingGuardEventId is not null) ShowGuardCard();
+    }
+
+    private void OnBlessPressed()
+    {
+        if (_selectedPersonId is not int id || !_world.People.TryGetValue(id, out var p)) return;
+        if (!p.Alive || p.Blessed) return;
+        RecordDivine(_world.BlessPerson(p));
+        OnPersonPicked(id);
+    }
+
+    private void OnFactionAct(Func<string, Event> act)
+    {
+        if (_selectedFactionId is not string fid) return;
+        try { RecordDivine(act(fid)); }
+        catch (ArgumentException) { /* the verb's visibility gate should prevent this */ }
+        OnFactionPicked(fid);
+    }
+
+    private void OnRegionAct(Func<int, Event?> act)
+    {
+        int rid = _map.SelectedRegionId;
+        if (rid < 0 || rid >= _world.Regions.Count) return;
+        try { RecordDivine(act(rid)); }   // a null act (land refused) records nothing, honestly
+        catch (ArgumentException) { }
+        OnRegionPicked(rid);
+    }
+
+    private bool OmenActive(int regionId)
+    {
+        foreach (var pr in _world.DivinePressures)
+            if (pr.Kind == DivinePressureKind.Omen && pr.TargetId == regionId.ToString() && pr.IsActive(_world))
+                return true;
+        return false;
     }
 
     private void BuildCatchup(Control root)
@@ -1060,11 +1180,27 @@ public partial class Main : Node
         // Maintain consequence counts (and the Region Lens activity index) incrementally so we
         // never rebuild a reverse index over the whole (ever-growing) chronicle. Update first,
         // then score the new slice.
+        // Active omens, snapshotted once per stream pass — O(pressures), a handful at most.
+        HashSet<int>? omens = null;
+        foreach (var pr in _world.DivinePressures)
+            if (pr.Kind == DivinePressureKind.Omen && pr.IsActive(_world)
+                && int.TryParse(pr.TargetId, out int omenRid))
+                (omens ??= new()).Add(omenRid);
+
         for (int i = _lastEventCount; i < events.Count; i++)
         {
             _regionActivity.Observe(events[i]);
             foreach (var c in events[i].Causes)
+            {
                 _consCount[c] = _consCount.GetValueOrDefault(c) + 1;
+                // The fate ledger's consequence trail: anything the chronicle traces to an
+                // act of the hand. Incremental, capped per act so the lists stay bounded.
+                if (_divineSources.Contains(c))
+                {
+                    if (!_divineConsequences.TryGetValue(c, out var dl)) { dl = new(); _divineConsequences[c] = dl; }
+                    if (dl.Count < 40) dl.Add(events[i].Id);
+                }
+            }
             // Place memory: a truly anchored event of a marking kind scars its region.
             if (events[i].RegionId is int mrid && ClassifyMark(events[i]) is MapView.MarkKind mk)
                 _map.AddPlaceMark(mrid, mk, events[i].Year, events[i].Id);
@@ -1092,6 +1228,9 @@ public partial class Main : Node
             if (yours) _castDirty = true;   // a YOURS event can change the cast (births, deaths, successions)
             int imp = Scoring.ImportanceFast(e, _world, _consCount);
             if (yours) imp += quietRegionLife ? YoursBoost / 2 : YoursBoost;
+            // An omen is attention made honest: tales truly anchored in the marked land
+            // surface louder while it hangs. A weight, never a mechanical effect.
+            if (omens is not null && e.RegionId is int erid && omens.Contains(erid)) imp += OmenBoost;
             // The guard trigger runs before the chattiness gate: a follow is an explicit ask,
             // so a followed soul's fate registers even when the feed is quiet. Introductions
             // run there too — meeting someone shouldn't depend on the chattiness slider.
@@ -2179,6 +2318,7 @@ public partial class Main : Node
     private void OpenCatchup(int eventId)
     {
         _glimpsePanel.Visible = false;   // the glimpse z-orders above the catch-up card
+        _fateLedger.Visible = false;     // one reading sheet at a time (panel economy)
         _catchupEventId = eventId;
         _catchupQuick = true;
         _catchupPanel.Visible = true;
@@ -2266,9 +2406,7 @@ public partial class Main : Node
     {
         if (_selectedPersonId is not int id || !_world.People.TryGetValue(id, out var p)) return;
         if (!p.Alive || p.Cursed) return;
-        _world.PlantCurse(p);
-        StreamNewHeadlines();        // surface the divine act immediately
-        if (_pendingGuardEventId is not null) ShowGuardCard();
+        RecordDivine(_world.PlantCurse(p));   // ledgered like every act of the hand
         _curseBtn.Visible = false;
         OnPersonPicked(id);          // re-render with CURSED state
     }
@@ -2414,6 +2552,12 @@ public partial class Main : Node
         _lensFactionBtn.Visible = false;
         _regionBtn.Visible = false;
         _curseBtn.Visible = p.Alive && !p.Cursed;
+        _blessBtn.Visible = p.Alive && !p.Blessed;
+        _protectBtn.Visible = false;
+        _doomBtn.Visible = false;
+        _omenBtn.Visible = false;
+        _forestBtn.Visible = false;
+        _springBtn.Visible = false;
         bool soulFollowed = _followedSouls.Contains(id);
         _soulBtn.Visible = p.Alive || soulFollowed;   // a dead soul can still be let go
         _soulBtn.Text = soulFollowed ? "★ Following this soul — unfollow" : "☆ Follow this soul";
@@ -2432,6 +2576,7 @@ public partial class Main : Node
 
         var sb = new StringBuilder();
         if (p.Cursed) sb.AppendLine($"[color=#{Ui.Hex(Ui.Ember)}][b]✳ CURSED[/b] — a god's mark lies on this bloodline[/color]\n");
+        if (p.Blessed) sb.AppendLine($"[color=#8a5d12][b]✦ {StoryCopy.Hint("BLESSED", "blessed")}[/b] — fate leans kindly toward this soul[/color]\n");
         // Why you care, said first: the connection to what you follow, with their sigil —
         // every person card opens by answering "who is this to me?"
         if (soulFollowed)
@@ -2601,8 +2746,14 @@ public partial class Main : Node
         _map.SelectedRegionId = regionId;
         _glimpsePanel.Visible = false;
         _curseBtn.Visible = false;
+        _blessBtn.Visible = false;
+        _protectBtn.Visible = false;
+        _doomBtn.Visible = false;
         _followBtn.Visible = false;
         _soulBtn.Visible = false;
+        _omenBtn.Visible = !OmenActive(regionId);
+        _forestBtn.Visible = true;
+        _springBtn.Visible = true;
         _lensFactionId = holder?.Id;
         _lensFactionBtn.Visible = holder is not null;
         if (holder is not null) _lensFactionBtn.Text = $"⚑ Inspect {holder.Name}";
@@ -2616,11 +2767,16 @@ public partial class Main : Node
 
         var sb = new StringBuilder();
         if (landFollowed) sb.AppendLine($"[color=#8a5d12][b]★ you are watching this land[/b][/color]\n");
+        if (OmenActive(regionId))
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Violet)}][b]✶ {StoryCopy.Hint("an omen hangs over this land", "omen")}[/b] — the eye of fate is turned here[/color]\n");
         sb.AppendLine(SectionCap("The land"));
         sb.AppendLine($"terrain: {region.TerrainType}");
         sb.AppendLine(holder is null
             ? "held by: no one — unclaimed wilderness"
             : $"held by: {Link("f:" + holder.Id, holder.Name)}");
+        // Culture made visible where you stand (M7 surfaced): the holder's hardened ways.
+        if (holder is not null && holder.CustomOriginEvent.Count > 0)
+            sb.AppendLine($"ways of the holder: [color=#{Ui.Hex(Ui.Violet)}]{string.Join(", ", holder.CustomOriginEvent.Keys.OrderBy(c => c))}[/color]");
         sb.AppendLine($"map hint: {PlaceSeeds.Label(PlaceSeeds.KindOf(_world, region))} — a viewer's mark, not sim state");
         sb.AppendLine();
         // The player's hand: what this place is said to be.
@@ -2709,6 +2865,10 @@ public partial class Main : Node
         _lensFactionBtn.Visible = false;
         _regionBtn.Visible = false;
         _curseBtn.Visible = false;
+        _blessBtn.Visible = false;
+        _omenBtn.Visible = false;
+        _forestBtn.Visible = false;
+        _springBtn.Visible = false;
         _soulBtn.Visible = false;
         _followBtn.Visible = true;
         _followBtn.Text = _markedFactions.Contains(fid) ? "★ Following — unfollow" : "☆ Follow this people";
@@ -2717,11 +2877,17 @@ public partial class Main : Node
         var members = _world.FactionMembers(fid);
         string leader = fac.LeaderId is int lid ? _world.People[lid].Name : "(none)";
         var dom = _world.DominantReligion(fid);
+        _protectBtn.Visible = members.Count > 0 && fac.ProtectUntilYear <= _world.Year;
+        _doomBtn.Visible = members.Count > 0 && fac.DoomUntilYear <= _world.Year;
 
         _inspectorTitle.Text = fac.Name;
         _inspectorSub.Text = $"{fac.Culture} culture · of {fac.Homeland}";
 
         var sb = new StringBuilder();
+        if (fac.ProtectUntilYear > _world.Year)
+            sb.AppendLine($"[color=#8a5d12][b]❧ {StoryCopy.Hint("UNDER PROTECTION", "protected")}[/b] — until Yr {fac.ProtectUntilYear}[/color]\n");
+        if (fac.DoomUntilYear > _world.Year)
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Ember)}][b]☄ {StoryCopy.Hint("UNDER A DOOM", "doomed")}[/b] — until Yr {fac.DoomUntilYear}[/color]\n");
         sb.AppendLine(SectionCap("The record"));
         sb.AppendLine($"living: {members.Count}");
         sb.AppendLine($"leader: {leader}");
@@ -2808,7 +2974,8 @@ public partial class Main : Node
         if (_running) _guardReturnable = false;   // time moved on; the held moment has passed
         if (_running && _guardToast.Visible) _guardToast.Visible = false;   // the moment passed unread
         bool cardUp = _guardPanel.Visible || _catchupPanel.Visible || _recapPanel.Visible
-            || _guardToast.Visible || _pendingGuardEventId is not null || _canonPanel.IsOpen;
+            || _guardToast.Visible || _fateLedger.Visible
+            || _pendingGuardEventId is not null || _canonPanel.IsOpen;
         _guardReturnBtn.Visible = _guardReturnable && !cardUp;
         // A queued recap shows on the transition INTO a pause (never over another card —
         // the focus guard always outranks it) and otherwise waits on its chip.

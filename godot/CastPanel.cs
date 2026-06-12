@@ -233,10 +233,16 @@ public sealed partial class CastPanel : PanelContainer
             if (ev is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
                 _onPick(pid);
         };
-        // The last beat the saga actually showed of them — hover memory, honest by source.
-        row.TooltipText = _lastSeen.TryGetValue(pid, out int lsId)
+        // The last beat the saga actually showed of them — hover memory, honest by source —
+        // plus their public standing when rumor has touched the name (M8 surfaced).
+        string standing = p.Reputation switch
+        {
+            >= 3 => " · admired", >= 1 => " · well spoken of",
+            <= -3 => " · infamous", <= -1 => " · whispered against", _ => "",
+        };
+        row.TooltipText = (_lastSeen.TryGetValue(pid, out int lsId)
             ? $"you last saw them Yr {w.Chronicle.Get(lsId).Year}: {w.Chronicle.Get(lsId).Text}"
-            : "the saga keeps no sightings of them — click to inspect";   // sightings track follows only
+            : "the saga keeps no sightings of them — click to inspect") + standing;
 
         var hb = new HBoxContainer();
         hb.AddThemeConstantOverride("separation", 8);

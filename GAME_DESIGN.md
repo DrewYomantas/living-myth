@@ -186,6 +186,37 @@ Do not jump straight into a giant settlement sim. Build this in slices.
    - Settlement population makeup becomes useful.
    - Refugees, plague, local faith, mixed families, and emergent hybrid peoples use the region/site layer.
 
+## The God-Hand (Divine Pressure — V1 shipped 2026-06-12)
+
+The player's verbs are now canon, and they follow one design law: **a divine act is
+explicit recorded state with a subtle mechanical lean — never a guarantee, never a lie.**
+
+- The seven V1 verbs: **Bless** a soul (eases the existing death roll), **Curse** a
+  bloodline (the original butterfly, now ledgered), **Protect** a people (famine weighs
+  lighter, fortune mends faster, for a season of years), **Doom** a people (the inverse),
+  **Seed an Omen** over a land (attention only — its tales surface louder; no roll changes
+  until an honest mechanic exists), **Seed a Forest** and **Call a Spring** (real terrain
+  edits on the world surface, witnessed by recorded events).
+- Mechanics are multipliers and biases on rolls the sim already makes — a pressure-free
+  world stays byte-identical to one where the system doesn't exist. Effects stay subtle
+  enough that the world's own causality remains the star.
+- Every act records a chronicle event; later events the pressure honestly influenced
+  cause-link back to it, so "why did this happen" can answer "because of your hand" only
+  when that is mechanical fact. Authored connector copy only.
+- The **Fate Ledger** is the player's sacred record: every act, its state (holds / faded /
+  wrought), and the consequences the chronicle traced to it.
+- Future verbs (prophecy, plague, brush-scale terrain shaping) join only with honest sim
+  mechanics behind them — no disabled fake buttons, ever.
+
+## The World Surface (Living Atlas — V1 shipped 2026-06-12)
+
+The island's renderable skin is a deterministic, editable cell grid (`WorldSurface` in the
+sim library): terrain classes, elevation, vegetation, rivers/lakes, and a bridge to the
+sim's regions. Regions stay the sim's spatial truth; the surface is what the viewer paints
+and the god-hand terraforms. Terraforming is journaled cell edits plus recorded events —
+never a repainted picture. Sites/settlements remain a future sim contract; the viewer's
+hut clusters and place markers are disclosed identity hints until then.
+
 ## Design Handoff Rule
 
 For visual/UI work, Claude Design, Figma, or another design tool should define the visual direction first. Claude Code should implement the design handoff, not invent the visual language while coding.
