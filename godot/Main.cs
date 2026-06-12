@@ -90,6 +90,11 @@ public partial class Main : Node
     private readonly List<FeedVisRow> _feedVis = new();     // (node, yours, weight) per visible row, newest first
     private readonly System.Collections.Generic.Dictionary<int, int> _consCount = new();
     private readonly RegionActivity _regionActivity = new();   // Region Lens: per-region anchored events
+    // Player canon — the third ledger (PROJECT_STATE.md "Truth model V1"): the player's
+    // hand over the world, loaded once per session, written only on an explicit save,
+    // never read by the sim. The editor pauses time and restores the pace it took.
+    private PlayerCanonStore _canon = null!;
+    private CanonPanel _canonPanel = null!;
     private const int EchoCadence = 8;                      // sim-years between echo scans (slow path, not per-tick)
     private int _lastEchoYear;
     private readonly System.Collections.Generic.Dictionary<string, int> _echoSeen = new();  // archetype -> latest carded start year
@@ -127,6 +132,9 @@ public partial class Main : Node
     private Label _guardChipGlyph = null!;
     private Button _guardReturnBtn = null!;               // floating way back to the held card
     private bool _guardWasMemorial;                       // restore the dim on return
+    private int _guardFocusPid = -1;                      // the held moment, kept re-renderable
+    private bool _guardIsDeath;
+    private int _guardPrevSeen = -1;
     private bool _guardReturnable;                        // true while the world still holds its breath
     private bool _returnIsRecap;                          // the held card is a chapter recap, not a guard card
 
@@ -182,6 +190,7 @@ public partial class Main : Node
         _lastEventCount = 0;
         _lastEchoYear = _world.Year;
 
+        LoadCanon();
         Ui.LoadFonts();
         BuildUi();
         _map.World = _world;
@@ -193,6 +202,30 @@ public partial class Main : Node
         StartChapter(0);   // chapter one opens on the founding events themselves
         RefreshTimeBar();
         _map.QueueRedraw();
+    }
+
+    // Load the player's canon book for this seed. An unreadable file is set aside as
+    // .bak (never destroyed) and a fresh book opens; a file from a NEWER build stays
+    // untouched and this session simply cannot write (affordances hide on ReadOnly).
+    private void LoadCanon()
+    {
+        string path = ProjectSettings.GlobalizePath($"user://canon_seed{Seed}.json");
+        var (canon, warning) = PlayerCanonStore.LoadOrNew(path, Seed);
+        if (warning is not null)
+        {
+            GD.PushWarning($"player canon: {warning}");
+            if (canon.ReadOnly && !canon.FutureSchema)
+            {
+                try
+                {
+                    System.IO.File.Move(path, path + ".bak", overwrite: false);
+                    GD.PushWarning($"player canon: unreadable file set aside as {path}.bak");
+                    (canon, _) = PlayerCanonStore.LoadOrNew(path, Seed);
+                }
+                catch (System.IO.IOException) { /* a .bak already exists — stay read-only this session */ }
+            }
+        }
+        _canon = canon;
     }
 
     public override void _Process(double delta)
@@ -271,6 +304,36 @@ public partial class Main : Node
         BuildGlimpse(root);
         BuildRecap(root);
         BuildGuardCard(root);   // last: the guard card (and its return chip) sits above everything
+        BuildCanonPanel(root);  // very last: the player's writing desk outranks every card while open
+    }
+
+    private void BuildCanonPanel(Control root)
+    {
+        _canonPanel = new CanonPanel();
+        root.AddChild(_canonPanel);
+        _canonPanel.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        _canonPanel.Setup(_canon, () => _world, () => _running, r => _running = r, OnCanonClosed);
+    }
+
+    // After the writing desk closes: re-render whatever surface should now carry the
+    // telling, then — if a guard moment was still held beneath — bring the card back the
+    // same way the return chip would, with its body rebuilt so a fresh inscription shows.
+    private void OnCanonClosed(bool changed)
+    {
+        if (changed)
+        {
+            if (_catchupPanel.Visible) RenderCatchup();
+            if (_selectedPersonId is int pid) OnPersonPicked(pid);
+            else if (_selectedFactionId is string fid) OnFactionPicked(fid);
+            else if (_map.SelectedRegionId >= 0) OnRegionPicked(_map.SelectedRegionId);
+        }
+        if (_guardReturnable && !_running && !_guardPanel.Visible
+            && !_catchupPanel.Visible && !_recapPanel.Visible && !_returnIsRecap)
+        {
+            RerenderHeldGuardCard();
+            _guardBackdrop.Visible = _guardWasMemorial;
+            _guardPanel.Visible = true;
+        }
     }
 
     private void UpdateRootSize()
@@ -1196,6 +1259,9 @@ public partial class Main : Node
         _glimpsePanel.Visible = false;   // the moment outranks a living glimpse
         _guardEventId = eid;
         _guardWasMemorial = memorial;
+        _guardFocusPid = focusPid ?? -1;
+        _guardIsDeath = isDeath;
+        _guardPrevSeen = prevSeen;
         _guardReturnable = true;
         _returnIsRecap = false;
         _guardReturnBtn.Text = memorial ? "↩ Return to the memorial" : "↩ Return to the tale";
@@ -1207,6 +1273,27 @@ public partial class Main : Node
         // A real place pulses first; failing that, the home the soul is remembered in.
         if (memorial && (e.RegionId ?? e.HomeRegionId) is int prid) _map.PulseRegion(prid);
 
+        _guardBody.Text = BuildGuardBody(e, focusPid, isDeath, memorial, prevSeen);
+        _guardBackdrop.Visible = memorial;
+        _guardPanel.Visible = true;
+        RememberSeen(e);   // the card itself is a sighting
+    }
+
+    // Re-render the held card's body from the stored moment — used when the writing desk
+    // closes over a held card, so a fresh memorial inscription shows on the way back.
+    private void RerenderHeldGuardCard()
+    {
+        if (_guardEventId < 0) return;
+        var e = _world.Chronicle.Get(_guardEventId);
+        _guardBody.Text = BuildGuardBody(e, _guardFocusPid >= 0 ? _guardFocusPid : null,
+            _guardIsDeath, _guardWasMemorial, _guardPrevSeen);
+    }
+
+    // The card body, pure string-building: every line is chronicle truth or a grammar-
+    // proven claim — nothing invented, nothing stored.
+    private string BuildGuardBody(Event e, int? focusPid, bool isDeath, bool memorial, int prevSeen)
+    {
+        var cls = Ui.ClassOf(e.Type);
         var sb = new StringBuilder();
         string lead = memorial ? "a soul you followed has died — the world holds its breath"
             : isDeath ? "a tale of a bloodline you follow closes — the world waits"
@@ -1235,7 +1322,7 @@ public partial class Main : Node
         // Said only when the mark truly stands (cairn-worthy lives only — a follow alone never
         // raises one): home-memory language, never a death place. A murder's cairn belongs to
         // the slain's line — the card's focus may be the killer, so "their" would misattribute.
-        if (e.HomeRegionId is int cairnRid && _map.HasHomeMark(cairnRid, eid)
+        if (e.HomeRegionId is int cairnRid && _map.HasHomeMark(cairnRid, e.Id)
             && _world.RegionName(cairnRid) is string cairnName)
             sb.AppendLine($"[color=#8a5d12]∆ a memorial cairn is raised in {cairnName}, "
                 + $"the home of {(e.Type == "murder" ? "the slain's line" : "their line")}[/color]");
@@ -1258,6 +1345,15 @@ public partial class Main : Node
                         sb.AppendLine($"[center][color=#{mc}]{mt}[/color][/center]");
                     if (p.Children.Count > 0)
                         sb.AppendLine($"[center][color=#{Ui.Hex(Ui.FadedSub)}]{p.Children.Count} {(p.Children.Count == 1 ? "child carries" : "children carry")} the line[/color][/center]");
+                    // The player's inscription — their hand, never the chronicle's voice.
+                    if (_canon.Get($"p:{p.Id}", CanonNoteType.Inscription) is CanonNote insc
+                        && _canon.StateOf(insc, _world) == CanonNoteState.Active)
+                    {
+                        sb.AppendLine($"[center][i]“{EscapeBb(insc.Text)}”[/i][/center]");
+                        sb.AppendLine($"[center][color=#{Ui.Hex(Ui.FadedSub)}]— your hand[/color]  {Link($"canon:inscription:p:{p.Id}", "✎")}[/center]");
+                    }
+                    else if (!_canon.ReadOnly)
+                        sb.AppendLine($"[center]{Link($"canon:inscription:p:{p.Id}", "✎ set a memorial inscription")}[/center]");
                 }
                 else
                 {
@@ -1279,7 +1375,7 @@ public partial class Main : Node
                 }
             }
             sb.AppendLine();
-            if (prevSeen >= 0 && prevSeen != eid)
+            if (prevSeen >= 0 && prevSeen != e.Id)
             {
                 var ls = _world.Chronicle.Get(prevSeen);
                 sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]you last saw {p.Name}: Yr {ls.Year} —[/color] {Link("e:" + ls.Id, ls.Text)}");
@@ -1288,10 +1384,7 @@ public partial class Main : Node
                 sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]nothing of {p.Name} has crossed the saga since you began to follow[/color]");
         }
 
-        _guardBody.Text = sb.ToString();
-        _guardBackdrop.Visible = memorial;
-        _guardPanel.Visible = true;
-        RememberSeen(e);   // the card itself is a sighting
+        return sb.ToString();
     }
 
     // Restyle the one guard panel per moment: the memorial earns the ceremonial frame —
@@ -1736,13 +1829,24 @@ public partial class Main : Node
             // An honest unknown at a chain root is said plainly, under its row.
             if (step.Origin is OriginInfo origin && StoryCopy.OriginLine(origin, _world) is string oline)
                 sb.AppendLine($"      [color=#{Ui.Hex(Ui.Faded)}][i]{oline}[/i][/color]{CanonGapAffordance(origin, e)}");
+            // The player's hand, kept apart from the record, beneath the row it glosses.
+            if (CanonNoteLine($"e:{e.Id}", CanonNoteType.ChroniclerNote) is string cline)
+                sb.AppendLine(cline);
+            else if (isTarget && !_canon.ReadOnly && step.Origin?.Kind != OriginKind.HonestUnknown)
+                sb.AppendLine($"      {Link($"canon:note:e:{e.Id}", "✎ add a chronicler's note")}");
         }
         _catchup.Text = sb.ToString();
     }
 
-    // The door into the player's telling for an honest gap — filled by the canon
-    // authorship slice; until then the gap line stands alone.
-    private string CanonGapAffordance(OriginInfo origin, Event e) => "";
+    // The door into the player's telling for an honest gap: "the chronicle does not
+    // record what stirred her" earns a quiet "✎ write what stirred her". Once a note
+    // exists it renders on its own line instead, so the door never doubles the telling.
+    private string CanonGapAffordance(OriginInfo origin, Event e)
+    {
+        if (_canon.ReadOnly || _canon.Get($"e:{e.Id}", CanonNoteType.ChroniclerNote) is not null) return "";
+        return StoryCopy.WriteAffordance(origin, _world) is string label
+            ? $"  {Link($"canon:note:e:{e.Id}", label)}" : "";
+    }
 
     private void OnCursePressed()
     {
@@ -1886,6 +1990,17 @@ public partial class Main : Node
             sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color] [color=#{Ui.Hex(cls.Color)}]{cls.Glyph}[/color] {Link("e:" + e.Id, e.Text)}");
         }
 
+        // The player's hand: a telling for this soul; once the tale has ended, the
+        // inscription too. A telling outlives its subject — dead souls keep their lore.
+        sb.AppendLine();
+        if (CanonBlock($"p:{id}", CanonNoteType.Telling) is string telling) sb.Append(telling);
+        else if (!_canon.ReadOnly) sb.AppendLine(Link($"canon:telling:p:{id}", $"✎ write a telling of {p.Name}"));
+        if (!p.Alive)
+        {
+            if (CanonBlock($"p:{id}", CanonNoteType.Inscription) is string insc) sb.Append(insc);
+            else if (!_canon.ReadOnly) sb.AppendLine(Link($"canon:inscription:p:{id}", "✎ set a memorial inscription"));
+        }
+
         _inspector.Text = sb.ToString();
         _inspectorPanel.Visible = true;
     }
@@ -1898,10 +2013,98 @@ public partial class Main : Node
         if (link.StartsWith("e:") && int.TryParse(link[2..], out var eid)) OpenCatchup(eid);
         else if (link.StartsWith("r:") && int.TryParse(link[2..], out var rid)) OnRegionPicked(rid);
         else if (link.StartsWith("f:")) OnFactionPicked(link[2..]);
+        else if (link.StartsWith("canon:")) OpenCanonEditor(link[6..]);
     }
 
     private static string Link(string target, string text)
         => $"[color=#8a5d12][url={target}]{text}[/url][/color]";
+
+    // ------------------------------------------------------------- player canon
+
+    // Link target shape: canon:{typeKey}:{entityKey} — e.g. canon:telling:p:12,
+    // canon:note:e:5012, canon:legend:r:3, canon:say:f:highland.
+    private static string TypeKeyOf(CanonNoteType t) => t switch
+    {
+        CanonNoteType.Telling => "telling",
+        CanonNoteType.ChroniclerNote => "note",
+        CanonNoteType.Inscription => "inscription",
+        CanonNoteType.PlaceLegend => "legend",
+        _ => "say",
+    };
+
+    // RichTextLabel renders BBCode — the player's own brackets must stay ink, not markup.
+    private static string EscapeBb(string s) => s.Replace("[", "[lb]");
+
+    private void OpenCanonEditor(string spec)
+    {
+        if (_canon.ReadOnly) return;
+        int sep = spec.IndexOf(':');
+        if (sep <= 0) return;
+        CanonNoteType? type = spec[..sep] switch
+        {
+            "telling" => CanonNoteType.Telling,
+            "note" => CanonNoteType.ChroniclerNote,
+            "inscription" => CanonNoteType.Inscription,
+            "legend" => CanonNoteType.PlaceLegend,
+            "say" => CanonNoteType.PeopleSay,
+            _ => null,
+        };
+        string entityKey = spec[(sep + 1)..];
+        if (type is null) return;
+
+        string title = StoryCopy.CanonLabel(type.Value), context = "";
+        if (entityKey.StartsWith("p:") && int.TryParse(entityKey[2..], out int pid)
+            && _world.People.TryGetValue(pid, out var p))
+        {
+            title = type == CanonNoteType.Inscription ? $"An inscription for {p.Name}" : $"A telling of {p.Name}";
+            context = $"of {_world.Factions[p.FactionId].Name} · born Yr {p.BirthYear}"
+                + (p.Alive ? "" : $" — died Yr {p.DeathYear}");
+        }
+        else if (entityKey.StartsWith("e:") && int.TryParse(entityKey[2..], out int ceid)
+            && ceid >= 0 && ceid < _world.Chronicle.Events.Count)
+        {
+            var ce = _world.Chronicle.Get(ceid);
+            title = "A chronicler's note";
+            context = $"Yr {ce.Year} — {ce.Text}";
+        }
+        else if (entityKey.StartsWith("r:") && int.TryParse(entityKey[2..], out int crid)
+            && crid >= 0 && crid < _world.Regions.Count)
+        {
+            var cr = _world.Regions[crid];
+            title = $"The legend of {cr.Name}";
+            context = $"{cr.TerrainType} — what the place is said to be";
+        }
+        else if (entityKey.StartsWith("f:") && _world.Factions.TryGetValue(entityKey[2..], out var cf))
+        {
+            title = $"What the people say of {cf.Name}";
+            context = $"{cf.Culture} culture · of {cf.Homeland}";
+        }
+        else return;   // the entity isn't in this world right now — no editor over nothing
+
+        _canonPanel.Open(entityKey, type.Value, title, context);
+    }
+
+    // One full canon block for an entity's own card: label, the telling, the hand.
+    // Null when no active note — empty notes render nothing, dormant/quarantined stay dark.
+    private string? CanonBlock(string entityKey, CanonNoteType type)
+    {
+        var note = _canon.Get(entityKey, type);
+        if (note is null || _canon.StateOf(note, _world) != CanonNoteState.Active) return null;
+        var sb = new StringBuilder();
+        sb.AppendLine(SectionCap(StoryCopy.CanonLabel(type)));
+        sb.AppendLine($"[i]{EscapeBb(note.Text)}[/i]");
+        sb.AppendLine($"[color=#{Ui.Hex(Ui.FadedSub)}]— your hand, Yr {note.CreatedYear}[/color]  {Link($"canon:{TypeKeyOf(type)}:{entityKey}", "✎ edit")}");
+        return sb.ToString();
+    }
+
+    // One collapsed canon line for busy surfaces (~90-char preview).
+    private string? CanonNoteLine(string entityKey, CanonNoteType type)
+    {
+        var note = _canon.Get(entityKey, type);
+        if (note is null || _canon.StateOf(note, _world) != CanonNoteState.Active) return null;
+        string preview = note.Text.Length > 90 ? note.Text[..90].TrimEnd() + "…" : note.Text;
+        return $"      [color=#{Ui.Hex(Ui.FadedSub)}][i]{StoryCopy.CanonLabel(type)}: “{EscapeBb(preview)}” — your hand[/i][/color]  {Link($"canon:{TypeKeyOf(type)}:{entityKey}", "✎")}";
+    }
 
     // The Region Lens (foundation slice): clicking any territory inspects the place itself —
     // its land, its neighbours, and the tales anchored to it — instead of silently handing off
@@ -1942,6 +2145,11 @@ public partial class Main : Node
             : $"held by: {Link("f:" + holder.Id, holder.Name)}");
         sb.AppendLine($"map hint: {PlaceSeeds.Label(PlaceSeeds.KindOf(_world, region))} — a viewer's mark, not sim state");
         sb.AppendLine();
+        // The player's hand: what this place is said to be.
+        if (CanonBlock($"r:{regionId}", CanonNoteType.PlaceLegend) is string legend)
+        { sb.Append(legend); sb.AppendLine(); }
+        else if (!_canon.ReadOnly)
+        { sb.AppendLine(Link($"canon:legend:r:{regionId}", "✎ set a place legend")); sb.AppendLine(); }
         sb.AppendLine(SectionCap("Neighbouring lands"));
         foreach (var nid in region.AdjacentRegionIds)
         {
@@ -2039,6 +2247,10 @@ public partial class Main : Node
         sb.AppendLine($"living: {members.Count}");
         sb.AppendLine($"leader: {leader}");
         sb.AppendLine($"dominant faith: {dom?.Name ?? "—"}");
+        // The player's hand: what is said of this people.
+        sb.AppendLine();
+        if (CanonBlock($"f:{fid}", CanonNoteType.PeopleSay) is string say) sb.Append(say);
+        else if (!_canon.ReadOnly) sb.AppendLine(Link($"canon:say:f:{fid}", "✎ write what the people say"));
         // Customs appear only once a value axis has hardened into one (M7 culture engine).
         var customs = fac.CustomOriginEvent.Keys.OrderBy(c => c).ToList();
         if (customs.Count > 0)
@@ -2113,7 +2325,7 @@ public partial class Main : Node
         _chatLabel.Text = $"chattiness ≥ {(int)_chatSlider.Value}";
         if (_running) _guardReturnable = false;   // time moved on; the held moment has passed
         bool cardUp = _guardPanel.Visible || _catchupPanel.Visible || _recapPanel.Visible
-            || _pendingGuardEventId is not null;
+            || _pendingGuardEventId is not null || _canonPanel.IsOpen;
         _guardReturnBtn.Visible = _guardReturnable && !cardUp;
         // A queued recap shows on the transition INTO a pause (never over another card —
         // the focus guard always outranks it) and otherwise waits on its chip.
