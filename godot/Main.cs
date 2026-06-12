@@ -102,6 +102,16 @@ public partial class Main : Node
     // standing per-tick scan of the ever-growing marked set.
     private CastPanel _cast = null!;
     private bool _castDirty = true;
+
+    // Living introductions: when someone ENTERS the player's story (takes a watched seat,
+    // is born to a followed soul, slays or weds one of yours), a small ambient card names
+    // them — so the memorial stops being the first time the game frames a person. Non-modal,
+    // never pauses, one at a time, wall-clock fade; each soul is introduced at most once.
+    private PanelContainer _threadCard = null!;
+    private RichTextLabel _threadBody = null!;
+    private Tween? _threadTween;
+    private int _threadPid = -1;
+    private readonly HashSet<int> _introduced = new();
     private const int EchoCadence = 8;                      // sim-years between echo scans (slow path, not per-tick)
     private int _lastEchoYear;
     private readonly System.Collections.Generic.Dictionary<string, int> _echoSeen = new();  // archetype -> latest carded start year
@@ -411,6 +421,111 @@ public partial class Main : Node
         root.AddChild(_cast);
         _cast.Setup(() => _world, _followedSouls, _seedPeople, _marked, _markedFactions,
                     _followedRegions, _lastSeenEvent, OnPersonPicked);
+        BuildThreadCard(root);
+    }
+
+    // The introduction card: top-center, ambient (glimpse rank — below every pausing card),
+    // click to inspect the newcomer, fades on its own.
+    private void BuildThreadCard(Control root)
+    {
+        _threadCard = new PanelContainer { Visible = false, MouseFilter = Control.MouseFilterEnum.Stop };
+        root.AddChild(_threadCard);
+        _threadCard.AnchorLeft = 0.5f; _threadCard.AnchorRight = 0.5f;
+        _threadCard.AnchorTop = 0; _threadCard.AnchorBottom = 0;
+        _threadCard.OffsetLeft = -210; _threadCard.OffsetRight = 210;
+        _threadCard.OffsetTop = 48;
+        var box = Ui.PanelBox(8);
+        box.BorderColor = Ui.Gold;
+        _threadCard.AddThemeStyleboxOverride("panel", box);
+        _threadCard.GuiInput += ev =>
+        {
+            if (ev is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } && _threadPid >= 0)
+            {
+                _threadCard.Visible = false;
+                OnPersonPicked(_threadPid);
+            }
+        };
+
+        var margin = new MarginContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        foreach (var s in new[] { "left", "right" }) margin.AddThemeConstantOverride($"margin_{s}", 12);
+        foreach (var s in new[] { "top", "bottom" }) margin.AddThemeConstantOverride($"margin_{s}", 7);
+        _threadCard.AddChild(margin);
+        _threadBody = new RichTextLabel
+        {
+            BbcodeEnabled = true,
+            FitContent = true,
+            ScrollActive = false,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            CustomMinimumSize = new Vector2(396, 0),
+        };
+        _threadBody.AddThemeColorOverride("default_color", Ui.Ink);
+        _threadBody.AddThemeFontOverride("bold_font", Ui.SerifBold);
+        margin.AddChild(_threadBody);
+    }
+
+    // Who just entered your story? Rare by design — only followed-soul kin, watched seats,
+    // and those who strike at what you follow. Each soul introduced at most once.
+    private void MaybeIntroduce(Event e)
+    {
+        if (_followedSouls.Count == 0 && _marked.Count == 0
+            && _markedFactions.Count == 0 && _followedRegions.Count == 0) return;
+        int? pid = null;
+        string? line = null;
+        switch (e.Type)
+        {
+            case "succession" when e.Participants.Count > 0
+                && _world.People.TryGetValue(e.Participants[0], out var heir):
+                bool watchedSeat = _markedFactions.Contains(heir.FactionId)
+                    || (_followedRegions.Count > 0 && _world.Factions.TryGetValue(heir.FactionId, out var hf)
+                        && hf.ControlledRegions.Any(s => _followedRegions.Contains(int.Parse(s))));
+                if (watchedSeat)
+                { pid = heir.Id; line = $"now leads {_world.Factions[heir.FactionId].Name}"; }
+                break;
+            case "birth" when e.Participants.Count >= 3:
+                foreach (int par in new[] { e.Participants[1], e.Participants[2] })
+                    if (_followedSouls.Contains(par))
+                    { pid = e.Participants[0]; line = $"child of {_world.People[par].Name}, a soul you follow"; break; }
+                break;
+            case "murder" when e.Participants.Count >= 2:
+                int victim = e.Participants[0], killer = e.Participants[1];
+                if ((_marked.Contains(victim) || _followedSouls.Contains(victim))
+                    && !_marked.Contains(killer) && !_followedSouls.Contains(killer))
+                {
+                    pid = killer;
+                    line = $"slew {_world.People[victim].Name}, "
+                        + (_followedSouls.Contains(victim) ? "a soul you followed" : "of the line you follow");
+                }
+                break;
+            case "marriage" when e.Participants.Count >= 2:
+                bool aSoul = _followedSouls.Contains(e.Participants[0]);
+                bool bSoul = _followedSouls.Contains(e.Participants[1]);
+                if (aSoul != bSoul)
+                {
+                    pid = aSoul ? e.Participants[1] : e.Participants[0];
+                    line = $"wed to {_world.People[aSoul ? e.Participants[0] : e.Participants[1]].Name}, a soul you follow";
+                }
+                break;
+        }
+        if (pid is not int id || line is null) return;
+        if (_followedSouls.Contains(id) || !_introduced.Add(id)) return;   // never re-introduce, never introduce a known soul
+        ShowThreadCard(id, line);
+    }
+
+    private void ShowThreadCard(int pid, string line)
+    {
+        if (!_world.People.TryGetValue(pid, out var p)) return;
+        _threadPid = pid;
+        _threadBody.Text =
+            $"[color=#{Ui.Hex(Ui.Faded)}]A NEW THREAD[/color]  {PersonSigils.Bb(_world, pid)} [b]{p.Name}[/b] — {line}"
+            + $"  [color=#{Ui.Hex(Ui.FadedSub)}]· click to meet them[/color]";
+        _threadTween?.Kill();
+        _threadCard.Modulate = Colors.White;
+        _threadCard.Visible = true;
+        // Wall-clock linger then fade — presentation only, never touches the tick.
+        _threadTween = _threadCard.CreateTween();
+        _threadTween.TweenInterval(6.0);
+        _threadTween.TweenProperty(_threadCard, "modulate:a", 0f, 1.4f);
+        _threadTween.TweenCallback(Callable.From(() => { _threadCard.Visible = false; _threadCard.Modulate = Colors.White; }));
     }
 
     private void BuildFeed(Control root)
@@ -921,8 +1036,10 @@ public partial class Main : Node
             int imp = Scoring.ImportanceFast(e, _world, _consCount);
             if (yours) imp += YoursBoost;
             // The guard trigger runs before the chattiness gate: a follow is an explicit ask,
-            // so a followed soul's fate registers even when the feed is quiet.
+            // so a followed soul's fate registers even when the feed is quiet. Introductions
+            // run there too — meeting someone shouldn't depend on the chattiness slider.
             MaybeArmGuard(e, yours, imp);
+            MaybeIntroduce(e);   // own early-outs; a watched seat's heir isn't YOURS by participants
             if (imp < threshold) continue;
 
             // A specifically watched soul in the tale earns the row a gold side rule and
@@ -1433,6 +1550,25 @@ public partial class Main : Node
                 // never per-tick.
                 var theirs = _world.Chronicle.Events.Where(t => t.Participants.Contains(pid)).TakeLast(6).ToList();
                 foreach (var t in theirs)
+                {
+                    var tc = Ui.ClassOf(t.Type);
+                    sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {t.Year}[/color] [color=#{Ui.Hex(tc.Color)}]{tc.Glyph}[/color] {Link("e:" + t.Id, t.Text)}");
+                }
+            }
+            else if (p.Alive)
+            {
+                // Mid-life framing: the recap shouldn't first arrive at the grave. A compact
+                // "tale so far" — every line real sim state, one-shot scan on card open.
+                sb.AppendLine();
+                sb.AppendLine(SectionCap("Their tale so far"));
+                sb.AppendLine($"{PersonSigils.Bb(_world, pid)} {p.Name} — age {p.Age(_world.Year)}, born Yr {p.BirthYear}"
+                    + (p.IsLeader ? $" · leads {_world.Factions[p.FactionId].Name}"
+                       : p.EverLeader ? " · once a leader" : ""));
+                if (ReputationDisplay(p.Reputation) is (string srt, string src))
+                    sb.AppendLine($"[color=#{src}]{srt}[/color]");
+                if (p.Children.Count > 0) sb.AppendLine($"children: {p.Children.Count}");
+                var sofar = _world.Chronicle.Events.Where(t => t.Id != e.Id && t.Participants.Contains(pid)).TakeLast(3).ToList();
+                foreach (var t in sofar)
                 {
                     var tc = Ui.ClassOf(t.Type);
                     sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {t.Year}[/color] [color=#{Ui.Hex(tc.Color)}]{tc.Glyph}[/color] {Link("e:" + t.Id, t.Text)}");
