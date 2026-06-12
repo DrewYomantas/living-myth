@@ -90,6 +90,13 @@ public sealed partial class CastPanel : PanelContainer
     public void Refresh(bool membershipDirty)
     {
         var w = _world();
+        // Implied members (leaders, holders) hold present-tense roles — a dead one must
+        // force a recompute even when no YOURS event flagged it (a watched land's holder
+        // can change hands with no event the player's follows touch). O(cap).
+        if (!membershipDirty)
+            foreach (var (pid, role) in _members)
+                if (role != "a soul you follow" && w.People.TryGetValue(pid, out var mp) && !mp.Alive)
+                { membershipDirty = true; break; }
         if (membershipDirty) RecomputeMembers(w);
 
         Visible = _members.Count > 0;
@@ -167,7 +174,7 @@ public sealed partial class CastPanel : PanelContainer
         // The last beat the saga actually showed of them — hover memory, honest by source.
         row.TooltipText = _lastSeen.TryGetValue(pid, out int lsId)
             ? $"you last saw them Yr {w.Chronicle.Get(lsId).Year}: {w.Chronicle.Get(lsId).Text}"
-            : "nothing of them has crossed the saga yet — click to inspect";
+            : "the saga keeps no sightings of them — click to inspect";   // sightings track follows only
 
         var hb = new HBoxContainer();
         hb.AddThemeConstantOverride("separation", 8);

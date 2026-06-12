@@ -15,7 +15,7 @@ public static class PersonSigils
     // fallback chain covers them), deliberately disjoint from Ui.ClassOf's set — a person
     // mark must never read as an event class.
     private static readonly string[] Glyphs =
-    { "✣", "✤", "✥", "✱", "✸", "✽", "❁", "❃", "❋", "✠", "❂", "✜" };
+    { "✣", "✤", "✥", "✱", "✸", "✿", "❁", "❃", "❋", "✠", "❂", "❅" };
 
     // Inked tints that hold on parchment — distinct from one another, dark enough for text,
     // kept apart from the event-class chip colors.

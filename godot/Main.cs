@@ -478,12 +478,17 @@ public partial class Main : Node
         switch (e.Type)
         {
             case "succession" when e.Participants.Count > 0
-                && _world.People.TryGetValue(e.Participants[0], out var heir):
+                && _world.People.TryGetValue(e.Participants[0], out var heir)
+                && heir.Alive && heir.IsLeader:   // streamed after the full tick — the heir may already be gone
                 bool watchedSeat = _markedFactions.Contains(heir.FactionId)
                     || (_followedRegions.Count > 0 && _world.Factions.TryGetValue(heir.FactionId, out var hf)
-                        && hf.ControlledRegions.Any(s => _followedRegions.Contains(int.Parse(s))));
+                        && hf.ControlledRegions.Any(s => int.TryParse(s, out int wr) && _followedRegions.Contains(wr)));
                 if (watchedSeat)
-                { pid = heir.Id; line = $"now leads {_world.Factions[heir.FactionId].Name}"; }
+                {
+                    pid = heir.Id;
+                    line = $"now leads {_world.Factions[heir.FactionId].Name}";
+                    _castDirty = true;   // a watched seat changed hands — the roster must follow
+                }
                 break;
             case "birth" when e.Participants.Count >= 3:
                 foreach (int par in new[] { e.Participants[1], e.Participants[2] })
@@ -2189,11 +2194,18 @@ public partial class Main : Node
         CastChanged();
     }
 
-    // A follow changed — the cast roster recomputes now, not next tick.
+    // A follow changed — the cast roster recomputes now, not next tick. Unfollowing
+    // everything also retires the your-story rows: gold rows without a follow behind
+    // them would sit as unlabeled chrome above the world channel forever.
     private void CastChanged()
     {
         _cast.Refresh(membershipDirty: true);
         _castDirty = false;
+        if (!FollowingAnything())
+        {
+            foreach (var r in _yoursVis) r.Node.QueueFree();
+            _yoursVis.Clear();
+        }
     }
 
     private static string SectionCap(string text)
@@ -2239,10 +2251,12 @@ public partial class Main : Node
             if (_followedSouls.Contains(ch)) return $"parent of {_world.People[ch].Name}, a soul you follow";
         if (_followedRegions.Count > 0)
         {
-            if (_world.Factions.TryGetValue(p.FactionId, out var f))
-                foreach (string s in f.ControlledRegions)
-                    if (int.TryParse(s, out int rid) && _followedRegions.Contains(rid))
-                        return $"their people hold {_world.Regions[rid].Name}, a land you watch";
+            // Iterate the followed set in id order, not the faction's HashSet — which
+            // region gets named must never vary with hash order between runs.
+            foreach (int rid in _followedRegions.OrderBy(r => r))
+                if (rid >= 0 && rid < _world.Regions.Count
+                    && _world.Regions[rid].ControllingFactionId == p.FactionId)
+                    return $"their people hold {_world.Regions[rid].Name}, a land you watch";
             if (p.HomeRegionId is int hr && _followedRegions.Contains(hr))
                 return $"of a line rooted in {_world.Regions[hr].Name}, a land you watch";
         }
@@ -2621,8 +2635,9 @@ public partial class Main : Node
         _yearBig.Text = $"Year {_world.Year}";
         _yearSub.Text = $"{_world.LivingCount} souls · {_world.Chronicle.Events.Count} tales";
         bool following = FollowingAnything();
-        _yoursHeader.Visible = following;   // channel headers exist only when there ARE channels
-        _worldHeader.Visible = following;
+        // Channel headers exist only when there genuinely are two channels on screen.
+        _yoursHeader.Visible = following && _yoursVis.Count > 0;
+        _worldHeader.Visible = _yoursHeader.Visible;
         bool guardActive = _guardMode != GuardMode.Off && following;
         _guardLabel.Visible = guardActive;
         if (guardActive)
