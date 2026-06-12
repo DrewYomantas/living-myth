@@ -47,7 +47,19 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   by default; How We Got Here → right side sheet; writing desk → right drawer; feed 300/world rows
   recede while focused; bottom dock 78; MapView.FocusPerson/FocusRegion (cast click = find them).
   Baseline held exactly 884/699/567/706.
-- **Next** — Drew's F5 feel-test of the map-first pass + myth-authorship surfaces; surface culture + gossip in the viewer; timeline scrubbing; baseline-moving sim contracts (battle sites, per-region economy, peace faction ids).
+- **Living Atlas Surface + God-Hand V1** (2026-06-12, sim + viewer + gate) — the editable world
+  skin and the playable hand. `WorldSurface.cs` (Sim, Godot-free): 96×96 deterministic cell grid
+  (terrain/elevation/vegetation/region bridge/rivers), pure coordinate hashes (zero Rng draws),
+  journaled terraform edits + StateHash — baseline-inert by construction; MapView renders it as one
+  nearest-filtered pixel texture rebuilt only on terraform/territory change; clicks resolve through
+  surface cells. God-hand: DivinePressure ledger + Bless/Curse/Protect/Doom/Omen/SeedForest/
+  CallSpring — multipliers on EXISTING rolls only (no new draws), divine cause-links with two new
+  authored BUT rules, Fate Ledger right sheet, map payoff marks (binding table in VISUAL_STYLE.md).
+  New gate `divine` (the `surface` name was taken by the surfacing demo). Baseline held exactly
+  884/699/567/706 — deliberately unmoved.
+- **Next** — Drew's F5 feel-test of the atlas surface + god-hand; pressure/edit persistence
+  (session-only today); timeline scrubbing; baseline-moving sim contracts (battle sites,
+  per-region economy, peace faction ids, sites/settlements).
 
 ## Commands
 ```bash
@@ -56,6 +68,7 @@ dotnet run --project src/LivingMyth.Console -- verify          # determinism gat
 dotnet run --project src/LivingMyth.Console -- homes           # home/anchor contract gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- story           # causal-grammar gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- canon           # player-canon contract gate (must pass)
+dotnet run --project src/LivingMyth.Console -- divine          # god-hand + surface gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- run --seed 42
 dotnet run --project src/LivingMyth.Console -- divergence --seed 18
 dotnet run --project src/LivingMyth.Console -- surface --seed 1
