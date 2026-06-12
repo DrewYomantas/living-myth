@@ -342,6 +342,54 @@ Life events (births, deaths, murders) carry `Event.HomeRegionId` — where the l
   through the visually distinct **memorial cairn** channel (shipped 2026-06-11,
   above) — never through the place-mark store, never with place-event language.
 
+## Causal story language (Myth Authorship V1 — PLANNED)
+
+The chronicle explains what it can prove, in these exact voicings — single-sourced in
+`godot/StoryCopy.cs`; this table is the review checklist. Connectors are **lead-in lines
+between record rows** (small, faded, italic, indented), never merged into event text:
+
+- `therefore —` (proven consequence, gap ≤ 2 yrs)
+- `{N} years passed — therefore,` (proven consequence across a real gap)
+- `the whispers fed it — therefore,` (war ← rumor)
+- `but —` / `{N} years on — but` (authored complication/reversal only)
+- `the grievance lay unresolved for {N} years, until —` (revenge, provably open the whole gap)
+- `the chronicle does not record what first stirred {Name}.` (prophet — honest unknown)
+- `the chronicle does not record what doctrine divided them.` (schism)
+- `what drew them together, the chronicle does not say.` (forbidden bond)
+
+Forbidden: any causal connective ("therefore", "because", "led to", "drove them to")
+without StoryGrammar evidence; any interior life the sim does not model ("plotted",
+"stewed", "dreamed of revenge"); voicing a connector against a row the current view has
+hidden (quick mode) — the connector is suppressed, never re-aimed.
+
+Reputation transitions read as memory, not debug output: `{name}'s name darkens: little
+known → whispered against` — band words carry glossary hints (`[hint=…]`), and the
+"unremarked" fallback is written out as `little known`.
+
+## Player canon display language (Myth Authorship V1 — PLANNED)
+
+Player-authored text is the player's hand laid over the world — never the chronicle's
+voice, never sim truth:
+
+- The only five labels: **Your telling** (person), **Chronicler's note** (event),
+  **Memorial inscription** (dead soul), **Place legend** (region), **What the people
+  say** (faction).
+- Treatment: italic, attributed `— your hand`, visually apart from record rows. Busy
+  surfaces show a ~90-char preview; the full text lives on the entity's own card.
+- Empty notes render nothing — no placeholder rows, no empty sections. Canon never
+  enters the saga feed. Canon wording never borrows the record's authority ("the
+  chronicle records…" is reserved for Recorded Fact).
+- The write affordance is a quiet `✎` link ("✎ write what stirred {name}", "✎ set a
+  memorial inscription", "✎ set a place legend") — gold-family, never a loud button,
+  shown only where an honest gap or an owned surface invites it.
+- The editor is a modal parchment card captioned `YOUR HAND — KEPT APART FROM THE
+  RECORD`; it pauses the world while open and restores the prior pace on close. 500
+  characters; saving empty text removes the note.
+- A note written in a past session attaches to deterministic ids: it stays dormant until
+  this run's chronicle reaches its entity again, and a note whose identity snapshot no
+  longer matches (sim build drift) is quarantined — kept in the file, never rendered
+  against the wrong entity.
+
 ## Sim-truth honesty contract (restated, binding)
 
 The viewer may *derive* presentation (place kinds, scatter positions, road kinks, island

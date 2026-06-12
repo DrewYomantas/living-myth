@@ -427,6 +427,54 @@ The audit's value is the contract map below — what each blocked category waits
 | friction | — | no | no | faction-pair scoped |
 | divine (curse) | — | no | no | the cursed person is unplaced; the map click position is viewer scatter, **not** sim truth |
 
+## Truth model V1 — four ledgers (Myth Authorship arc, 2026-06-11; status: PLANNED)
+
+Binding from the Myth Authorship milestone on. Every piece of story the player sees belongs
+to exactly one ledger, and the ledgers never blur:
+
+| Ledger | What it is | Where it lives |
+|---|---|---|
+| **Recorded Fact** | What the sim knows happened: Event rows. Text is immutable — `Render()` is the verify comparand | `Chronicle` |
+| **Causal Claim** | A relationship the viewer may assert because it is deterministically provable: an `Event.Causes` link, stored person/faction state, or an authored rule over those. Derived on demand, never stored, never invented | `LivingMyth.Sim/StoryGrammar.cs` (read-model beside Echoes/Feed/Scoring) |
+| **Player Telling** | Freeform player-authored lore: tellings, chronicler's notes, memorial inscriptions, place legends, what-the-people-say. Always labeled, always visually apart, never interleaved into record text | `LivingMyth.Sim/PlayerCanon.cs` store → `user://canon_seed{N}.json` |
+| **Mechanical Truth** | What the sim acts on: live state (`Avenged`, `Tension`, `Prosperity`, …) | `World` |
+
+V1 rules: **Player Telling never becomes Mechanical Truth** (a future structured nudge
+system would be the only promotion path, and it does not exist). The sim never reads the
+canon store — enforced by the `canon` gate (reflection over sim types + a behavioral
+double-run). Canon is save-specific (per-seed file); world-template and shared/mod canon
+are future scopes the data shape must not block.
+
+### Connector provenance contract (binding)
+
+A causal connector may appear in the viewer ONLY when backed by deterministic evidence:
+
+| Connector | Meaning | Required evidence |
+|---|---|---|
+| therefore | proven consequence | the effect's `Causes` contains the cause (the generic default — `Causes` literally means "events that led to this one") |
+| but | proven complication or reversal | **authored rules only, never generic**: persecution-of-faith (faith proclaimed → adherent killed for it), scandal/honor killing off a forbidden bond, war-despite-peace (a blessed union provably *eased* tension yet its event sits in the war's grievance memory), ways shed/grate (customs) |
+| N years passed | real time gap | `effect.Year − cause.Year`, actual arithmetic — never mood |
+| unresolved until | a grievance provably open across the gap | revenge only: `victim.MurderEventId == cause.Id`, `victim.Avenged` flipped by exactly this event, the slain is `victim.KillerId` |
+| the chronicle does not say | honest unknown | authored allow-list of rootless events only: prophet (what first stirred them), schism (what doctrine divided them), forbidden bond (what drew them together) |
+
+Rootless events otherwise classify **RecordedMotive** (the text states it: ambition murders,
+natural deaths, friction, the founding), **ThresholdState** (famine/boom/trade/custom
+adoption — a threshold crossing), or **Routine** (births, weddings — say nothing). The
+default for an unrecognized rootless event is Routine: silence can never overclaim.
+
+Thread lifecycle vocabulary (viewer language over chains — never stored sim state):
+opened → deepened (therefore) → complicated (but) → quiet (no recorded consequence yet) →
+resolved (peace / avenged / faded) or transformed (martyrdom, seizure). When the sim cannot
+prove what filled a gap, the viewer states the gap honestly ("the grievance lay
+unresolved") — never "they plotted for years".
+
+### Rename / display-name contract (scaffold only)
+
+`Person.Name` and `Event.Text` are immutable identity: internal names live forever, and
+historical event text always renders the original names (it is also the verify comparand,
+so it cannot change). Any future rename feature is display-layer only — the canon schema
+reserves `display_name_override` (documented, not built). No rename UI exists in V1.
+
 ## Region Lens — data contracts still missing (design notes, not promises)
 The viewer-side lens is honest about these; each needs a deliberate sim-side milestone because all
 of them move the verify baseline (new RNG draws and/or new ordered iteration):
