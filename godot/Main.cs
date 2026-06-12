@@ -96,6 +96,12 @@ public partial class Main : Node
     private PlayerCanonStore _canon = null!;
     private CanonPanel _canonPanel = null!;
     private bool _canonReturnsToGuard;   // the desk was opened FROM the held card — return there on close
+
+    // The Cast (dramatis personae): the standing answer to "who is who". Membership
+    // recomputes only when dirty (a follow changed, or a YOURS event streamed) — never a
+    // standing per-tick scan of the ever-growing marked set.
+    private CastPanel _cast = null!;
+    private bool _castDirty = true;
     private const int EchoCadence = 8;                      // sim-years between echo scans (slow path, not per-tick)
     private int _lastEchoYear;
     private readonly System.Collections.Generic.Dictionary<string, int> _echoSeen = new();  // archetype -> latest carded start year
@@ -199,6 +205,7 @@ public partial class Main : Node
         _map.Souls = _followedSouls;
         _map.FollowedRegions = _followedRegions;
         StreamNewHeadlines();
+        CastChanged();   // hidden while nothing is followed; built ready
         if (_pendingGuardEventId is not null) ShowGuardCard();   // unreachable today; hardening
         StartChapter(0);   // chapter one opens on the founding events themselves
         RefreshTimeBar();
@@ -249,10 +256,12 @@ public partial class Main : Node
             _accum += (float)delta;
             float interval = BaseInterval / effSpeed;
             int budget = 6;   // cap ticks per frame so we never spiral trying to catch up
+            bool ticked = false;
             while (_accum >= interval && budget-- > 0)
             {
                 _accum -= interval;
                 _world.Tick();
+                ticked = true;
                 _chapterShownYears++;
                 bool notable = StreamNewHeadlines();
                 if (_pendingGuardEventId is not null)
@@ -269,6 +278,7 @@ public partial class Main : Node
                 }
             }
             if (_accum > interval * 6) _accum = 0f;   // drop any backlog
+            if (ticked) { _cast.Refresh(_castDirty); _castDirty = false; }   // O(cap) labels; membership only when dirty
             MaybeDetectEchoes();
             if (_chapterCloseReason is not null || _chapterShownYears >= ChapterYears)
                 CloseChapter(_chapterCloseReason ?? "a generation told");
@@ -301,6 +311,7 @@ public partial class Main : Node
         BuildFeed(root);
         BuildBottomBar(root);
         BuildYearCard(root);
+        BuildCastPanel(root);
         BuildInspector(root);
         BuildCatchup(root);
         BuildGlimpse(root);
@@ -392,6 +403,14 @@ public partial class Main : Node
         _guardLabel.AddThemeFontSizeOverride("font_size", 11);
         _guardLabel.AddThemeColorOverride("font_color", Ui.Gold);
         vb.AddChild(_guardLabel);
+    }
+
+    private void BuildCastPanel(Control root)
+    {
+        _cast = new CastPanel { Position = new Vector2(12, 132) };   // under the year card
+        root.AddChild(_cast);
+        _cast.Setup(() => _world, _followedSouls, _seedPeople, _marked, _markedFactions,
+                    _followedRegions, _lastSeenEvent, OnPersonPicked);
     }
 
     private void BuildFeed(Control root)
@@ -803,7 +822,7 @@ public partial class Main : Node
         Ui.StyleButton(unfollow);
         unfollow.Pressed += () =>
         {
-            if (_glimpsePid >= 0 && _followedSouls.Remove(_glimpsePid)) _map.QueueRedraw();
+            if (_glimpsePid >= 0 && _followedSouls.Remove(_glimpsePid)) { _map.QueueRedraw(); CastChanged(); }
             _glimpsePanel.Visible = false;
         };
         btns.AddChild(unfollow);
@@ -898,6 +917,7 @@ public partial class Main : Node
                 foreach (var pid in e.Participants) _marked.Add(pid);
 
             bool yours = IsYours(e);
+            if (yours) _castDirty = true;   // a YOURS event can change the cast (births, deaths, successions)
             int imp = Scoring.ImportanceFast(e, _world, _consCount);
             if (yours) imp += YoursBoost;
             // The guard trigger runs before the chattiness gate: a follow is an explicit ask,
@@ -1033,6 +1053,27 @@ public partial class Main : Node
         glyph.AddThemeColorOverride("font_color", Ui.ParchmentHi);
         chip.AddChild(glyph);
         hb.AddChild(chip);
+
+        // The cast mark: the first followed participant's sigil rides the row, so a known
+        // soul is recognizable in the stream without reading the name. O(participants),
+        // and only when anything is followed.
+        if (_followedSouls.Count > 0 || _marked.Count > 0)
+            foreach (var pid in e.Participants)
+                if (_followedSouls.Contains(pid) || _marked.Contains(pid))
+                {
+                    var sig = PersonSigils.Of(_world, pid);
+                    var mark = new Label
+                    {
+                        Text = sig.Glyph,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        MouseFilter = Control.MouseFilterEnum.Ignore,
+                        SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+                    };
+                    mark.AddThemeFontSizeOverride("font_size", 13);
+                    mark.AddThemeColorOverride("font_color", sig.Tint);
+                    hb.AddChild(mark);
+                    break;
+                }
 
         var body = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore };
         body.AddThemeConstantOverride("separation", 1);
@@ -1354,7 +1395,7 @@ public partial class Main : Node
                 if (memorial)
                 {
                     // The memorial centerpiece: name in ceremony, every line real sim state.
-                    sb.AppendLine($"[center][font_size=24][b]{p.Name}[/b][/font_size][/center]");
+                    sb.AppendLine($"[center][font_size=24]{PersonSigils.Bb(_world, p.Id)} [b]{p.Name}[/b][/font_size][/center]");
                     sb.AppendLine($"[center][color=#{Ui.Hex(Ui.FadedSub)}]of {fac.Name}"
                         + (p.EverLeader ? ", once their leader" : "")
                         + $" · born Yr {p.BirthYear} — died Yr {died} · {died - p.BirthYear} years[/color][/center]");
@@ -1964,6 +2005,7 @@ public partial class Main : Node
             if (_world.People.TryGetValue(pid, out var p)) _chapterRepBase[pid] = p.Reputation;
         }
         _map.QueueRedraw();
+        CastChanged();
         OnPersonPicked(pid);
     }
 
@@ -1976,6 +2018,7 @@ public partial class Main : Node
         if (rid < 0 || rid >= _world.Regions.Count) return;
         if (!_followedRegions.Remove(rid)) _followedRegions.Add(rid);
         _map.QueueRedraw();
+        CastChanged();
         OnRegionPicked(rid);
     }
 
@@ -1988,6 +2031,14 @@ public partial class Main : Node
         _marked.Clear();
         _marked.UnionWith(people);
         _map.QueueRedraw();
+        CastChanged();
+    }
+
+    // A follow changed — the cast roster recomputes now, not next tick.
+    private void CastChanged()
+    {
+        _cast.Refresh(membershipDirty: true);
+        _castDirty = false;
     }
 
     private static string SectionCap(string text)
