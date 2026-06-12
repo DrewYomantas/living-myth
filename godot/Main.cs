@@ -1298,7 +1298,7 @@ public partial class Main : Node
         string lead = memorial ? "a soul you followed has died — the world holds its breath"
             : isDeath ? "a tale of a bloodline you follow closes — the world waits"
             : focusPid is not null ? "fate touches what you follow — the world waits"
-            : RegionYours(e) ? "fate touches a land you watch — the world waits"
+            : RegionYours(e) ? $"fate touches {StoryCopy.Hint("a land you watch", "followed land")} — the world waits"
             : "a great deed marks the age — the world waits";
         sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]{lead}[/color]");
         sb.AppendLine();
@@ -1307,9 +1307,9 @@ public partial class Main : Node
         string where = e.RegionId is int rid && _world.RegionName(rid) is string rn
             ? $"  [color=#{Ui.Hex(Ui.Faded)}]· in {rn}[/color]"
             : e.HomeRegionId is int hrid && _world.RegionName(hrid) is string hrn
-            ? $"  [color=#{Ui.Hex(Ui.Faded)}]· {(e.Type == "birth" ? $"of a line rooted in {hrn}"
-                : e.Type == "murder" ? $"remembered in {hrn}, the home of the slain's line"
-                : $"remembered in {hrn}, the home of their line")}[/color]"
+            ? $"  [color=#{Ui.Hex(Ui.Faded)}]· {(e.Type == "birth" ? $"of a line {StoryCopy.Hint("rooted in", "rooted in")} {hrn}"
+                : e.Type == "murder" ? $"{StoryCopy.Hint("remembered in", "remembered in")} {hrn}, the home of the slain's line"
+                : $"{StoryCopy.Hint("remembered in", "remembered in")} {hrn}, the home of their line")}[/color]"
             : memorial ? $"  [color=#{Ui.Hex(Ui.Faded)}]· the chronicle records no place for this passing[/color]" : "";
         sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color]  [color=#{Ui.Hex(cls.Color)}]{cls.Glyph} {cls.Label.ToUpperInvariant()}[/color]  [b]{e.Text}[/b]{where}");
         // Why this touched your guard: the one proven cause behind the moment, voiced
@@ -1324,7 +1324,7 @@ public partial class Main : Node
         // the slain's line — the card's focus may be the killer, so "their" would misattribute.
         if (e.HomeRegionId is int cairnRid && _map.HasHomeMark(cairnRid, e.Id)
             && _world.RegionName(cairnRid) is string cairnName)
-            sb.AppendLine($"[color=#8a5d12]∆ a memorial cairn is raised in {cairnName}, "
+            sb.AppendLine($"[color=#8a5d12]∆ a {StoryCopy.Hint("memorial cairn", "memorial cairn")} is raised in {cairnName}, "
                 + $"the home of {(e.Type == "murder" ? "the slain's line" : "their line")}[/color]");
 
         if (focusPid is int pid && _world.People.TryGetValue(pid, out var p))
@@ -1345,6 +1345,11 @@ public partial class Main : Node
                         sb.AppendLine($"[center][color=#{mc}]{mt}[/color][/center]");
                     if (p.Children.Count > 0)
                         sb.AppendLine($"[center][color=#{Ui.Hex(Ui.FadedSub)}]{p.Children.Count} {(p.Children.Count == 1 ? "child carries" : "children carry")} the line[/color][/center]");
+                    // A murdered soul leaves an open grievance — stored sim state
+                    // (Murdered && !Avenged), honest about the gap it opens, never "they
+                    // will be avenged" (the chronicle does not know that).
+                    if (p.Murdered && !p.Avenged)
+                        sb.AppendLine($"[center][color=#{Ui.Hex(Ui.FadedSub)}]the grievance of this murder lies unresolved[/color][/center]");
                     // The player's inscription — their hand, never the chronicle's voice.
                     if (_canon.Get($"p:{p.Id}", CanonNoteType.Inscription) is CanonNote insc
                         && _canon.StateOf(insc, _world) == CanonNoteState.Active)
@@ -1464,7 +1469,12 @@ public partial class Main : Node
         _guardChipGlyph.AddThemeColorOverride("font_color", Ui.ParchmentHi);
         _guardChip.AddChild(_guardChipGlyph);
         hb.AddChild(_guardChip);
-        _guardTitle = new Label { Text = "Focus Guard", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _guardTitle = new Label
+        {
+            Text = "Focus Guard",
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            TooltipText = StoryCopy.Glossary["guard"],
+        };
         _guardTitle.AddThemeFontOverride("font", Ui.SerifBold);
         _guardTitle.AddThemeFontSizeOverride("font_size", 21);
         _guardTitle.AddThemeColorOverride("font_color", Ui.InkDeep);
@@ -1650,10 +1660,13 @@ public partial class Main : Node
             foreach (var (pid, baseRep) in OrderedRepBase(snap))
             {
                 if (!_followedSouls.Contains(pid) || !_world.People.TryGetValue(pid, out var p)) continue;
-                string before = ReputationDisplay(baseRep)?.text ?? "unremarked";
-                string after = ReputationDisplay(p.Reputation)?.text ?? "unremarked";
+                string before = RepBandWord(baseRep);
+                string after = RepBandWord(p.Reputation);
                 if (before == after) continue;
-                sb.AppendLine($"{p.Name} — {before} → {after}");
+                // A name moves as memory, not as debug output: darkens/brightens by the
+                // real reputation delta, band words glossed on hover.
+                string turn = p.Reputation < baseRep ? "darkens" : "brightens";
+                sb.AppendLine($"{p.Name}'s name {turn}: {StoryCopy.Hint(before, before)} → {StoryCopy.Hint(after, after)}");
                 any = true;
             }
             foreach (var fid in snap.RegionBase.Keys.OrderBy(k => k))
@@ -1674,6 +1687,35 @@ public partial class Main : Node
                 if (lives > 0) channels.Add($"{lives} {(lives == 1 ? "life" : "lives")} remembered here");
                 sb.AppendLine($"{Link("r:" + rid, _world.Regions[rid].Name)} — {string.Join(" · ", channels)}");
                 any = true;
+            }
+            // Still unresolved — proven open threads, never mood: unavenged murders among
+            // the souls and kin you follow (Murdered && !Avenged is stored sim state), and
+            // wars no peace event has ever answered. Honest copy only — the chronicle does
+            // not know what filled the gap, so nothing here says "plotted" or "brooded".
+            var watched = new HashSet<int>(_marked);
+            watched.UnionWith(_followedSouls);
+            var grievances = StoryGrammar.OpenGrievances(_world, watched);
+            var openWars = StoryGrammar.OpenWars(_world);
+            if (grievances.Count > 0 || openWars.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine(SectionCap("Still unresolved"));
+                foreach (var g in grievances.Take(3))
+                {
+                    string vName = _world.People[g.VictimId].Name;
+                    sb.AppendLine(g.KillerAlive
+                        ? $"the murder of {vName} [color=#{Ui.Hex(Ui.Faded)}](Yr {g.MurderYear})[/color] is unavenged — {_world.Year - g.MurderYear} years and counting  {Link("e:" + g.MurderEventId, "the deed")}"
+                        : $"the murder of {vName} [color=#{Ui.Hex(Ui.Faded)}](Yr {g.MurderYear})[/color] was never answered — the killer died unpunished  {Link("e:" + g.MurderEventId, "the deed")}");
+                    any = true;
+                }
+                if (grievances.Count > 3)
+                    sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]…and {grievances.Count - 3} more grievances unanswered[/color]");
+                foreach (var ow in openWars.Take(2))
+                {
+                    var we = _world.Chronicle.Get(ow.WarEventId);
+                    sb.AppendLine($"{Link("e:" + ow.WarEventId, we.Text)} [color=#{Ui.Hex(Ui.Faded)}]— declared Yr {ow.DeclaredYear}, no peace has been made[/color]");
+                    any = true;
+                }
             }
             if (!any) sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]your threads passed the age quietly[/color]");
         }
@@ -1816,7 +1858,8 @@ public partial class Main : Node
                 sb.AppendLine($"      [color=#{Ui.Hex(Ui.FadedSub)}][i]{StoryCopy.ConnectorPhrase(link)}[/i][/color]");
             var cls = Ui.ClassOf(e.Type);
             string year = $"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color]";
-            string chip = $"[color=#{Ui.Hex(cls.Color)}]{cls.Glyph} {cls.Label.ToUpperInvariant()}[/color]";
+            // Hint() is a no-op for labels without a glossary entry, so every chip can ask.
+            string chip = $"[color=#{Ui.Hex(cls.Color)}]{cls.Glyph} {StoryCopy.Hint(cls.Label.ToUpperInvariant(), cls.Label.ToLowerInvariant())}[/color]";
             string body = isTarget ? $"[b]{e.Text}[/b]" : e.Text;
             string where = e.RegionId is int rid && _world.RegionName(rid) is string rn
                 ? $"  [color=#{Ui.Hex(Ui.Faded)}]· in {rn}[/color]" : "";
@@ -1930,6 +1973,17 @@ public partial class Main : Node
         <= -3 => ("Infamous — a blackened name", "3a2418"),
         <= -1 => ("Whispered against", "5a4632"),
         _ => null,
+    };
+
+    // Short band words for reputation transitions (same thresholds as ReputationDisplay;
+    // the silent middle band gets a readable word instead of the old debug-ish "unremarked").
+    private static string RepBandWord(int rep) => rep switch
+    {
+        >= 3 => "admired",
+        >= 1 => "well spoken of",
+        <= -3 => "infamous",
+        <= -1 => "whispered against",
+        _ => "little known",
     };
 
     private void OnPersonPicked(int id)
