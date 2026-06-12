@@ -44,6 +44,14 @@
     "gossip_reputation_step": 1,
     "gossip_tension_step": 0.8,
     "gossip_cooldown_years": 8,
-    "gossip_cross_faction_chance": 0.35
+    "gossip_cross_faction_chance": 0.35,
+    "bless_death_multiplier": 0.7,
+    "protect_famine_relief": 0.5,
+    "doom_famine_burden": 1.5,
+    "protect_prosperity_bias": 0.02,
+    "doom_prosperity_drag": 0.02,
+    "protect_duration_years": 50,
+    "doom_duration_years": 50,
+    "omen_duration_years": 40
   }
 }

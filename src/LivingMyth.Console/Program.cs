@@ -21,8 +21,9 @@ switch (cmd)
     case "homes": HomesCmd(Years(120)); break;
     case "story": StoryCmd(Years(120)); break;
     case "canon": CanonCmd(); break;
+    case "divine": DivineCmd(Years(200)); break;
     default:
-        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon");
+        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine");
         break;
 }
 return;
@@ -632,6 +633,183 @@ void CanonCmd()
     }
 
     Console.WriteLine(bad.Count == 0 ? "\nCANON CONTRACT HOLDS." : $"\n{bad.Count} CHECK(S) BROKE THE CONTRACT.");
+    Environment.Exit(bad.Count == 0 ? 0 : 1);
+}
+
+// ------------------------------------------------------------------------- divine
+
+// Proof gate for god-hand divine pressure V1 + the editable world surface: pressure records
+// are deterministic, targets validate, the curse stays traceable, pressure-influenced events
+// cause-link to the real divine acts, terrain edits are deterministic and real, the
+// RegionId/HomeRegionId channels stay unmixed, and the sim remains canon-blind.
+void DivineCmd(int years)
+{
+    Console.WriteLine($"Divine pressure gate ({years} yrs): the god's hand is explicit state, deterministic,");
+    Console.WriteLine("honestly cause-linked, and the surface edits are real and replayable.");
+    var bad = new List<string>();
+
+    // The scripted hand: the same acts at year 0, then the world runs free.
+    World RunScript(int seed)
+    {
+        var (cfg, names) = Load();
+        var w = new World(seed, cfg, names);
+        w.SeedWorld();
+        var f = w.Config.Factions;
+        // Deterministic targets: the two eldest of the first people are blessed (old enough
+        // to die naturally inside the window), the youngest adult of the second is cursed.
+        var elders = w.FactionMembers(f[0].Id).OrderByDescending(p => p.Age(w.Year)).ThenBy(p => p.Id).Take(2).ToList();
+        foreach (var e in elders) w.BlessPerson(e);
+        var cursed = w.FactionMembers(f[1].Id).Where(p => p.Age(w.Year) >= 18)
+            .OrderBy(p => p.Age(w.Year)).ThenBy(p => p.Id).First();
+        w.PlantCurse(cursed);
+        w.ProtectFaction(f[0].Id);
+        w.DoomFaction(f[1].Id);
+        int target = w.Factions[f[2].Id].ControlledRegions.Count > 0
+            ? w.Factions[f[2].Id].ControlledRegions.Select(int.Parse).Min() : 0;
+        w.SeedOmen(target);
+        // A region whose seat sits in rock or water honestly refuses the edit (null) —
+        // walk regions in id order until the land takes each act. Deterministic.
+        foreach (var r in w.Regions) if (w.SeedForest(r.Id) is not null) break;
+        foreach (var r in w.Regions) if (w.CallSpring(r.Id) is not null) break;
+        for (int i = 0; i < years; i++) w.Tick();
+        return w;
+    }
+
+    string Ledger(World w) => string.Join("\n", w.DivinePressures.Select(p =>
+        $"{p.Id}|{p.Kind}|{p.TargetType}|{p.TargetId}|{p.StartYear}|{p.SourceEventId}|{p.ExpiresYear?.ToString() ?? "-"}"));
+
+    // ---- target validation: the hand cannot act on what is not there ----
+    {
+        var (cfg, names) = Load();
+        var w = new World(7, cfg, names);
+        w.SeedWorld();
+        for (int i = 0; i < 60; i++) w.Tick();   // let some souls die
+        bool Throws(Action a) { try { a(); return false; } catch (ArgumentException) { return true; } }
+        var deadSoul = w.People.Values.Where(p => !p.Alive).OrderBy(p => p.Id).First();
+        var alive = w.Living()[0];
+        w.BlessPerson(alive);
+        bool ok = Throws(() => w.BlessPerson(deadSoul))
+               && Throws(() => w.BlessPerson(alive))                   // double-bless
+               && Throws(() => w.ProtectFaction("no-such-people"))
+               && Throws(() => w.SeedOmen(-1))
+               && Throws(() => w.SeedForest(9999));
+        Console.WriteLine($"  validation: {(ok ? "OK" : "FAIL")}");
+        if (!ok) bad.Add("validation");
+    }
+
+    int blessLinkedDeaths = 0, doomLinkedFamines = 0, curseFallout = 0;
+    foreach (int seed in new[] { 7, 42 })
+    {
+        var w = RunScript(seed);
+        var w2 = RunScript(seed);
+        var seedBad = new List<string>();
+
+        // Determinism: chronicle, ledger, and surface state all byte-identical.
+        if (w.Chronicle.Render() != w2.Chronicle.Render()) seedBad.Add("chronicle differs between identical scripts");
+        if (Ledger(w) != Ledger(w2)) seedBad.Add("fate ledger differs between identical scripts");
+        if (w.Surface.StateHash() != w2.Surface.StateHash()) seedBad.Add("surface state differs between identical scripts");
+
+        // Terrain edits are real: the touched surface differs from a pristine one, and the
+        // forest genuinely thickened around the seeded seat.
+        var (cfgP, namesP) = Load();
+        var pristine = new World(seed, cfgP, namesP);
+        pristine.SeedWorld();
+        if (pristine.Surface.StateHash() == w.Surface.StateHash()) seedBad.Add("terrain edits left no trace on the surface");
+        var forestEv = w.Chronicle.Events.FirstOrDefault(e => e.Tags.Contains("terrain") && e.Tags.Contains("forest"));
+        var springEv = w.Chronicle.Events.FirstOrDefault(e => e.Tags.Contains("terrain") && e.Tags.Contains("water"));
+        if (forestEv is null || springEv is null) seedBad.Add("terrain acts recorded no events");
+        else
+        {
+            int rid = forestEv.RegionId!.Value;
+            var r = w.Regions[rid];
+            var (scx, scy) = WorldSurface.CellOf(r.X, r.Y);
+            float vegNow = w.Surface.VegetationAt(scx, scy);
+            float vegWas = pristine.Surface.VegetationAt(scx, scy);
+            if (vegNow <= vegWas) seedBad.Add($"seeded forest did not raise vegetation ({vegWas:0.00} -> {vegNow:0.00})");
+        }
+
+        // Channel honesty: divine acts never carry a home anchor; person-target acts carry
+        // no place at all; region-target acts are anchored exactly where the hand touched.
+        foreach (var e in w.Chronicle.Events.Where(e => e.Type == "divine"))
+        {
+            if (e.HomeRegionId is not null) seedBad.Add($"divine event #{e.Id} carries a home anchor");
+            bool personAct = e.Tags.Contains("curse") || e.Tags.Contains("blessing");
+            bool regionAct = e.Tags.Contains("omen") || e.Tags.Contains("terrain");
+            if (personAct && e.RegionId is not null) seedBad.Add($"person-target act #{e.Id} claims a place");
+            if (regionAct && e.RegionId is null) seedBad.Add($"region-target act #{e.Id} lost its anchor");
+        }
+
+        // Cause-link honesty: every pressure-influenced edge points at the recorded act,
+        // and the grammar classifies it with the authored rule.
+        int curseId = w.CurseEvent!.Id;
+        var blessIds = w.DivinePressures.Where(p => p.Kind == DivinePressureKind.Bless)
+            .Select(p => p.SourceEventId).ToHashSet();
+        var doomId = w.DivinePressures.First(p => p.Kind == DivinePressureKind.Doom).SourceEventId;
+        var protectId = w.DivinePressures.First(p => p.Kind == DivinePressureKind.Protect).SourceEventId;
+        foreach (var e in w.Chronicle.Events)
+        {
+            if (e.Causes.Contains(curseId)) curseFallout++;
+            if (e.Type == "death" && e.Causes.Any(blessIds.Contains))
+            {
+                blessLinkedDeaths++;
+                var link = StoryGrammar.ProximateLink(w, e)!;
+                if (blessIds.Contains(link.CauseEventId) && link.RuleId != "death-despite-blessing")
+                    seedBad.Add($"blessed death #{e.Id} classified '{link.RuleId}'");
+            }
+            if (e.Type == "famine" && e.Causes.Contains(doomId))
+            {
+                doomLinkedFamines++;
+                var link = StoryGrammar.ProximateLink(w, e)!;
+                if (link.CauseEventId == doomId && link.RuleId != "famine-under-doom")
+                    seedBad.Add($"doomed famine #{e.Id} classified '{link.RuleId}'");
+            }
+            if (e.Type == "famine" && e.Causes.Contains(protectId))
+            {
+                var link = StoryGrammar.ProximateLink(w, e)!;
+                if (link.CauseEventId == protectId
+                    && (link.RuleId != "famine-despite-protection" || link.Kind != ConnectorKind.But))
+                    seedBad.Add($"famine under protection #{e.Id} classified '{link.RuleId}' ({link.Kind})");
+            }
+            // Grammar safety net on the scripted world: But stays authored-only.
+            if (e.Causes.Count > 0)
+            {
+                var l = StoryGrammar.ProximateLink(w, e)!;
+                if (l.Kind == ConnectorKind.But && !StoryGrammar.ButRules.Contains(l.RuleId))
+                    seedBad.Add($"event #{e.Id} BUT from non-authored rule '{l.RuleId}'");
+            }
+        }
+
+        Console.WriteLine($"  seed {seed,3}: {(seedBad.Count == 0 ? "OK" : "FAIL")}  {w.Chronicle.Events.Count} events, " +
+            $"{w.DivinePressures.Count} pressures, surface {w.Surface.Edits.Count} edits (hash {w.Surface.StateHash():x16})");
+        foreach (var b in seedBad.Take(5)) Console.WriteLine($"           {b}");
+        bad.AddRange(seedBad);
+    }
+
+    // The influences must actually have happened somewhere across the suite — a gate that
+    // only checks vacuous conditionals proves nothing.
+    Console.WriteLine($"  influence: {curseFallout} curse-fallout, {blessLinkedDeaths} blessed deaths, {doomLinkedFamines} doomed famines");
+    if (curseFallout == 0) bad.Add("curse never traced to any fallout");
+    if (blessLinkedDeaths == 0) bad.Add("no blessed death ever cause-linked (suite too quiet?)");
+    if (doomLinkedFamines == 0) bad.Add("no doomed famine ever cause-linked (suite too quiet?)");
+
+    // The sim stays canon-blind (reflection re-assert; the canon gate proves it behaviorally).
+    {
+        var canonTypes = new[] { typeof(PlayerCanonStore), typeof(CanonNote), typeof(CanonFile) };
+        var simTypes = new[] { typeof(World), typeof(Chronicle), typeof(Event), typeof(Person),
+                               typeof(Faction), typeof(Region), typeof(WorldSurface), typeof(DivinePressure) };
+        bool Touches(Type t) => canonTypes.Contains(t)
+            || (t.IsGenericType && t.GetGenericArguments().Any(Touches));
+        const System.Reflection.BindingFlags all =
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic |
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static;
+        bool blind = simTypes.All(t =>
+            t.GetFields(all).All(fl => !Touches(fl.FieldType)) &&
+            t.GetProperties(all).All(pr => !Touches(pr.PropertyType)));
+        Console.WriteLine($"  canon-blind: {(blind ? "OK" : "FAIL")}");
+        if (!blind) bad.Add("a sim type can see the player canon");
+    }
+
+    Console.WriteLine(bad.Count == 0 ? "\nDIVINE PRESSURE HOLDS." : $"\n{bad.Count} CHECK(S) BROKE THE CONTRACT.");
     Environment.Exit(bad.Count == 0 ? 0 : 1);
 }
 

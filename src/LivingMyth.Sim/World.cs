@@ -414,18 +414,135 @@ public sealed class World
         fac.ControlledRegions.Add(region.Id.ToString());
     }
 
-    // ---------- the god's hand ----------
+    // ---------- the god's hand (divine pressure V1) ----------
+
+    /// <summary>The fate ledger: every act of the god's hand, in order. Append-only,
+    /// deterministic, never read by the tick except through the explicit per-target
+    /// fields the acts set (Person.Blessed/Cursed, Faction protect/doom windows).</summary>
+    public List<DivinePressure> DivinePressures { get; } = new();
+    private int _nextPressureId;
+
+    private DivinePressure AddPressure(DivinePressureKind kind, string targetType, string targetId,
+                                       Event source, int? expiresYear)
+    {
+        var pr = new DivinePressure(_nextPressureId++, kind, targetType, targetId, Year, source.Id, expiresYear);
+        DivinePressures.Add(pr);
+        return pr;
+    }
+
+    private int DurationParam(string key, int def) => (int)Params.GetValueOrDefault(key, def);
+
+    private Region ValidRegion(int regionId)
+        => regionId >= 0 && regionId < Regions.Count ? Regions[regionId]
+        : throw new ArgumentException($"no such region: {regionId}");
+
+    private Faction ValidLivingFaction(string fid)
+        => Factions.TryGetValue(fid, out var fac) && fac.Members.Count > 0 ? fac
+        : throw new ArgumentException($"no living faction: {fid}");
 
     /// <summary>Lay a curse on one person and their bloodline. Plants a flag and records the
     /// act. It deliberately consumes no randomness, so a cursed run stays perfectly in step
     /// with a clean run until the curse actually changes an outcome. That's the butterfly.</summary>
     public Event PlantCurse(Person person)
     {
+        if (person.Cursed) throw new ArgumentException($"{person.Name} is already cursed");
         person.Cursed = true;
         var ev = Chronicle.Record(Year, "divine",
             $"A curse is laid upon {person.Name} of {Factions[person.FactionId].Name} and all their blood.",
             participants: new() { person.Id }, tags: new() { "divine", "curse" });
         CurseEvent = ev;
+        AddPressure(DivinePressureKind.Curse, "person", person.Id.ToString(), ev, null);
+        return ev;
+    }
+
+    /// <summary>Bless one life: fate leans gently toward them (bless_death_multiplier on the
+    /// existing death roll — the same draw, a kinder threshold; never a guarantee). Their
+    /// eventual natural death cause-links back to this act, honestly.</summary>
+    public Event BlessPerson(Person person)
+    {
+        if (!person.Alive) throw new ArgumentException($"{person.Name} is dead — the dead are past blessing");
+        if (person.Blessed) throw new ArgumentException($"{person.Name} is already blessed");
+        person.Blessed = true;
+        var ev = Chronicle.Record(Year, "divine",
+            $"A blessing is laid upon {person.Name} of {Factions[person.FactionId].Name}; fate leans kindly toward them.",
+            participants: new() { person.Id }, tags: new() { "divine", "blessing" });
+        person.BlessEvent = ev;
+        AddPressure(DivinePressureKind.Bless, "person", person.Id.ToString(), ev, null);
+        return ev;
+    }
+
+    /// <summary>Shield a people for a season of years: famine weighs lighter on them and
+    /// their fortunes mend a little faster. Modest, windowed, self-expiring.</summary>
+    public Event ProtectFaction(string factionId)
+    {
+        var fac = ValidLivingFaction(factionId);
+        if (fac.ProtectUntilYear > Year) throw new ArgumentException($"{fac.Name} already stand under protection");
+        int until = Year + DurationParam("protect_duration_years", 50);
+        var ev = Chronicle.Record(Year, "divine",
+            $"A divine protection settles over {fac.Name}; for a time, hardship will weigh lighter on them.",
+            participants: fac.LeaderId is int lid ? new() { lid } : null,
+            tags: new() { "divine", "protect" });
+        fac.ProtectUntilYear = until;
+        fac.ProtectEventId = ev.Id;
+        AddPressure(DivinePressureKind.Protect, "faction", factionId, ev, until);
+        return ev;
+    }
+
+    /// <summary>Pronounce a doom over a people for a season of years: their fortunes run
+    /// thin and famine bites deeper. Modest, windowed, self-expiring.</summary>
+    public Event DoomFaction(string factionId)
+    {
+        var fac = ValidLivingFaction(factionId);
+        if (fac.DoomUntilYear > Year) throw new ArgumentException($"{fac.Name} already labor under a doom");
+        int until = Year + DurationParam("doom_duration_years", 50);
+        var ev = Chronicle.Record(Year, "divine",
+            $"A doom is pronounced upon {fac.Name}; for a time, their fortunes will run thin.",
+            participants: fac.LeaderId is int lid ? new() { lid } : null,
+            tags: new() { "divine", "doom" });
+        fac.DoomUntilYear = until;
+        fac.DoomEventId = ev.Id;
+        AddPressure(DivinePressureKind.Doom, "faction", factionId, ev, until);
+        return ev;
+    }
+
+    /// <summary>Seed an omen over a land. Honest scope: attention, not mechanics — the viewer
+    /// surfaces this land's tales while the omen hangs; no roll anywhere changes. The act is
+    /// truly anchored (the omen IS at this place), so RegionId is honest.</summary>
+    public Event SeedOmen(int regionId)
+    {
+        var region = ValidRegion(regionId);
+        var ev = Chronicle.Record(Year, "divine",
+            $"A strange omen hangs over {region.Name}; the eye of fate turns there.",
+            tags: new() { "divine", "omen" }, regionId: regionId);
+        AddPressure(DivinePressureKind.Omen, "region", regionId.ToString(), ev,
+            Year + DurationParam("omen_duration_years", 40));
+        return ev;
+    }
+
+    /// <summary>Terraform: raise a forest around a region's seat. The surface edit is the
+    /// real state change; the recorded event is the honest witness (truly anchored — the
+    /// forest IS at this place). Null when the land had no room to change.</summary>
+    public Event? SeedForest(int regionId)
+    {
+        var region = ValidRegion(regionId);
+        if (Surface.SeedForestAt(regionId, region.X, region.Y) == 0) return null;
+        var ev = Chronicle.Record(Year, "divine",
+            $"A forest rises across {region.Name} where no seed was sown.",
+            tags: new() { "divine", "terrain", "forest" }, regionId: regionId);
+        AddPressure(DivinePressureKind.ForestSeeded, "region", regionId.ToString(), ev, null);
+        return ev;
+    }
+
+    /// <summary>Terraform: call a spring from the earth near a region's seat — a small lake
+    /// ringed by wetland. Null when no open ground would take it.</summary>
+    public Event? CallSpring(int regionId)
+    {
+        var region = ValidRegion(regionId);
+        if (Surface.CallSpringAt(regionId, region.X, region.Y) == 0) return null;
+        var ev = Chronicle.Record(Year, "divine",
+            $"A spring breaks from the earth of {region.Name}, and water gathers where none ran before.",
+            tags: new() { "divine", "terrain", "water" }, regionId: regionId);
+        AddPressure(DivinePressureKind.SpringCalled, "region", regionId.ToString(), ev, null);
         return ev;
     }
 
@@ -596,14 +713,27 @@ public sealed class World
             int step = Rng.RandInt(-1, 1);
             f.Prosperity += step * Params["economy_prosperity_step"];
             f.Prosperity += (1.0 - f.Prosperity) * Params["economy_prosperity_revert"];
+            // God-hand pressure: a flat bias on the walk while the window holds — same
+            // draws, gently shifted values. Inert (0-width windows) without player acts.
+            if (f.ProtectUntilYear > Year)
+                f.Prosperity += Params.GetValueOrDefault("protect_prosperity_bias", 0.02);
+            if (f.DoomUntilYear > Year)
+                f.Prosperity -= Params.GetValueOrDefault("doom_prosperity_drag", 0.02);
             f.Prosperity = Math.Clamp(f.Prosperity, 0.0, 2.0);
 
             if (!f.InFamine && f.Prosperity < Params["famine_threshold"])
             {
                 f.InFamine = true;
+                // A famine arriving under an active doom or protection cause-links to the
+                // divine act, honestly: the doom truly pressed it down ("therefore"); the
+                // protection truly stood against it and was overcome ("but").
+                var divineCauses = new List<int>();
+                if (f.DoomUntilYear > Year && f.DoomEventId is int de) divineCauses.Add(de);
+                if (f.ProtectUntilYear > Year && f.ProtectEventId is int pe) divineCauses.Add(pe);
                 f.FamineEvent = Chronicle.Record(Year, "famine",
                     $"Famine grips {f.Name}.",
                     participants: f.LeaderId is int fl ? new() { fl } : null,
+                    causes: divineCauses.Count > 0 ? divineCauses : null,
                     tags: new() { "economy", "scarcity" });
                 // A starving people leans on its neighbours: each famine onset pushes aggression
                 // outward once, toward every other people that still has living members.
@@ -958,16 +1088,29 @@ public sealed class World
     {
         foreach (var p in Living())   // living in id order — same set/order as before, O(living)
         {
+            // Divine pressure modulates the SAME roll — multipliers on the existing draw,
+            // never an extra draw, so a pressure-free run stays byte-identical (verify-safe).
             double dc = DeathChance(p.Age(Year));
             if (p.Cursed) dc = Math.Min(0.95, dc * Params["curse_death_multiplier"]);
+            if (p.Blessed) dc *= Params.GetValueOrDefault("bless_death_multiplier", 0.7);
             var fac = Factions[p.FactionId];
-            if (fac.InFamine) dc = Math.Min(0.95, dc * Params["famine_death_multiplier"]);
+            if (fac.InFamine)
+            {
+                double fm = Params["famine_death_multiplier"];
+                if (fac.ProtectUntilYear > Year)
+                    fm = 1.0 + (fm - 1.0) * Params.GetValueOrDefault("protect_famine_relief", 0.5);
+                if (fac.DoomUntilYear > Year)
+                    fm = 1.0 + (fm - 1.0) * Params.GetValueOrDefault("doom_famine_burden", 1.5);
+                dc = Math.Min(0.95, dc * fm);
+            }
             if (Rng.Chance(dc))
             {
                 if (p.Cursed && CurseEvent is not null)
                     Kill(p, reason: "as the old curse takes them", cause: CurseEvent);
                 else if (fac.InFamine && fac.FamineEvent is not null)
                     Kill(p, reason: "in the famine", cause: fac.FamineEvent);
+                else if (p.Blessed && p.BlessEvent is not null)
+                    Kill(p, cause: p.BlessEvent);   // the blessing was on them; it could not hold
                 else
                     Kill(p);
             }

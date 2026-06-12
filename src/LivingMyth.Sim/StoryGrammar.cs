@@ -133,7 +133,8 @@ public static class StoryGrammar
     /// <summary>The authored But-set: the only rules allowed to claim a reversal. The
     /// story gate asserts no But ever fires outside this set.</summary>
     public static readonly HashSet<string> ButRules = new()
-    { "persecution-of-faith", "scandal-breaks", "honor-killing", "war-despite-peace", "ways-shed", "ways-grate" };
+    { "persecution-of-faith", "scandal-breaks", "honor-killing", "war-despite-peace", "ways-shed", "ways-grate",
+      "famine-despite-protection", "death-despite-blessing" };
 
     /// <summary>Annotate the full causal chain behind one event (card-open one-shot —
     /// the same Trace cost the catch-up panel already pays).</summary>
@@ -230,10 +231,23 @@ public static class StoryGrammar
         if (effect.Type == "rumor")
             return (ConnectorKind.Therefore, "talk-of-deed");   // gossip never invents truth
 
+        // God-hand evidence (divine pressure V1): a famine arriving under an active doom was
+        // truly pressed down by it (the prosperity drag is mechanical fact); one arriving
+        // despite an active protection is the authored reversal — the shield stood and was
+        // overcome. Both edges exist only because Economy() recorded the divine cause.
+        if (effect.Type == "famine" && cause.Type == "divine" && cause.Tags.Contains("doom"))
+            return (ConnectorKind.Therefore, "famine-under-doom");
+        if (effect.Type == "famine" && cause.Type == "divine" && cause.Tags.Contains("protect"))
+            return (ConnectorKind.But, "famine-despite-protection");
+
         if (effect.Type == "death" && cause.Type == "famine")
             return (ConnectorKind.Therefore, "famine-death");
         if (effect.Type == "death" && cause.Type == "war")
             return (ConnectorKind.Therefore, "war-death");
+        // A blessed life ends anyway: the multiplier truly leaned this very roll, so the
+        // reversal is mechanical fact, not mood. Curse deaths stay the plain therefore.
+        if (effect.Type == "death" && cause.Type == "divine" && cause.Tags.Contains("blessing"))
+            return (ConnectorKind.But, "death-despite-blessing");
         if (effect.Type == "death" && cause.Type == "divine")
             return (ConnectorKind.Therefore, "curse-death");
         if (effect.Type == "death" && cause.Type == "murder")

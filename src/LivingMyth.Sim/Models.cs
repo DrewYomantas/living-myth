@@ -42,6 +42,12 @@ public sealed class Person
     // current control. Null = the chronicle honestly does not record where this line is rooted.
     public int? HomeRegionId { get; set; }
 
+    // god-hand V1: a blessing leans fate gently toward this one life (bless_death_multiplier
+    // on the existing death roll — subtle, never a guarantee). BlessEvent is the recorded act,
+    // so a blessed soul's eventual death can cause-link honestly back to the player's hand.
+    public bool Blessed { get; set; }
+    public Event? BlessEvent { get; set; }
+
     public Person(int id, string name, string factionId, int birthYear, string sex)
     {
         Id = id;
@@ -101,6 +107,14 @@ public sealed class Faction
     public Dictionary<string, double> Values { get; } = new();          // axis -> 0..1, seeded from culture baseline
     public Dictionary<string, int> CustomOriginEvent { get; } = new();  // held custom -> event that birthed it (cause-link + Vanished Way span)
 
+    // god-hand V1: protection/doom windows. Self-expiring by year comparison (UntilYear > Year),
+    // so the tick needs no expiry scan; the event ids let famines under pressure cause-link
+    // honestly back to the recorded divine act. Both default inert (0 / null).
+    public int ProtectUntilYear { get; set; }
+    public int? ProtectEventId { get; set; }
+    public int DoomUntilYear { get; set; }
+    public int? DoomEventId { get; set; }
+
     public Faction(string id, string name, string culture, string homeland)
     {
         Id = id;
@@ -108,6 +122,51 @@ public sealed class Faction
         Culture = culture;
         Homeland = homeland;
     }
+}
+
+/// <summary>
+/// The fate ledger's unit: one act of the god's hand, as explicit state. Every pressure
+/// names its kind, target, start year, and the chronicle event that recorded the act —
+/// so the viewer's ledger, the catch-up chains, and the `divine` gate all read the same
+/// truth. Mechanics stay subtle multipliers on existing rolls; a pressure never adds RNG
+/// draws, so a world with no pressures is byte-identical to one where the type doesn't
+/// exist (the verify baseline cannot move).
+/// </summary>
+public enum DivinePressureKind { Bless, Curse, Protect, Doom, Omen, ForestSeeded, SpringCalled }
+
+public sealed class DivinePressure
+{
+    public int Id { get; }
+    public DivinePressureKind Kind { get; }
+    public string TargetType { get; }    // "person" | "faction" | "region"
+    public string TargetId { get; }      // person/region id as string, faction id verbatim
+    public int StartYear { get; }
+    public int SourceEventId { get; }    // the recorded divine act — the cause-link root
+    public int? ExpiresYear { get; }     // null = unbound (a curse on a bloodline, a terrain act)
+
+    public DivinePressure(int id, DivinePressureKind kind, string targetType, string targetId,
+                          int startYear, int sourceEventId, int? expiresYear)
+    {
+        Id = id;
+        Kind = kind;
+        TargetType = targetType;
+        TargetId = targetId;
+        StartYear = startYear;
+        SourceEventId = sourceEventId;
+        ExpiresYear = expiresYear;
+    }
+
+    /// <summary>Whether the pressure still presses. Terrain acts are instants — done, not
+    /// active; a curse runs with the bloodline; a blessing with the blessed life.</summary>
+    public bool IsActive(World world) => Kind switch
+    {
+        DivinePressureKind.Bless => int.TryParse(TargetId, out int pid)
+            && world.People.TryGetValue(pid, out var p) && p.Alive,
+        DivinePressureKind.Curse => true,
+        DivinePressureKind.Protect or DivinePressureKind.Doom or DivinePressureKind.Omen
+            => ExpiresYear is int ey && world.Year < ey,
+        _ => false,
+    };
 }
 
 /// <summary>
