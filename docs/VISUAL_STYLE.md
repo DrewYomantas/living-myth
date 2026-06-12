@@ -342,7 +342,7 @@ Life events (births, deaths, murders) carry `Event.HomeRegionId` — where the l
   through the visually distinct **memorial cairn** channel (shipped 2026-06-11,
   above) — never through the place-mark store, never with place-event language.
 
-## Causal story language (Myth Authorship V1 — PLANNED)
+## Causal story language (Myth Authorship V1 — SHIPPED 2026-06-11)
 
 The chronicle explains what it can prove, in these exact voicings — single-sourced in
 `godot/StoryCopy.cs`; this table is the review checklist. Connectors are **lead-in lines
@@ -366,7 +366,7 @@ Reputation transitions read as memory, not debug output: `{name}'s name darkens:
 known → whispered against` — band words carry glossary hints (`[hint=…]`), and the
 "unremarked" fallback is written out as `little known`.
 
-## Player canon display language (Myth Authorship V1 — PLANNED)
+## Player canon display language (Myth Authorship V1 — SHIPPED 2026-06-11)
 
 Player-authored text is the player's hand laid over the world — never the chronicle's
 voice, never sim truth:

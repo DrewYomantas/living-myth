@@ -149,6 +149,23 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       anchored here · M lives remembered here"); map draws a quiet persistent gold ring (fainter
       + tighter than the lens ring). Lens states honestly that much of history carries no place
       anchor yet. verify unchanged 884/699/567/706 (viewer-only).
+- [x] Myth Authorship + Causal Chronicle V1 (2026-06-11): the chronicle now explains what it
+      can prove, and the player may write what it cannot. Truth model V1 (four ledgers —
+      Recorded Fact / Causal Claim / Player Telling / Mechanical Truth) documented and binding.
+      `StoryGrammar` (sim read-model beside Echoes/Feed): proven connectors (therefore / but /
+      unresolved-until) over `Event.Causes` with an authored rule table (~24 rules; the
+      generic fallback never fired on the verify seeds — full authored coverage), root
+      classification with an honest-unknown allow-list (prophet / schism / forbidden bond),
+      `OpenGrievances`/`OpenWars`. `PlayerCanon` (sim-blind store, versioned JSON at
+      `user://canon_seed{N}.json`): one note per (entity, type) — tellings, chronicler's
+      notes, memorial inscriptions, place legends, what-the-people-say — dormant until the
+      re-run reaches the entity again, quarantined on identity drift, atomic saves. Viewer:
+      catch-up voices connector lead-ins + honest unknowns + ✎ write affordances; guard cards
+      carry a proven why-line; memorials take inscriptions and say "lies unavenged" (exactly
+      `Murdered && !Avenged`, never wider); recaps gain "Still unresolved" + reputation
+      memory copy ("{name}'s name darkens: little known → whispered against") + glossary
+      hints. New gates `story` + `canon` green; verify held **exactly 884/699/567/706**
+      throughout (zero sim-behavior changes — the grammar is a pure read-model).
 - [ ] Later — battle sites and per-region
       economy (add events/RNG and move the verify baseline; together they extend place memory to
       battles/famine and let war's-peace / famine's-end close chapters); mythic glosses / entity
@@ -377,6 +394,34 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
   (840efbf: anchoring arc, homes gate, scoring + anchor-channel gotchas). All gates green, tree
   clean, pushed. Next: F5 feel-test (see "Next session starts with").
 
+- [2026-06-11] Session: Myth Authorship + Causal Chronicle V1 — the milestone that turns
+  "and then" into "therefore". Recon found the decisive fact early: `Event.Causes` already
+  records the chains (revenge→murder, martyr→murder, persecution→faith origin,
+  succession→death, war→grievances incl. rumors), so the whole grammar could be a pure
+  read-model — baseline structurally safe. Built in seven slices, each gate-green:
+  (1) truth-model docs; (2) `StoryGrammar.cs` + `story` gate — proximate-cause pick is
+  latest-year (provably max-id), "but" is authored-only (the showcase rule:
+  war-despite-peace, because a blessed union's −3.5 AddTension still lands its event in
+  grievance memory — the one edge where generic "therefore" would lie), honest-unknown is
+  an allow-list with Routine-silence default so "the chronicle does not say" can never
+  flood; (3) `PlayerCanon.cs` + `canon` gate — the gate caught a real store bug
+  (StateOf memoized Active across *different* world instances; now keyed per (note, world));
+  (4) causal catch-up — connectors voiced only under a visible cause row, year-named when
+  branches interleave so a connector can never visually re-aim; (5) the writing desk
+  (CanonPanel) + tellings/notes/inscriptions/legends/people-say across person/region/
+  faction/catch-up/memorial surfaces, guard-card body extracted into BuildGuardBody so a
+  fresh inscription shows on return; (6) recap "Still unresolved" + reputation memory copy
+  + glossary [hint]s; (7) adversarial verifier pass over the full diff — 2 BLOCKERs caught
+  and fixed (catch-up RichTextLabel had no MetaClicked handler, every ✎ link dead; recap
+  said "the killer died unpunished" where a justice event may be recorded — copy narrowed
+  to exactly what `Murdered && !Avenged` proves) + 4 WARNs (connector re-aim, stale
+  inspector selection reopening on canon save, dismissed guard card force-returning, .bak
+  rescue missing UnauthorizedAccessException). Gates after everything: build clean ×2,
+  verify exactly 884/699/567/706, homes green, story green (120 + 1000 yrs), canon green.
+  Known accepted limits: faith notes have a reserved `rel:{id}` key but no surface (no
+  religion panel exists); rename is schema-reserved only; quarantined notes have no
+  recovery UI (the file keeps them); overwriting a quarantined note's slot replaces it.
+
 ### Life Memory — anchor contract (2026-06-11)
 
 | Event | `RegionId` (where it happened) | `HomeRegionId` (where it is remembered) | Whose home, and why |
@@ -427,7 +472,7 @@ The audit's value is the contract map below — what each blocked category waits
 | friction | — | no | no | faction-pair scoped |
 | divine (curse) | — | no | no | the cursed person is unplaced; the map click position is viewer scatter, **not** sim truth |
 
-## Truth model V1 — four ledgers (Myth Authorship arc, 2026-06-11; status: PLANNED)
+## Truth model V1 — four ledgers (Myth Authorship arc — SHIPPED 2026-06-11)
 
 Binding from the Myth Authorship milestone on. Every piece of story the player sees belongs
 to exactly one ledger, and the ledgers never blur:
@@ -501,6 +546,18 @@ at mixed speeds, and judge by feel, tuning named consts as you go (rebuild + com
   hard (every home-rooted birth/death is YOURS + notable — if so, consider gating the dramatic
   beat or the boost for region-yours life events); does the "fate touches a land you watch" card
   fire at a sane rate.
+Myth-authorship additions to the same sitting (none of it seen running either):
+- Open How We Got Here on a revenge murder: connector lead-ins read naturally? gap years
+  right? "the grievance lay unresolved for N years, until —" lands?
+- Find a prophet event → "the chronicle does not record what first stirred X" + ✎ link →
+  write a telling → confirm it shows on the person card and back in the catch-up thread.
+- Memorial card: why-line, "lies unavenged", ✎ inscription → save → card returns with the
+  inscription shown.
+- Chapter recap: "Still unresolved" grievance lines; reputation "name darkens" copy.
+- Hover a [hint] term (whispered against, remembered in) — confirm the gloss tooltip renders
+  (Godot 4.6 BBCode [hint="…"]; fallback plan: TooltipText, one-line StoryCopy change).
+- Restart the viewer: the telling is dormant until the year it was written about returns,
+  then reappears (save/load roundtrip live).
 Then the next implementation pass: surface culture + gossip in the viewer, or timeline scrubbing
 (close the historical-faction-membership audit hole first, per docs/TIME_AND_STORY_PACING.md).
 
