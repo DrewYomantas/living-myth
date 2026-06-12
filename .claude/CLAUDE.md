@@ -20,7 +20,8 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   memorial cards, chapter recaps, canon wiring), `MapView.cs` (map render, clicks, pulses, place/home
   marks), `UiTheme.cs` (Ui.* styling, single-sourced accents), `RegionActivity.cs` (per-region event
   index, two channels), `PlaceSeeds.cs` (deterministic viewer place hints), `StoryCopy.cs` (ALL
-  connector/canon English + glossary), `CanonPanel.cs` (the canon writing desk).
+  connector/canon English + glossary), `CanonPanel.cs` (the canon writing desk),
+  `PersonSigils.cs` (deterministic per-soul marks), `CastPanel.cs` (the dramatis-personae roster).
 
 ## Milestones
 - **M0–M5.1** — spatial island, regions, territory, extinction land-release.
@@ -36,7 +37,11 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   + `canon` gate; viewer: causal catch-up, guard why-line, the writing desk (CanonPanel) with
   tellings/notes/inscriptions/legends/people-say, recap Still-Unresolved, reputation memory
   copy, glossary hints. Baseline held exactly 884/699/567/706 (pure read-models, zero sim changes).
-- **Next** — F5 feel-test of everything since the pacing arc + the myth-authorship surfaces (none of it seen running); surface culture + gossip in the viewer; timeline scrubbing; baseline-moving sim contracts (battle sites, per-region economy, peace faction ids).
+- **The Cast** (2026-06-12, viewer-only) — the first playtest's cast-tracking fix: person sigils
+  (PlaceSeeds pattern), the capped dramatis-personae panel, living introductions ("A NEW THREAD"
+  cards) + mid-life tale-so-far on guard cards, your-story/world feed channels, why-you-care-first
+  person cards, followed-land life-event flood tuning. Baseline held exactly 884/699/567/706.
+- **Next** — F5 feel-test of The Cast + the myth-authorship surfaces; surface culture + gossip in the viewer; timeline scrubbing; baseline-moving sim contracts (battle sites, per-region economy, peace faction ids).
 
 ## Commands
 ```bash
