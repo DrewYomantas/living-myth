@@ -11,11 +11,16 @@ Godot only renders it. Authored content stays in `src/LivingMyth.Sim/data/*.json
 separate from logic. Never let simulation logic leak into Godot nodes.
 
 ## Layout
-- `src/LivingMyth.Sim/` — the sim (Rng, Models, Chronicle, World, Scoring, Echoes, Feed). net8.0.
-- `src/LivingMyth.Console/` — proof runner (run | divergence | surface | verify | homes).
-- `godot/` — the viewer (.NET build): `MapView.cs` (map render + click + region pulse) and `Main.cs`
-  (tick loop, pacing/speed ladder + dramatic auto-slow, live feed, inspectors, curse tool, catch-up,
-  Follow/Yours channel, focus guard + memorial cards, chapter recaps). References the Sim.
+- `src/LivingMyth.Sim/` — the sim (Rng, Models, Chronicle, World, Scoring, Echoes, Feed) plus pure
+  read-models over it (StoryGrammar — proven causal connectors; PlayerCanon — the player-telling
+  store, never read by World). net8.0.
+- `src/LivingMyth.Console/` — proof runner (run | divergence | surface | verify | homes | story | canon).
+- `godot/` — the viewer (.NET build), references the Sim: `Main.cs` (tick loop, pacing + dramatic
+  auto-slow, live feed, inspectors, curse tool, causal catch-up, Follow/Yours channel, focus guard +
+  memorial cards, chapter recaps, canon wiring), `MapView.cs` (map render, clicks, pulses, place/home
+  marks), `UiTheme.cs` (Ui.* styling, single-sourced accents), `RegionActivity.cs` (per-region event
+  index, two channels), `PlaceSeeds.cs` (deterministic viewer place hints), `StoryCopy.cs` (ALL
+  connector/canon English + glossary), `CanonPanel.cs` (the canon writing desk).
 
 ## Milestones
 - **M0–M5.1** — spatial island, regions, territory, extinction land-release.
