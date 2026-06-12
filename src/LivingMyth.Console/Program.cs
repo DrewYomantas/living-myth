@@ -456,7 +456,8 @@ void StoryCmd(int years)
                 { bad.Add($"annotate #{id} steps not in record order"); break; }
         }
 
-        // Determinism: a second identical run must yield byte-identical grammar output.
+        // Determinism: a second identical run must yield byte-identical grammar output —
+        // including the open-thread queries the recap's "Still unresolved" section renders.
         string Canon(World ww)
         {
             var sb = new System.Text.StringBuilder();
@@ -474,6 +475,12 @@ void StoryCmd(int years)
                     sb.Append(e.Id).Append('|').Append(o.Kind).Append('|').Append(o.CopyKey).Append('\n');
                 }
             }
+            foreach (var g in StoryGrammar.OpenGrievances(ww, ww.People.Keys.ToList()))
+                sb.Append("grievance|").Append(g.VictimId).Append('|').Append(g.KillerId)
+                  .Append('|').Append(g.MurderEventId).Append('|').Append(g.MurderYear)
+                  .Append('|').Append(g.KillerAlive).Append('\n');
+            foreach (var ow in StoryGrammar.OpenWars(ww))
+                sb.Append("openwar|").Append(ow.WarEventId).Append('|').Append(ow.DeclaredYear).Append('\n');
             return sb.ToString();
         }
         var (c2, n2) = Load();

@@ -95,6 +95,7 @@ public partial class Main : Node
     // never read by the sim. The editor pauses time and restores the pace it took.
     private PlayerCanonStore _canon = null!;
     private CanonPanel _canonPanel = null!;
+    private bool _canonReturnsToGuard;   // the desk was opened FROM the held card — return there on close
     private const int EchoCadence = 8;                      // sim-years between echo scans (slow path, not per-tick)
     private int _lastEchoYear;
     private readonly System.Collections.Generic.Dictionary<string, int> _echoSeen = new();  // archetype -> latest carded start year
@@ -222,7 +223,8 @@ public partial class Main : Node
                     GD.PushWarning($"player canon: unreadable file set aside as {path}.bak");
                     (canon, _) = PlayerCanonStore.LoadOrNew(path, Seed);
                 }
-                catch (System.IO.IOException) { /* a .bak already exists — stay read-only this session */ }
+                catch (System.Exception ex) when (ex is System.IO.IOException or System.UnauthorizedAccessException)
+                { /* a .bak already exists or the file is locked — stay read-only this session */ }
             }
         }
         _canon = canon;
@@ -327,13 +329,16 @@ public partial class Main : Node
             else if (_selectedFactionId is string fid) OnFactionPicked(fid);
             else if (_map.SelectedRegionId >= 0) OnRegionPicked(_map.SelectedRegionId);
         }
-        if (_guardReturnable && !_running && !_guardPanel.Visible
+        // Return to the held card only when the desk was opened FROM it — a dismissed
+        // card keeps its chip as an offer, never a forced return.
+        if (_canonReturnsToGuard && _guardReturnable && !_running && !_guardPanel.Visible
             && !_catchupPanel.Visible && !_recapPanel.Visible && !_returnIsRecap)
         {
             RerenderHeldGuardCard();
             _guardBackdrop.Visible = _guardWasMemorial;
             _guardPanel.Visible = true;
         }
+        _canonReturnsToGuard = false;
     }
 
     private void UpdateRootSize()
@@ -593,7 +598,16 @@ public partial class Main : Node
         titles.AddChild(_inspectorSub);
         var close = new Button { Text = "✕", CustomMinimumSize = new Vector2(28, 28) };
         Ui.StyleButton(close);
-        close.Pressed += () => { _inspectorPanel.Visible = false; _map.SelectedFactionId = null; _map.SelectedRegionId = -1; };
+        close.Pressed += () =>
+        {
+            _inspectorPanel.Visible = false;
+            _map.SelectedFactionId = null;
+            _map.SelectedRegionId = -1;
+            // Forget the selection too, or a later canon save re-renders (and re-opens)
+            // an inspector the player deliberately dismissed.
+            _selectedPersonId = null;
+            _selectedFactionId = null;
+        };
         hb.AddChild(close);
 
         var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
@@ -701,6 +715,9 @@ public partial class Main : Node
         };
         _catchup.AddThemeColorOverride("default_color", Ui.Ink);
         _catchup.AddThemeFontOverride("bold_font", Ui.SerifBold);
+        // The thread is walkable: e: retargets this panel in place, canon: opens the
+        // writing desk above it (OnCanonClosed re-renders the thread on save).
+        _catchup.MetaClicked += meta => OnInspectorLink(meta.AsString());
         scroll.AddChild(_catchup);
     }
 
@@ -1346,10 +1363,11 @@ public partial class Main : Node
                     if (p.Children.Count > 0)
                         sb.AppendLine($"[center][color=#{Ui.Hex(Ui.FadedSub)}]{p.Children.Count} {(p.Children.Count == 1 ? "child carries" : "children carry")} the line[/color][/center]");
                     // A murdered soul leaves an open grievance — stored sim state
-                    // (Murdered && !Avenged), honest about the gap it opens, never "they
-                    // will be avenged" (the chronicle does not know that).
+                    // (Murdered && !Avenged), claimed no wider than the state itself:
+                    // "unavenged", never "unpunished" (justice may be recorded apart),
+                    // never "they will be avenged" (the chronicle does not know that).
                     if (p.Murdered && !p.Avenged)
-                        sb.AppendLine($"[center][color=#{Ui.Hex(Ui.FadedSub)}]the grievance of this murder lies unresolved[/color][/center]");
+                        sb.AppendLine($"[center][color=#{Ui.Hex(Ui.FadedSub)}]this murder lies unavenged[/color][/center]");
                     // The player's inscription — their hand, never the chronicle's voice.
                     if (_canon.Get($"p:{p.Id}", CanonNoteType.Inscription) is CanonNote insc
                         && _canon.StateOf(insc, _world) == CanonNoteState.Active)
@@ -1500,7 +1518,7 @@ public partial class Main : Node
         };
         _guardBody.AddThemeColorOverride("default_color", Ui.Ink);
         _guardBody.AddThemeFontOverride("bold_font", Ui.SerifBold);
-        _guardBody.MetaClicked += meta => { CloseGuardCard(); OnInspectorLink(meta.AsString()); };
+        _guardBody.MetaClicked += meta => { CloseGuardCard(); OnInspectorLink(meta.AsString(), fromGuardCard: true); };
         scroll.AddChild(_guardBody);
 
         var btns = new HBoxContainer();
@@ -1702,10 +1720,13 @@ public partial class Main : Node
                 sb.AppendLine(SectionCap("Still unresolved"));
                 foreach (var g in grievances.Take(3))
                 {
+                    // "Unavenged" is exactly what Murdered && !Avenged proves — justice may
+                    // have been recorded separately (executions never flip Avenged), so the
+                    // copy must never widen to "unpunished".
                     string vName = _world.People[g.VictimId].Name;
                     sb.AppendLine(g.KillerAlive
                         ? $"the murder of {vName} [color=#{Ui.Hex(Ui.Faded)}](Yr {g.MurderYear})[/color] is unavenged — {_world.Year - g.MurderYear} years and counting  {Link("e:" + g.MurderEventId, "the deed")}"
-                        : $"the murder of {vName} [color=#{Ui.Hex(Ui.Faded)}](Yr {g.MurderYear})[/color] was never answered — the killer died unpunished  {Link("e:" + g.MurderEventId, "the deed")}");
+                        : $"the murder of {vName} [color=#{Ui.Hex(Ui.Faded)}](Yr {g.MurderYear})[/color] was never avenged — the killer is gone  {Link("e:" + g.MurderEventId, "the deed")}");
                     any = true;
                 }
                 if (grievances.Count > 3)
@@ -1848,14 +1869,22 @@ public partial class Main : Node
         if (shown.Count <= 1)
             sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}](this one stands alone — no deeper causes recorded)[/color]");
         var rendered = new HashSet<int>();
+        int lastRendered = -1;
         foreach (var step in shown)
         {
             var e = step.Event;
             bool isTarget = e.Id == id;
             // Voice the proven connector only when its cause row is visible above — a
-            // connector is never aimed at a row the current view has hidden.
+            // connector is never aimed at a row the current view has hidden. And when
+            // interleaved branches put another tale between cause and effect, the year is
+            // named, so the voicing can never visually re-aim at a neighbouring row.
             if (step.Link is ChainLink link && rendered.Contains(link.CauseEventId))
-                sb.AppendLine($"      [color=#{Ui.Hex(Ui.FadedSub)}][i]{StoryCopy.ConnectorPhrase(link)}[/i][/color]");
+            {
+                string phrase = StoryCopy.ConnectorPhrase(link);
+                if (link.CauseEventId != lastRendered)
+                    phrase += $" (Yr {_world.Chronicle.Get(link.CauseEventId).Year} above)";
+                sb.AppendLine($"      [color=#{Ui.Hex(Ui.FadedSub)}][i]{phrase}[/i][/color]");
+            }
             var cls = Ui.ClassOf(e.Type);
             string year = $"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color]";
             // Hint() is a no-op for labels without a glossary entry, so every chip can ask.
@@ -1866,6 +1895,7 @@ public partial class Main : Node
             string line = $"{year}  {chip}  {body}{where}";
             sb.AppendLine(isTarget ? $"[bgcolor=#{Ui.Hex(Ui.RowBgWarm)}]{line}[/bgcolor]" : line);
             rendered.Add(e.Id);
+            lastRendered = e.Id;
             // A war fed by many grievances says so — Causes.Count is recorded fact.
             if (e.Type == "war" && e.Causes.Count > 1)
                 sb.AppendLine($"      [color=#{Ui.Hex(Ui.FadedSub)}][i]fed by {e.Causes.Count} recorded grievances[/i][/color]");
@@ -2062,12 +2092,12 @@ public partial class Main : Node
     // Inspector cross-links: e:<event id> opens How We Got Here, r:<region id> the Region
     // Lens, f:<faction id> the faction inspector. The link targets are real ids the panels
     // already render from — no new lookups.
-    private void OnInspectorLink(string link)
+    private void OnInspectorLink(string link, bool fromGuardCard = false)
     {
         if (link.StartsWith("e:") && int.TryParse(link[2..], out var eid)) OpenCatchup(eid);
         else if (link.StartsWith("r:") && int.TryParse(link[2..], out var rid)) OnRegionPicked(rid);
         else if (link.StartsWith("f:")) OnFactionPicked(link[2..]);
-        else if (link.StartsWith("canon:")) OpenCanonEditor(link[6..]);
+        else if (link.StartsWith("canon:")) OpenCanonEditor(link[6..], fromGuardCard);
     }
 
     private static string Link(string target, string text)
@@ -2089,9 +2119,10 @@ public partial class Main : Node
     // RichTextLabel renders BBCode — the player's own brackets must stay ink, not markup.
     private static string EscapeBb(string s) => s.Replace("[", "[lb]");
 
-    private void OpenCanonEditor(string spec)
+    private void OpenCanonEditor(string spec, bool fromGuardCard = false)
     {
         if (_canon.ReadOnly) return;
+        _canonReturnsToGuard = fromGuardCard;
         int sep = spec.IndexOf(':');
         if (sep <= 0) return;
         CanonNoteType? type = spec[..sep] switch

@@ -92,6 +92,8 @@ public static class StoryCopy
         ["followed land"] = "a watched land: tales anchored here and lives remembered here become yours",
     };
 
+    // Glossary values are dropped raw into [hint="…"] — they must never contain a double
+    // quote or a closing bracket, or the BBCode breaks. Keep new entries plain prose.
     public static string Hint(string text, string key)
         => Glossary.TryGetValue(key, out var tip) ? $"[hint=\"{tip}\"]{text}[/hint]" : text;
 }

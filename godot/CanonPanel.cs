@@ -140,7 +140,11 @@ public sealed partial class CanonPanel : Control
         _noteType = type;
         _title.Text = title;
         _context.Text = contextLine;
+        // A quarantined note (sim-build drift) belongs to a different telling of this id —
+        // never preload its text under the new entity's title.
         var existing = _store.Get(entityKey, type);
+        if (existing is not null && _store.StateOf(existing, _world()) != CanonNoteState.Active)
+            existing = null;
         _hadNote = existing is not null;
         _text.Text = existing?.Text ?? "";
         _removeBtn.Visible = _hadNote;
@@ -157,7 +161,10 @@ public sealed partial class CanonPanel : Control
         if (_text.Text.Length > MaxChars)
         {
             // Hold the cap without fighting the caret: trim and park it at the end.
-            _text.Text = _text.Text[..MaxChars];
+            // Never split a surrogate pair at the boundary.
+            int cut = MaxChars;
+            if (char.IsHighSurrogate(_text.Text[cut - 1])) cut--;
+            _text.Text = _text.Text[..cut];
             _text.SetCaretLine(_text.GetLineCount() - 1);
             _text.SetCaretColumn(_text.GetLine(_text.GetLineCount() - 1).Length);
         }
