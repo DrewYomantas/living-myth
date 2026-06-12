@@ -22,8 +22,9 @@ switch (cmd)
     case "story": StoryCmd(Years(120)); break;
     case "canon": CanonCmd(); break;
     case "divine": DivineCmd(Years(200)); break;
+    case "save": SaveCmd(Years(60)); break;
     default:
-        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine");
+        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine | save");
         break;
 }
 return;
@@ -810,6 +811,203 @@ void DivineCmd(int years)
     }
 
     Console.WriteLine(bad.Count == 0 ? "\nDIVINE PRESSURE HOLDS." : $"\n{bad.Count} CHECK(S) BROKE THE CONTRACT.");
+    Environment.Exit(bad.Count == 0 ? 0 : 1);
+}
+
+// --------------------------------------------------------------------------- save
+
+// Proof gate for the world-save contract (Persistence V1): the save is an INPUT JOURNAL —
+// divine acts with years + identity snapshots, follows, attention state. It must roundtrip,
+// replay deterministically (a fresh run + the journal == the original session's world),
+// never touch a clean sim unless explicitly applied, quarantine drifted targets, preserve
+// corrupt/future files, and stay fully apart from the player canon.
+void SaveCmd(int years)
+{
+    Console.WriteLine($"World-save gate ({years} yrs): the journal roundtrips, replays deterministically,");
+    Console.WriteLine("never alters a clean sim unless applied, and drifted targets quarantine.");
+    var bad = new List<string>();
+    void Check(string name, bool ok, string? detail = null)
+    {
+        Console.WriteLine($"  {name}: {(ok ? "OK" : "FAIL")}{(ok || detail is null ? "" : "  " + detail)}");
+        if (!ok) bad.Add(name);
+    }
+
+    string path = Path.Combine(Path.GetTempPath(), $"lm_save_gate_{Guid.NewGuid():N}.json");
+    string canonPath = Path.Combine(Path.GetTempPath(), $"lm_save_gate_canon_{Guid.NewGuid():N}.json");
+    try
+    {
+        string Ledger(World w) => string.Join("\n", w.DivinePressures.Select(p =>
+            $"{p.Id}|{p.Kind}|{p.TargetType}|{p.TargetId}|{p.StartYear}|{p.SourceEventId}|{p.ExpiresYear?.ToString() ?? "-"}"));
+
+        // The "live session": acts at year 0, more mid-run, all journaled as they land.
+        (World w, PlayerWorldStore store) LiveSession()
+        {
+            var (cfg, names) = Load();
+            var w = new World(7, cfg, names);
+            w.SeedWorld();
+            var (store, _) = PlayerWorldStore.LoadOrNew(path, 7);
+            void Act(Event? ev)
+            {
+                if (ev is null) return;
+                var pr = w.DivinePressures.Last(p => p.SourceEventId == ev.Id);
+                store.RecordAct(w, pr);
+            }
+            var f = w.Config.Factions;
+            var elder = w.FactionMembers(f[0].Id).OrderByDescending(p => p.Age(w.Year)).ThenBy(p => p.Id).First();
+            Act(w.BlessPerson(elder));
+            Act(w.ProtectFaction(f[0].Id));
+            foreach (var r in w.Regions) if (w.SeedForest(r.Id) is Event fe) { Act(fe); break; }
+            for (int y = 0; y < years; y++)
+            {
+                w.Tick();
+                if (w.Year == 20)
+                {
+                    var cursee = w.FactionMembers(f[1].Id).Where(p => p.Age(w.Year) >= 18)
+                        .OrderBy(p => p.Age(w.Year)).ThenBy(p => p.Id).First();
+                    Act(w.PlantCurse(cursee));
+                    Act(w.DoomFaction(f[1].Id));
+                }
+                if (w.Year == 35)
+                {
+                    int target = w.Factions[f[2].Id].ControlledRegions.Count > 0
+                        ? w.Factions[f[2].Id].ControlledRegions.Select(int.Parse).Min() : 0;
+                    Act(w.SeedOmen(target));
+                    foreach (var r in w.Regions) if (w.CallSpring(r.Id) is Event se) { Act(se); break; }
+                }
+            }
+            return (w, store);
+        }
+
+        // 1. Missing file -> empty writable store, no file conjured.
+        var (s0, warn0) = PlayerWorldStore.LoadOrNew(path, 7);
+        Check("load-missing", s0.ActCount == 0 && warn0 is null && !File.Exists(path) && !s0.ReadOnly);
+
+        // 2. Live session journals + saves; the file roundtrips deep-equal.
+        var (live, liveStore) = LiveSession();
+        var souls = new[] { live.Living()[0].Id };
+        var lands = new[] { 0, 3 };
+        liveStore.SetFollows(live, souls, new[] { live.Living()[1].Id }, new[] { "highland" }, lands);
+        liveStore.SetLastSeen(new Dictionary<int, int> { [souls[0]] = live.Chronicle.Events.Count - 1 });
+        liveStore.ResumeYear = live.Year;
+        liveStore.Save();
+        var (s1, warn1) = PlayerWorldStore.LoadOrNew(path, 7);
+        bool same = warn1 is null && s1.ActCount == liveStore.ActCount && s1.ResumeYear == live.Year
+            && s1.Follows.Souls.SequenceEqual(liveStore.Follows.Souls)
+            && s1.Follows.Bloodlines.SequenceEqual(liveStore.Follows.Bloodlines)
+            && s1.Follows.Peoples.SequenceEqual(liveStore.Follows.Peoples)
+            && s1.Follows.Lands.SequenceEqual(liveStore.Follows.Lands)
+            && s1.LastSeen.Count == 1 && s1.LastSeen[souls[0]] == live.Chronicle.Events.Count - 1;
+        for (int i = 0; same && i < s1.ActCount; i++)
+        {
+            var a = liveStore.Acts[i];
+            var b = s1.Acts[i];
+            same &= a.Seq == b.Seq && a.Kind == b.Kind && a.TargetType == b.TargetType
+                 && a.TargetId == b.TargetId && a.Year == b.Year
+                 && a.Snapshot.Count == b.Snapshot.Count
+                 && a.Snapshot.All(kv => b.Snapshot.TryGetValue(kv.Key, out var v) && v == kv.Value);
+        }
+        Check("roundtrip", same);
+
+        // 3. Replay determinism: a fresh world + the journal == the live session's world,
+        //    chronicle, fate ledger, and surface all byte-identical.
+        World Replay(PlayerWorldStore store)
+        {
+            var (cfg, names) = Load();
+            var w = new World(7, cfg, names);
+            w.SeedWorld();
+            store.ApplyDue(w);
+            for (int y = 0; y < years; y++) { w.Tick(); store.ApplyDue(w); }
+            return w;
+        }
+        var (s2, _) = PlayerWorldStore.LoadOrNew(path, 7);
+        var replayed = Replay(s2);
+        Check("replay-deterministic",
+            replayed.Chronicle.Render() == live.Chronicle.Render()
+            && Ledger(replayed) == Ledger(live)
+            && replayed.Surface.StateHash() == live.Surface.StateHash()
+            && s2.QuarantinedActs.Count == 0,
+            $"events {replayed.Chronicle.Events.Count} vs {live.Chronicle.Events.Count}, quarantined {s2.QuarantinedActs.Count}");
+
+        // 4. Edits restore: the replayed surface genuinely differs from a pristine one
+        //    (the forest and spring came back without the player's hand this session).
+        var (cfgP, namesP) = Load();
+        var pristine = new World(7, cfgP, namesP);
+        pristine.SeedWorld();
+        for (int y = 0; y < years; y++) pristine.Tick();
+        Check("edits-restore", replayed.Surface.StateHash() != pristine.Surface.StateHash()
+            && replayed.Surface.Edits.Count == live.Surface.Edits.Count);
+
+        // 5. A loaded-but-unapplied journal alters nothing: a clean run with the store
+        //    merely in scope is byte-identical to a pristine run.
+        var (s3, _) = PlayerWorldStore.LoadOrNew(path, 7);
+        var (cfgC, namesC) = Load();
+        var untouched = new World(7, cfgC, namesC);
+        untouched.SeedWorld();
+        for (int y = 0; y < years; y++) untouched.Tick();
+        Check("unapplied-inert", untouched.Chronicle.Render() == pristine.Chronicle.Render()
+            && untouched.DivinePressures.Count == 0 && s3.ActCount > 0);
+
+        // 6. Follows restore deterministically against the replayed world; an invalid
+        //    land id (file tampering / drift) is dropped, never half-applied.
+        var (fSouls, fLines, fPeoples, fLands, fDropped) = s2.RestoreFollows(replayed);
+        Check("follows-restore", fSouls.SequenceEqual(souls) && fPeoples.SequenceEqual(new[] { "highland" })
+            && fLands.SequenceEqual(lands) && fLines.Count == 1 && fDropped.Count == 0);
+        s2.Follows.Lands.Add(9999);
+        var (_, _, _, fLands2, fDropped2) = s2.RestoreFollows(replayed);
+        Check("follows-quarantine", fLands2.SequenceEqual(lands) && fDropped2.Count == 1);
+
+        // 7. A drifted act target quarantines on replay: skipped, kept, never misapplied.
+        var (s4, _) = PlayerWorldStore.LoadOrNew(path, 7);
+        var blessAct = s4.Acts.First(a => a.Kind == "bless");
+        blessAct.Snapshot["name"] = "Someone Else Entirely";
+        var replayedDrift = Replay(s4);
+        bool blessApplied = replayedDrift.DivinePressures.Any(p => p.Kind == DivinePressureKind.Bless);
+        s4.Save();
+        var (s5, _) = PlayerWorldStore.LoadOrNew(path, 7);
+        // Skipping the bless honestly diverges the drift-world, so LATER person-target
+        // acts may quarantine too (their pids can belong to different souls there) —
+        // the contract is: the tampered act never applies, and nothing is destroyed.
+        Check("act-quarantine", !blessApplied && s4.QuarantinedActs.Contains(blessAct)
+            && s5.ActCount == s4.ActCount, $"quarantined {s4.QuarantinedActs.Count}");
+
+        // 8. Corrupt file: preserved byte-for-byte, store read-only, writes refuse.
+        File.WriteAllText(path, "{ this is not json");
+        var (sBad, warnBad) = PlayerWorldStore.LoadOrNew(path, 7);
+        bool saveThrew = false;
+        try { sBad.Save(); } catch (InvalidOperationException) { saveThrew = true; }
+        Check("corrupt-file", sBad.ActCount == 0 && warnBad is not null && sBad.ReadOnly && !sBad.FutureSchema
+                           && saveThrew && File.ReadAllText(path) == "{ this is not json");
+
+        // 9. Future schema: preserved untouched, read-only, flagged.
+        File.WriteAllText(path, "{\"schema_version\": 99, \"seed\": 7, \"acts\": []}");
+        var (sFut, warnFut) = PlayerWorldStore.LoadOrNew(path, 7);
+        Check("future-schema", sFut.ActCount == 0 && warnFut is not null && sFut.ReadOnly && sFut.FutureSchema);
+
+        // 10. Canon separation: the world save never touches the canon file, and no sim
+        //     type can see the world-save types (reflection, same proof as the canon gate).
+        File.WriteAllText(canonPath, "{\"schema_version\": 1, \"seed\": 7, \"notes\": []}");
+        string canonBytes = File.ReadAllText(canonPath);
+        var saveTypes = new[] { typeof(PlayerWorldStore), typeof(WorldAct), typeof(WorldSaveFile), typeof(WorldFollows) };
+        var simTypes = new[] { typeof(World), typeof(Chronicle), typeof(Event), typeof(Person),
+                               typeof(Faction), typeof(Religion), typeof(Region), typeof(WorldSurface),
+                               typeof(DivinePressure), typeof(Rng) };
+        bool Touches(Type t) => saveTypes.Contains(t)
+            || (t.IsGenericType && t.GetGenericArguments().Any(Touches));
+        const System.Reflection.BindingFlags all =
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic |
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static;
+        bool blind = simTypes.All(t =>
+            t.GetFields(all).All(fl => !Touches(fl.FieldType)) &&
+            t.GetProperties(all).All(pr => !Touches(pr.PropertyType)));
+        Check("canon-separate-and-sim-blind", blind && File.ReadAllText(canonPath) == canonBytes);
+    }
+    finally
+    {
+        foreach (var p in new[] { path, path + ".tmp", canonPath, canonPath + ".tmp" })
+            if (File.Exists(p)) File.Delete(p);
+    }
+
+    Console.WriteLine(bad.Count == 0 ? "\nWORLD SAVE CONTRACT HOLDS." : $"\n{bad.Count} CHECK(S) BROKE THE CONTRACT.");
     Environment.Exit(bad.Count == 0 ? 0 : 1);
 }
 

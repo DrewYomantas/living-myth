@@ -121,6 +121,17 @@ public partial class Main : Node
     private CanonPanel _canonPanel = null!;
     private bool _canonReturnsToGuard;   // the desk was opened FROM the held card — return there on close
 
+    // The world save (Persistence V1): an input journal, never a snapshot — every divine
+    // act with its year + target snapshot, the follows, and the attention state. On launch
+    // the deterministic sim fast-forwards to the saved year with each act re-applied at
+    // its recorded year, so the player-shaped world returns exactly. Saved on every act,
+    // every follow change, every transition into pause, and on window close.
+    private PlayerWorldStore _worldStore = null!;
+    private bool _catchingUp;            // resume fast-forward: indexes update, but no cards, no pulses
+    private int _ticksSinceSave;
+    private const int AutosaveTicks = 200;        // crash-safety cadence (shown ticks)
+    private const int CatchupFeedRows = 70;       // feed rows actually built for replayed history
+
     // The Cast (dramatis personae): the standing answer to "who is who". Membership
     // recomputes only when dirty (a follow changed, or a YOURS event streamed) — never a
     // standing per-tick scan of the ever-growing marked set.
@@ -234,21 +245,33 @@ public partial class Main : Node
         _world = new World(Seed, config, names);
         _world.SeedWorld();
         _lastEventCount = 0;
-        _lastEchoYear = _world.Year;
 
         LoadCanon();
+        LoadWorldStore();
+        bool resumed = ReplayWorldJournal();   // fast-forward to the saved year, acts re-applied in place
+        _lastEchoYear = _world.Year;
+        RestoreFollows();
         Ui.LoadFonts();
         BuildUi();
         _map.World = _world;
         _map.Marked = _marked;       // same HashSet, mutated in place — map sees follows live
         _map.Souls = _followedSouls;
         _map.FollowedRegions = _followedRegions;
+        _catchingUp = resumed;       // replayed history feeds the indexes, never cards or pulses
         StreamNewHeadlines();
+        _catchingUp = false;
+        _pendingGuardEventId = null;   // replayed history never interrupts (gated above; hardening)
+        if (resumed) PrimeEchoMemory();   // echoes of the replayed years are old news, not punctuation
         CastChanged();   // hidden while nothing is followed; built ready
-        if (_pendingGuardEventId is not null) ShowGuardCard();   // unreachable today; hardening
-        StartChapter(0);   // chapter one opens on the founding events themselves
+        StartChapter(resumed ? _world.Chronicle.Events.Count : 0);   // a fresh chapter opens NOW
+        if (resumed) _running = false;   // the resumed world waits for the player
         RefreshTimeBar();
         _map.QueueRedraw();
+    }
+
+    public override void _Notification(int what)
+    {
+        if (what == NotificationWMCloseRequest && _worldStore is not null) SaveWorldStore();
     }
 
     // Load the player's canon book for this seed. An unreadable file is set aside as
@@ -274,6 +297,97 @@ public partial class Main : Node
             }
         }
         _canon = canon;
+    }
+
+    // The world save loads exactly like the canon: unreadable files are set aside as
+    // .bak (never destroyed), future-schema files stay untouched and read-only.
+    private void LoadWorldStore()
+    {
+        string path = ProjectSettings.GlobalizePath($"user://world_seed{Seed}.json");
+        var (store, warning) = PlayerWorldStore.LoadOrNew(path, Seed);
+        if (warning is not null)
+        {
+            GD.PushWarning($"world save: {warning}");
+            if (store.ReadOnly && !store.FutureSchema)
+            {
+                try
+                {
+                    System.IO.File.Move(path, path + ".bak", overwrite: false);
+                    GD.PushWarning($"world save: unreadable file set aside as {path}.bak");
+                    (store, _) = PlayerWorldStore.LoadOrNew(path, Seed);
+                }
+                catch (System.Exception ex) when (ex is System.IO.IOException or System.UnauthorizedAccessException)
+                { /* a .bak already exists or the file is locked — stay read-only this session */ }
+            }
+        }
+        _worldStore = store;
+    }
+
+    // Replay the journal: re-apply each saved act when the run reaches its year, ticking
+    // forward to the saved resume year. Deterministic sim + deterministic re-application
+    // = the same world as the last session (the `save` gate proves it byte-identically).
+    private bool ReplayWorldJournal()
+    {
+        void Apply()
+        {
+            foreach (var (_, ev) in _worldStore.ApplyDue(_world))
+                if (ev is not null) _divineSources.Add(ev.Id);   // the ledger's consequence roots
+        }
+        Apply();
+        int target = Math.Max(_worldStore.ResumeYear, _world.Year);
+        while (_world.Year < target)
+        {
+            _world.Tick();
+            Apply();
+        }
+        foreach (var q in _worldStore.QuarantinedActs)
+            GD.PushWarning($"world save: act #{q.Seq} ({q.Kind} {q.TargetType} {q.TargetId}, Yr {q.Year}) "
+                + "no longer matches this world — quarantined, kept in the file");
+        return _worldStore.ActCount > 0 || _worldStore.ResumeYear > _world.Config.StartYear
+            || _worldStore.Follows.Souls.Count + _worldStore.Follows.Bloodlines.Count
+             + _worldStore.Follows.Peoples.Count + _worldStore.Follows.Lands.Count > 0;
+    }
+
+    // Follows come back after the fast-forward (on a faithful replay every previously
+    // followed soul exists again at the resume year); drift drops the follow with a
+    // warning rather than ever re-attaching the mark to a different soul.
+    private void RestoreFollows()
+    {
+        var (souls, lines, peoples, lands, dropped) = _worldStore.RestoreFollows(_world);
+        _followedSouls.UnionWith(souls);
+        _seedPeople.UnionWith(lines);
+        _markedFactions.UnionWith(peoples);
+        _followedRegions.UnionWith(lands);
+        var (people, _) = Feed.ExpandMarked(_world, _seedPeople, _markedFactions);
+        _marked.UnionWith(people);
+        foreach (var kv in _worldStore.LastSeen)
+            if (kv.Value >= 0 && kv.Value < _world.Chronicle.Events.Count)
+                _lastSeenEvent[kv.Key] = kv.Value;
+        foreach (var d in dropped)
+            GD.PushWarning($"world save: follow {d} no longer matches this world — dropped");
+    }
+
+    // Echoes detected over replayed history are memory, not news — mark them seen so the
+    // next echo scan cards only what happens from here on.
+    private void PrimeEchoMemory()
+    {
+        foreach (var echo in Echoes.DetectAll(_world))
+            if (echo.YearSpan.First > _echoSeen.GetValueOrDefault(echo.Archetype, int.MinValue))
+                _echoSeen[echo.Archetype] = echo.YearSpan.First;
+    }
+
+    // One funnel for every write: resume year, follows, and attention state travel
+    // together, atomically. Refuses quietly on a read-only store (file preserved).
+    private void SaveWorldStore()
+    {
+        if (_worldStore.ReadOnly) return;
+        _worldStore.ResumeYear = _world.Year;
+        _worldStore.SetFollows(_world, _followedSouls, _seedPeople, _markedFactions, _followedRegions);
+        _worldStore.SetLastSeen(_lastSeenEvent);
+        try { _worldStore.Save(); }
+        catch (System.Exception ex) when (ex is System.IO.IOException or System.UnauthorizedAccessException)
+        { GD.PushWarning($"world save: could not write ({ex.GetType().Name})"); }
+        _ticksSinceSave = 0;
     }
 
     public override void _Process(double delta)
@@ -318,6 +432,7 @@ public partial class Main : Node
             }
             if (_accum > interval * 6) _accum = 0f;   // drop any backlog
             if (ticked) { _cast.Refresh(_castDirty); _castDirty = false; }   // O(cap) labels; membership only when dirty
+            if (ticked && ++_ticksSinceSave >= AutosaveTicks) SaveWorldStore();   // crash-safety heartbeat
             MaybeDetectEchoes();
             if (_chapterCloseReason is not null || _chapterShownYears >= ChapterYears)
                 CloseChapter(_chapterCloseReason ?? "a generation told");
@@ -925,8 +1040,23 @@ public partial class Main : Node
     {
         if (ev is null) return;
         _divineSources.Add(ev.Id);
+        JournalAct(ev);
         StreamNewHeadlines();
         if (_pendingGuardEventId is not null) ShowGuardCard();
+    }
+
+    // Every live act of the hand lands in the world save as it happens — the journal
+    // entry is derived from the act's own DivinePressure, so the two ledgers can't drift.
+    private void JournalAct(Event ev)
+    {
+        if (_worldStore.ReadOnly) return;
+        for (int i = _world.DivinePressures.Count - 1; i >= 0; i--)
+            if (_world.DivinePressures[i].SourceEventId == ev.Id)
+            {
+                _worldStore.RecordAct(_world, _world.DivinePressures[i]);
+                SaveWorldStore();
+                return;
+            }
     }
 
     private void OnBlessPressed()
@@ -1108,7 +1238,8 @@ public partial class Main : Node
         Ui.StyleButton(unfollow);
         unfollow.Pressed += () =>
         {
-            if (_glimpsePid >= 0 && _followedSouls.Remove(_glimpsePid)) { _map.QueueRedraw(); CastChanged(); }
+            if (_glimpsePid >= 0 && _followedSouls.Remove(_glimpsePid))
+            { _map.QueueRedraw(); CastChanged(); SaveWorldStore(); }
             _glimpsePanel.Visible = false;
         };
         btns.AddChild(unfollow);
@@ -1234,9 +1365,15 @@ public partial class Main : Node
             // The guard trigger runs before the chattiness gate: a follow is an explicit ask,
             // so a followed soul's fate registers even when the feed is quiet. Introductions
             // run there too — meeting someone shouldn't depend on the chattiness slider.
-            MaybeArmGuard(e, yours, imp);
-            MaybeIntroduce(e);   // own early-outs; a watched seat's heir isn't YOURS by participants
+            // Replayed history (the resume fast-forward) is memory, not the present: it
+            // feeds every index above but never cards, introduces, pulses, or remembers.
+            if (!_catchingUp)
+            {
+                MaybeArmGuard(e, yours, imp);
+                MaybeIntroduce(e);   // own early-outs; a watched seat's heir isn't YOURS by participants
+            }
             if (imp < threshold) continue;
+            if (_catchingUp && i < events.Count - CatchupFeedRows) continue;   // only recent history earns rows
 
             // A specifically watched soul in the tale earns the row a gold side rule and
             // flares their map halo — only when they truly are a participant.
@@ -1248,13 +1385,14 @@ public partial class Main : Node
             var row = AddFeedRow(e, imp, yours, soul);
             // Last-seen memory records only what was actually shown (this row, or a guard
             // card — see ShowGuardCard), so "you last saw…" never cites an undisplayed event.
-            if (yours && row is not null) RememberSeen(e);
-            if (soul && row is not null)
+            // Catch-up rows restore the feed's recent window without rewriting that memory.
+            if (yours && row is not null && !_catchingUp) RememberSeen(e);
+            if (soul && row is not null && !_catchingUp)
                 foreach (var pid in e.Participants)
                     if (_followedSouls.Contains(pid)) _map.PulseSoul(pid);
             // Yours always gets the spotlight (quiet region-life excepted); otherwise a high
             // importance bar catches divine/war/founding and ignores routine births/deaths.
-            if (row is not null && ((yours && !quietRegionLife) || imp >= NotableBar))
+            if (row is not null && !_catchingUp && ((yours && !quietRegionLife) || imp >= NotableBar))
             {
                 notableSeen = true;
                 PulseFeedRow(row);
@@ -2429,6 +2567,7 @@ public partial class Main : Node
             RecomputeMarked();
             OnFactionPicked(fid);
         }
+        SaveWorldStore();   // a follow is part of the player-shaped world — it persists
     }
 
     // Follow one soul, not their line: no bloodline expansion, no viral growth at birth —
@@ -2445,6 +2584,7 @@ public partial class Main : Node
         _map.QueueRedraw();
         CastChanged();
         OnPersonPicked(pid);
+        SaveWorldStore();
     }
 
     // Follow a land, not a people: the place itself becomes the player's mark. Only the two
@@ -2458,6 +2598,7 @@ public partial class Main : Node
         _map.QueueRedraw();
         CastChanged();
         OnRegionPicked(rid);
+        SaveWorldStore();
     }
 
     // Rebuild the followed bloodline from the explicit marks. The pedigree graph is permanent,
@@ -2973,6 +3114,7 @@ public partial class Main : Node
         _chatLabel.Text = $"chattiness ≥ {(int)_chatSlider.Value}";
         if (_running) _guardReturnable = false;   // time moved on; the held moment has passed
         if (_running && _guardToast.Visible) _guardToast.Visible = false;   // the moment passed unread
+        if (_wasRunning && !_running) SaveWorldStore();   // every settle into pause is a safe place to keep the world
         bool cardUp = _guardPanel.Visible || _catchupPanel.Visible || _recapPanel.Visible
             || _guardToast.Visible || _fateLedger.Visible
             || _pendingGuardEventId is not null || _canonPanel.IsOpen;
