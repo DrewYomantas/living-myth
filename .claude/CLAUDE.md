@@ -11,7 +11,8 @@ Godot only renders it. Authored content stays in `src/LivingMyth.Sim/data/*.json
 separate from logic. Never let simulation logic leak into Godot nodes.
 
 ## Layout
-- `src/LivingMyth.Sim/` — the sim (Rng, Models, Chronicle, World, Scoring, Echoes, Feed) plus pure
+- `src/LivingMyth.Sim/` — the sim (Rng, Models, Chronicle, World, Scoring, Echoes, Feed; WorldSurface
+  — the editable terrain cell grid; the DivinePressure ledger in Models/World) plus pure
   read-models over it (StoryGrammar — proven causal connectors; PlayerCanon — the player-telling
   store, never read by World). net8.0.
 - `src/LivingMyth.Console/` — proof runner (run | divergence | surface | verify | homes | story | canon).
@@ -21,7 +22,8 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   marks), `UiTheme.cs` (Ui.* styling, single-sourced accents), `RegionActivity.cs` (per-region event
   index, two channels), `PlaceSeeds.cs` (deterministic viewer place hints), `StoryCopy.cs` (ALL
   connector/canon English + glossary), `CanonPanel.cs` (the canon writing desk),
-  `PersonSigils.cs` (deterministic per-soul marks), `CastPanel.cs` (the dramatis-personae roster).
+  `PersonSigils.cs` (deterministic per-soul marks), `CastPanel.cs` (the dramatis-personae roster),
+  `FateLedger.cs` (the god-hand's act-and-consequence sheet).
 
 ## Milestones
 - **M0–M5.1** — spatial island, regions, territory, extinction land-release.
@@ -139,6 +141,20 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
   dramatic auto-slow) only changes the *wall-clock rate* at which existing ticks are shown — `Tick()`
   must still be called the same number of times in the same order. So viewer-only work can never move
   the `verify` counts; if it does, sim code was touched by accident. `verify` is the guard.
+- **Divine pressure is multiplier-only.** God-hand mechanics may only modulate EXISTING Rng
+  rolls (bless eases the death roll; protect/doom scale the famine multiplier and bias the
+  prosperity walk inside self-expiring windows) — never add a draw to the tick. That is why
+  verify holds 884/699/567/706 with the whole system in place; a pressure that draws breaks
+  it. Omen is attention-only by design (a viewer surfacing weight, no mechanics). The
+  `divine` gate proves determinism, cause-link honesty, and channel rules.
+- **WorldSurface is baseline-inert by construction.** Pure coordinate hashes (not even an Rng
+  stream), never read by the tick; terraform edits are journaled and bump `Version` — the
+  viewer's ONLY texture-rebuild signal (never rebuild per frame). The `divine` gate hashes
+  surface state across double runs.
+- **No new island assumptions** (World Forge plan, GAME_DESIGN.md): the world shape lives
+  behind one seam in WorldSurface; new features must not hardcode disk topology or "the
+  island" copy. Maps become data (`maps/*.json`) in a future milestone; famous-IP maps
+  (Middle-Earth etc.) are off the table legally — Earth and original/public-domain only.
 - **Solution file is `LivingMyth.slnx`** (new SDK-10 XML format), not `.sln`.
 - **Data loads at runtime from next to the binary.** `DataLoader` reads
   `AppContext.BaseDirectory/data/{config,names}.json` (copied to output, reliable under both
