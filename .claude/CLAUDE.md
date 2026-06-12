@@ -24,13 +24,22 @@ separate from logic. Never let simulation logic leak into Godot nodes.
 - **Visual: Living Atlas Foundation** (2026-06-10) — docs/VISUAL_STYLE.md style bible, parchment map place tags, framed docks, warmed atlas palette. See PROJECT_STATE.md for details.
 - **Focus Time arc** (2026-06-10/11, viewer-only) — docs/TIME_AND_STORY_PACING.md design doc; focus guard (pause-on-drama off/★/all + recap/death cards); Guard V2 soul follow + memorial card; held-card return chip; chapter recaps (25 shown years or echo/memorial arc closure → queued recap card with top-3, Your Threads deltas, echoes).
 - **Anchoring arc** (2026-06-11) — Person.HomeRegionId (founders ← founding seat, children inherit, null honest; `homes` gate) → Event.HomeRegionId on births/deaths/murders (memory anchor, never a location) → memorial cairns + followed regions (viewer-only). Baseline held 884/699/567/706 throughout.
-- **Next** — F5 feel-test of everything since the pacing arc (none of it seen running); surface culture + gossip in the viewer; timeline scrubbing; baseline-moving sim contracts (battle sites, per-region economy, peace faction ids).
+- **Myth Authorship + Causal Chronicle V1** (2026-06-11) — truth model V1 (Recorded Fact /
+  Causal Claim / Player Telling / Mechanical Truth, binding in PROJECT_STATE.md); StoryGrammar
+  sim read-model (therefore/but/unresolved-until over `Event.Causes`, honest-unknown allow-list)
+  + `story` gate; PlayerCanon store (`user://canon_seed{N}.json`, dormant/quarantine identity)
+  + `canon` gate; viewer: causal catch-up, guard why-line, the writing desk (CanonPanel) with
+  tellings/notes/inscriptions/legends/people-say, recap Still-Unresolved, reputation memory
+  copy, glossary hints. Baseline held exactly 884/699/567/706 (pure read-models, zero sim changes).
+- **Next** — F5 feel-test of everything since the pacing arc + the myth-authorship surfaces (none of it seen running); surface culture + gossip in the viewer; timeline scrubbing; baseline-moving sim contracts (battle sites, per-region economy, peace faction ids).
 
 ## Commands
 ```bash
 dotnet build LivingMyth.slnx                                   # build everything
 dotnet run --project src/LivingMyth.Console -- verify          # determinism gate (must pass)
 dotnet run --project src/LivingMyth.Console -- homes           # home/anchor contract gate (must pass; --years N)
+dotnet run --project src/LivingMyth.Console -- story           # causal-grammar gate (must pass; --years N)
+dotnet run --project src/LivingMyth.Console -- canon           # player-canon contract gate (must pass)
 dotnet run --project src/LivingMyth.Console -- run --seed 42
 dotnet run --project src/LivingMyth.Console -- divergence --seed 18
 dotnet run --project src/LivingMyth.Console -- surface --seed 1
@@ -57,6 +66,20 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 - **Importance gates die on quiet event types.** Scoring TypeWeight: death=5, birth=3 — an
   importance bar for life events is dead code. Gate on person truth instead (memorial cairns:
   murder always, death only if EverLeader — final by death, so pacing-independent).
+- **The story grammar is a read-model, not a narrator.** `StoryGrammar` (Sim, beside Echoes)
+  emits structured connector kinds backed only by `Event.Causes` + person/faction state; the
+  viewer voices them via `godot/StoryCopy.cs` — the ONLY home for connector/canon English
+  (VISUAL_STYLE.md holds the binding copy tables). "But" is authored-only (`ButRules`),
+  honest-unknown is an allow-list (prophet/schism/forbidden bond), every other rootless event
+  stays silent. Extend the rule table and the `story` gate together — the gate proves evidence
+  ids, real gap arithmetic, the war-despite-peace reversal, and double-run determinism.
+- **Player canon is the third ledger, never sim truth.** `PlayerCanonStore` (Sim, path-injected
+  → `user://canon_seed{N}.json`) is never read by `World` — the `canon` gate proves it by
+  reflection + a behavioral double-run. Notes attach to deterministic ids and validate lazily
+  per (note, world): dormant until this run re-reaches the entity, quarantined on snapshot
+  drift (sim-code changes shift event ids; quarantined notes are kept in the file, never
+  rendered, no recovery UI yet). Copy claims stay exactly as wide as the state they read:
+  "unavenged" (`Murdered && !Avenged`), never "unpunished" — justice events are recorded apart.
 - **Two anchor channels, never mixed.** `Event.RegionId` = where it happened; `Event.HomeRegionId`
   = where it's remembered (lineage home root). Home-anchor copy is binding (VISUAL_STYLE.md):
   "remembered in / of / rooted in {X}" — never "died/born/murdered in {X}", never bare "in {X}".
@@ -109,7 +132,7 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 _Last updated: 2026-06-11_
 
 ### Context Management
-- Your context snowballs at **turn 20** on average (38% of sessions). Use `/compact` proactively after turn 18-20 on long sessions to prevent unbounded growth.
+- Your context snowballs at **turn 19** on average (39% of sessions). Use `/compact` proactively after turn 17-19 on long sessions to prevent unbounded growth.
 - Some sessions use significantly more tokens than others. Consider shorter, more focused sessions with clear goals.
 - You could benefit from subagents for parallel tasks. Consider splitting multi-file operations into parallel agent tasks.
 - You read files you don't end up using. Use `Grep` first to locate relevant files before reading them — reduces unnecessary context by ~0%.
