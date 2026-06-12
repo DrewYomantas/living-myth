@@ -40,7 +40,11 @@ public partial class Main : Node
     private World _world = null!;
     private Control _root = null!;
     private MapView _map = null!;
-    private VBoxContainer _feedList = null!;
+    private VBoxContainer _feedList = null!;      // the world's channel
+    private VBoxContainer _yoursList = null!;     // your story's channel — pinned above the world
+    private Label _yoursHeader = null!;
+    private Label _worldHeader = null!;
+    private readonly List<FeedVisRow> _yoursVis = new();
     private RichTextLabel _inspector = null!;
     private Panel _inspectorPanel = null!;
     private Label _inspectorTitle = null!;
@@ -59,8 +63,8 @@ public partial class Main : Node
     private readonly HashSet<int> _followedRegions = new(); // lands watched as places — tales anchored here and lives remembered here are YOURS
     private Button _regionBtn = null!;
     private const int YoursBoost = 70;                      // weight added to a marked-bloodline event
-    private const int FeedWindow = 60;                      // rolling feed holds this many rows
-    private const float YoursCapFraction = 0.6f;            // YOURS may fill at most this share of the window
+    private const int FeedWindow = 60;                      // rolling world-feed window
+    private const int YoursWindow = 14;                     // rolling your-story window (its own section)
     private Panel _catchupPanel = null!;
     private RichTextLabel _catchup = null!;
     private int? _catchupEventId;
@@ -564,9 +568,27 @@ public partial class Main : Node
         var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
         vb.AddChild(scroll);
 
+        // Two channels, one scroll: your story pinned above the world's churn, so the
+        // tales you asked for stop fighting the firehose for the same rows. Headers only
+        // appear while anything is followed — no empty chrome.
+        var channels = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        channels.AddThemeConstantOverride("separation", 6);
+        scroll.AddChild(channels);
+
+        _yoursHeader = Ui.SectionLabel("Your story", 11);
+        _yoursHeader.AddThemeColorOverride("font_color", Ui.Gold);
+        _yoursHeader.Visible = false;
+        channels.AddChild(_yoursHeader);
+        _yoursList = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _yoursList.AddThemeConstantOverride("separation", 8);
+        channels.AddChild(_yoursList);
+
+        _worldHeader = Ui.SectionLabel("The world", 11);
+        _worldHeader.Visible = false;
+        channels.AddChild(_worldHeader);
         _feedList = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         _feedList.AddThemeConstantOverride("separation", 8);
-        scroll.AddChild(_feedList);
+        channels.AddChild(_feedList);
 
         var hint = new Label { Text = "click a tale to see how it happened", HorizontalAlignment = HorizontalAlignment.Center };
         hint.AddThemeFontSizeOverride("font_size", 11);
@@ -1031,10 +1053,16 @@ public partial class Main : Node
             if (_marked.Count > 0 && e.Type == "birth" && e.Participants.Any(_marked.Contains))
                 foreach (var pid in e.Participants) _marked.Add(pid);
 
-            bool yours = IsYours(e);
+            bool personYours = PersonYours(e);
+            bool yours = personYours || RegionYours(e);
+            // Feel-test tuning: a followed land's rooted plain births/deaths are memory,
+            // not drama — half boost and no dramatic beat, or a populous watched land
+            // throttles high-speed playback with every life rooted there. Murders and
+            // events touching followed PEOPLE keep their full weight.
+            bool quietRegionLife = yours && !personYours && e.Type is "birth" or "death";
             if (yours) _castDirty = true;   // a YOURS event can change the cast (births, deaths, successions)
             int imp = Scoring.ImportanceFast(e, _world, _consCount);
-            if (yours) imp += YoursBoost;
+            if (yours) imp += quietRegionLife ? YoursBoost / 2 : YoursBoost;
             // The guard trigger runs before the chattiness gate: a follow is an explicit ask,
             // so a followed soul's fate registers even when the feed is quiet. Introductions
             // run there too — meeting someone shouldn't depend on the chattiness slider.
@@ -1056,9 +1084,9 @@ public partial class Main : Node
             if (soul && row is not null)
                 foreach (var pid in e.Participants)
                     if (_followedSouls.Contains(pid)) _map.PulseSoul(pid);
-            // Yours always gets the spotlight; otherwise a high importance bar (well above
-            // chattiness) catches divine/war/founding and ignores routine births/deaths.
-            if (row is not null && (yours || imp >= NotableBar))
+            // Yours always gets the spotlight (quiet region-life excepted); otherwise a high
+            // importance bar catches divine/war/founding and ignores routine births/deaths.
+            if (row is not null && ((yours && !quietRegionLife) || imp >= NotableBar))
             {
                 notableSeen = true;
                 PulseFeedRow(row);
@@ -1105,9 +1133,13 @@ public partial class Main : Node
            .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.Out);
     }
 
+    private bool FollowingAnything()
+        => _followedSouls.Count > 0 || _seedPeople.Count > 0
+        || _markedFactions.Count > 0 || _followedRegions.Count > 0;
+
     // Does this event touch a marked bloodline or a marked people? Inline + O(participants),
     // so it stays off the heavier Feed.BuildFeed path while keeping the live feed O(living).
-    private bool IsYours(Event e)
+    private bool PersonYours(Event e)
     {
         foreach (var pid in e.Participants)
         {
@@ -1115,8 +1147,10 @@ public partial class Main : Node
             if (_markedFactions.Count > 0 && _world.People.TryGetValue(pid, out var p)
                 && _markedFactions.Contains(p.FactionId)) return true;
         }
-        return RegionYours(e);
+        return false;
     }
+
+    private bool IsYours(Event e) => PersonYours(e) || RegionYours(e);
 
     // A followed land claims its own story through the two honest channels only: tales truly
     // anchored here (RegionId) and lives remembered here (HomeRegionId) — never inference.
@@ -1213,7 +1247,9 @@ public partial class Main : Node
         {
             Text = e.Text,
             AutowrapMode = TextServer.AutowrapMode.WordSmart,
-            MaxLinesVisible = 2,
+            // While you're focused on follows, the world compresses to one line per tale
+            // unless it's genuinely loud — quieter weather, same honesty.
+            MaxLinesVisible = !yours && FollowingAnything() && imp < NotableBar ? 1 : 2,
             TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
             MouseFilter = Control.MouseFilterEnum.Ignore,
         };
@@ -1226,38 +1262,21 @@ public partial class Main : Node
 
     private Control? AddFeedRow(Event e, int imp, bool yours, bool soul = false)
     {
-        // YOURS cap: a +70-boosted bloodline can otherwise flood the window. Non-YOURS rows
-        // always get in (they already cleared the threshold). A YOURS row past the cap displaces
-        // the weakest currently-visible YOURS row — and if it's itself the weakest, it's skipped.
-        // O(visible rows), no history scan.
-        if (yours)
-        {
-            int yoursCap = (int)(FeedWindow * YoursCapFraction);
-            int visibleYours = 0;
-            FeedVisRow? weakest = null;
-            foreach (var r in _feedVis)
-            {
-                if (!r.Yours) continue;
-                visibleYours++;
-                if (weakest is null || r.Weight < weakest.Weight) weakest = r;
-            }
-            if (visibleYours >= yoursCap)
-            {
-                if (weakest is null || imp <= weakest.Weight) return null;   // new row is the weakest YOURS
-                weakest.Node.QueueFree();
-                _feedVis.Remove(weakest);
-            }
-        }
-
+        // Each channel keeps its own rolling window — your story can never flood the
+        // world's, nor be drowned by it. Newest wins within a channel (feed semantics);
+        // the old weakest-YOURS displacement died with the shared window.
         var row = BuildFeedRowControl(e, imp, yours, soul);
-        _feedList.AddChild(row);
-        _feedList.MoveChild(row, 0);   // newest on top
-        _feedVis.Insert(0, new FeedVisRow { Node = row, Yours = yours, Weight = imp });
-        while (_feedVis.Count > FeedWindow)
+        var list = yours ? _yoursList : _feedList;
+        var vis = yours ? _yoursVis : _feedVis;
+        int window = yours ? YoursWindow : FeedWindow;
+        list.AddChild(row);
+        list.MoveChild(row, 0);   // newest on top
+        vis.Insert(0, new FeedVisRow { Node = row, Yours = yours, Weight = imp });
+        while (vis.Count > window)
         {
-            var oldest = _feedVis[_feedVis.Count - 1];
+            var oldest = vis[vis.Count - 1];
             oldest.Node.QueueFree();
-            _feedVis.RemoveAt(_feedVis.Count - 1);
+            vis.RemoveAt(vis.Count - 1);
         }
         return row;
     }
@@ -2203,6 +2222,33 @@ public partial class Main : Node
         _ => "little known",
     };
 
+    // The connection between a person and the player's follows, in priority order —
+    // O(kin + held regions), real relations only, home language per the binding contract.
+    private string? CareLine(Person p)
+    {
+        if (_marked.Contains(p.Id)) return "of the line you follow";
+        if (_markedFactions.Contains(p.FactionId))
+            return p.IsLeader
+                ? $"leads {_world.Factions[p.FactionId].Name}, a people you follow"
+                : $"of {_world.Factions[p.FactionId].Name}, a people you follow";
+        if (p.SpouseId is int sp && _followedSouls.Contains(sp))
+            return $"wed to {_world.People[sp].Name}, a soul you follow";
+        foreach (int par in p.Parents)
+            if (_followedSouls.Contains(par)) return $"child of {_world.People[par].Name}, a soul you follow";
+        foreach (int ch in p.Children)
+            if (_followedSouls.Contains(ch)) return $"parent of {_world.People[ch].Name}, a soul you follow";
+        if (_followedRegions.Count > 0)
+        {
+            if (_world.Factions.TryGetValue(p.FactionId, out var f))
+                foreach (string s in f.ControlledRegions)
+                    if (int.TryParse(s, out int rid) && _followedRegions.Contains(rid))
+                        return $"their people hold {_world.Regions[rid].Name}, a land you watch";
+            if (p.HomeRegionId is int hr && _followedRegions.Contains(hr))
+                return $"of a line rooted in {_world.Regions[hr].Name}, a land you watch";
+        }
+        return null;
+    }
+
     private void OnPersonPicked(int id)
     {
         if (!_world.People.TryGetValue(id, out var p)) return;
@@ -2232,7 +2278,12 @@ public partial class Main : Node
 
         var sb = new StringBuilder();
         if (p.Cursed) sb.AppendLine($"[color=#{Ui.Hex(Ui.Ember)}][b]✳ CURSED[/b] — a god's mark lies on this bloodline[/color]\n");
-        if (soulFollowed) sb.AppendLine($"[color=#8a5d12][b]★ you are watching this soul[/b][/color]\n");
+        // Why you care, said first: the connection to what you follow, with their sigil —
+        // every person card opens by answering "who is this to me?"
+        if (soulFollowed)
+            sb.AppendLine($"[color=#8a5d12][b]{PersonSigils.Bb(_world, id)} ★ you are watching this soul[/b][/color]\n");
+        else if (CareLine(p) is string care)
+            sb.AppendLine($"[color=#8a5d12][b]{PersonSigils.Bb(_world, id)} {care}[/b][/color]\n");
         if (ReputationDisplay(p.Reputation) is (string repText, string repColor))
         {
             sb.AppendLine(SectionCap("Reputation"));
@@ -2569,9 +2620,10 @@ public partial class Main : Node
     {
         _yearBig.Text = $"Year {_world.Year}";
         _yearSub.Text = $"{_world.LivingCount} souls · {_world.Chronicle.Events.Count} tales";
-        bool guardActive = _guardMode != GuardMode.Off
-            && (_followedSouls.Count > 0 || _seedPeople.Count > 0 || _markedFactions.Count > 0
-                || _followedRegions.Count > 0);
+        bool following = FollowingAnything();
+        _yoursHeader.Visible = following;   // channel headers exist only when there ARE channels
+        _worldHeader.Visible = following;
+        bool guardActive = _guardMode != GuardMode.Off && following;
         _guardLabel.Visible = guardActive;
         if (guardActive)
         {
