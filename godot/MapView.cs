@@ -18,8 +18,10 @@ public partial class MapView : Control
     public Action<int, Vector2>? SoulPicked;   // a followed soul's marker clicked — Main opens the glimpse
     public Action<string>? FactionPicked;
     public Action<int>? RegionPicked;       // region id — Main decides faction vs. unclaimed
+    public Action<int>? SitePicked;         // a Sites V1 site marker clicked — Main opens the Site Card
 
     private readonly List<(Vector2 pos, float r, int id)> _dots = new();
+    private readonly List<(Vector2 pos, float r, int id)> _siteScreen = new();   // sites drawn this frame, for clicks + tags
     private int _hoverRegion = -1;
 
     // The living-atlas skin: WorldSurface rendered once into a nearest-filtered pixel
@@ -128,6 +130,7 @@ public partial class MapView : Control
 
     public string? SelectedFactionId;   // set by Main while a faction inspector is open — label emphasis only
     public int SelectedRegionId = -1;   // set by Main while the Region Lens is open — gold lens ring only
+    public int SelectedSiteId = -1;     // set by Main while a Site Card is open — small gold ring + its tag
     public HashSet<int>? FollowedRegions;   // shared with Main, mutated in place — lands the player watches
 
     // Place-seed marker palette: timber/thatch/stone/dirt, per DESIGN.md ("ancient, not generic").
@@ -141,7 +144,8 @@ public partial class MapView : Control
     private static readonly Color FieldGold = new("8f7c43");
     private static readonly Color TentCloth = new("7d6b50");
     private static readonly Color MarkInk = new(0.16f, 0.12f, 0.07f);
-    private const float CaptionZoom = 2.0f;   // place tags appear at/above this zoom
+    private const float CaptionZoom = 2.0f;   // region place tags appear at/above this zoom
+    private const float SiteTagZoom = 2.4f;   // individual site name tags appear at/above this zoom
 
     // Soft dark tags behind map text — readable over any terrain without a full parchment panel.
     private static readonly StyleBoxFlat LabelTag = MakeTag(new Color(0.12f, 0.09f, 0.05f, 0.42f), null);
@@ -264,6 +268,17 @@ public partial class MapView : Control
         if (p.HomeRegionId is int hr) FocusRegion(hr);
     }
 
+    // Ease the lens onto one real place — the "find it" verb for sites.
+    public void FocusSite(int siteId)
+    {
+        if (World is null || siteId < 0 || siteId >= World.Sites.All.Count) return;
+        var s = World.Sites.Get(siteId);
+        _focusNorm = new Vector2(s.Nx, s.Ny);
+        _focusRemaining = FocusEaseSecs;
+        _manualCamCooldown = 0f;
+        _easeTargetRegion = -1;
+    }
+
     public void ResetCamera() { _zoom = 1f; _pan = Vector2.Zero; MarkManual(); QueueRedraw(); }
 
     private void ZoomAt(float newZoom, Vector2 anchor)
@@ -300,6 +315,7 @@ public partial class MapView : Control
     {
         _dots.Clear();
         _soulScreen.Clear();
+        _siteScreen.Clear();
         DrawRect(new Rect2(Vector2.Zero, Size), Sea);                       // 1. water
         var font = GetThemeDefaultFont();
         if (World is null || font is null) return;
@@ -336,9 +352,9 @@ public partial class MapView : Control
                     DrawArc(P(r.X, r.Y), regionR, 0, Mathf.Tau, 40,
                             RegionColor(r) with { A = 0.8f }, 2.2f);
 
-        DrawRoads(P);                                                       // 4. roads
+        DrawRoads(P);                                                       // 4. roads + site paths
         DrawPlaceMemory(P, regionR);                                        // 5a. place memory
-        DrawPlaceSeeds(P, regionR, font);                                   // 5. place markers
+        DrawSites(P, regionR);                                              // 5. Sites V1 markers
         DrawPeople(P, regionR, font);                                       // 6+7. people + highlights
 
         // 7b. region lens ring — the inspected place, ringed gold beneath the labels.
@@ -346,6 +362,13 @@ public partial class MapView : Control
         {
             var sr = World.Regions[SelectedRegionId];
             DrawArc(P(sr.X, sr.Y), regionR + 3f, 0, Mathf.Tau, 48, Ui.LensGold with { A = 0.85f }, 2.5f);
+        }
+        // 7b'. the inspected site, ringed small and gold — a place, not a whole land.
+        if (SelectedSiteId >= 0 && SelectedSiteId < World.Sites.All.Count)
+        {
+            var ss = World.Sites.Get(SelectedSiteId);
+            DrawArc(P(ss.Nx, ss.Ny), Mathf.Max(11f, regionR * 0.24f), 0, Mathf.Tau, 32,
+                    Ui.LensGold with { A = 0.9f }, 2f);
         }
 
         // 7c. followed lands — a quiet persistent gold ring, the player's standing mark on a
@@ -374,6 +397,7 @@ public partial class MapView : Control
 
         var placed = DrawFactionLabels(P, font);                            // 8. labels
         DrawPlaceTags(P, regionR, placed);
+        DrawSiteTags(placed);
         DrawSoulTags(placed);
 
         if (_hoverRegion >= 0 && _hoverRegion < World.Regions.Count)
@@ -390,20 +414,39 @@ public partial class MapView : Control
         }
     }
 
-    // Roads: dirt paths between adjacent regions held by the same people — the only
-    // high-confidence links the current data supports without scanning history. Each path's
-    // kink comes from a stable pair hash, never the sim's Rng.
+    // Roads + paths: dirt roads between adjacent regions held by the same people (seat site
+    // to seat site — the road goes where the places truly are), and fainter local paths from
+    // each region's seat out to its own sites. Path kinks come from a stable hash, never Rng.
     private void DrawRoads(Func<float, float, Vector2> P)
     {
-        foreach (var a in World!.Regions)
+        var sites = World!.Sites;
+
+        // Local paths first, beneath the roads.
+        foreach (var r in World.Regions)
+        {
+            var local = sites.ForRegion(r.Id);
+            if (local.Count < 2) continue;
+            var seat = P(local[0].Nx, local[0].Ny);
+            for (int i = 1; i < local.Count; i++)
+            {
+                var dst = P(local[i].Nx, local[i].Ny);
+                var s = seat.Lerp(dst, 0.10f);
+                var e = seat.Lerp(dst, 0.90f);
+                DrawPolyline(new[] { s, e }, RoadDirt with { A = 0.16f }, 1.4f, true);
+            }
+        }
+
+        foreach (var a in World.Regions)
         {
             if (a.ControllingFactionId is not string fid) continue;
             foreach (var bid in a.AdjacentRegionIds)
             {
                 if (bid <= a.Id || World.Regions[bid].ControllingFactionId != fid) continue;
                 var b = World.Regions[bid];
-                var p1 = P(a.X, a.Y);
-                var p2 = P(b.X, b.Y);
+                var seatA = sites.SeatOf(a.Id);
+                var seatB = sites.SeatOf(b.Id);
+                var p1 = seatA is not null ? P(seatA.Nx, seatA.Ny) : P(a.X, a.Y);
+                var p2 = seatB is not null ? P(seatB.Nx, seatB.Ny) : P(b.X, b.Y);
                 var s = p1.Lerp(p2, 0.12f);     // trimmed ends so paths don't pierce the markers
                 var e = p1.Lerp(p2, 0.88f);
                 var dir = e - s;
@@ -415,37 +458,31 @@ public partial class MapView : Control
         }
     }
 
-    // Place seeds: deterministic viewer-derived landmark glyphs (see PlaceSeeds.cs). Visual
-    // identity only — the sim has no settlements; nothing here is sim state or touches its Rng.
-    // Held regions fly a small faction banner; parchment name tags are drawn later (layer 8) so
-    // they sit above people dots — see DrawPlaceTags.
+    // The region's parchment tag anchors on its seat site — labels finally sit where the
+    // place truly is, not on an abstract region centre.
     private (Vector2 c, float s) MarkerAnchor(Func<float, float, Vector2> P, float regionR, Region r)
     {
-        var c = P(r.X, r.Y) + PlaceSeeds.Offset(World!.Seed, r.Id) * regionR * 0.30f;
+        var seat = World!.Sites.SeatOf(r.Id);
+        var c = seat is not null ? P(seat.Nx, seat.Ny) : P(r.X, r.Y);
         return (c, Mathf.Clamp(regionR * 0.30f, 7f, 30f));
     }
 
-    private void DrawPlaceSeeds(Func<float, float, Vector2> P, float regionR, Font font)
+    // Sites V1: every marker is a REAL place from the sim's site read-model — a stable id,
+    // a name, a type the terrain honestly supports, a real surface cell. The seat of a held
+    // region flies its people's banner (holder derived live, never stored).
+    private void DrawSites(Func<float, float, Vector2> P, float regionR)
     {
-        foreach (var r in World!.Regions)
+        var sites = World!.Sites;
+        float s = Mathf.Clamp(regionR * 0.17f, 5f, 16f);
+        foreach (var site in sites.All)
         {
-            var (c, s) = MarkerAnchor(P, regionR, r);
-            // A held place reads as a small lived-in cluster, not one lone icon: 1–2
-            // satellite huts at stable hash angles (viewer identity only — no sim sites yet).
-            if (r.ControllingFactionId is string holder)
-            {
-                uint h = PlaceSeeds.Hash(World.Seed, r.Id, 5);
-                int extra = 1 + (int)(h % 2);
-                for (int i = 0; i < extra; i++)
-                {
-                    float ang = ((h >> (4 + i * 8)) & 0xff) / 255f * Mathf.Tau;
-                    var off = new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * s * (1.25f + 0.3f * i);
-                    DrawHut(c + off, s * 0.38f);
-                }
-                DrawBannerFlag(c + new Vector2(s * 0.85f, s * 0.5f), s,
+            var c = P(site.Nx, site.Ny);
+            float ss = s * (site.IsSeat ? 1.3f : 1f);
+            DrawSiteMarker(c, ss, site.Type);
+            if (site.IsSeat && World.Regions[site.RegionId].ControllingFactionId is string holder)
+                DrawBannerFlag(c + new Vector2(ss * 0.95f, ss * 0.55f), ss * 1.15f,
                                FactionColors.GetValueOrDefault(holder, Neutral));
-            }
-            DrawPlaceMarker(c, s, PlaceSeeds.KindOf(World, r));
+            _siteScreen.Add((c, Mathf.Max(9f, ss), site.Id));
         }
     }
 
@@ -544,7 +581,10 @@ public partial class MapView : Control
             if (!sel && _zoom < CaptionZoom) continue;
             var (c, s) = MarkerAnchor(P, regionR, r);
             string name = r.Name;
-            string sub = PlaceSeeds.Label(PlaceSeeds.KindOf(World, r));
+            var local = World.Sites.ForRegion(r.Id);
+            string sub = local.Count > 0
+                ? $"{local.Count} place{(local.Count == 1 ? "" : "s")} · {r.TerrainType}"
+                : r.TerrainType;
             float w = Mathf.Max(Ui.SerifBold.GetStringSize(name, HorizontalAlignment.Left, -1, 13).X,
                                 Ui.SmallCaps.GetStringSize(sub, HorizontalAlignment.Left, -1, 10).X);
             var rect = new Rect2(c.X - w / 2f - 8, c.Y + s * 0.9f + 6, w + 16, 34);
@@ -562,57 +602,73 @@ public partial class MapView : Control
         }
     }
 
-    private void DrawPlaceMarker(Vector2 c, float s, PlaceSeeds.Kind kind)
+    // Sites V1 marker silhouettes, built from the same primitive vocabulary as the old
+    // place seeds (timber/thatch/stone/dirt) — generated shapes, never imported art.
+    private void DrawSiteMarker(Vector2 c, float s, SiteType type)
     {
-        switch (kind)
+        switch (type)
         {
-            case PlaceSeeds.Kind.HillFort:
+            case SiteType.HillFort:
                 DrawArc(c, s * 0.9f, 0, Mathf.Tau, 20, StoneMark with { A = 0.85f }, Mathf.Max(1.2f, s * 0.1f));
                 DrawHut(c + new Vector2(0, s * 0.1f), s * 0.7f);
                 break;
-            case PlaceSeeds.Kind.WatchPost:
+            case SiteType.WatchPost:
                 DrawRect(new Rect2(c.X - s * 0.14f, c.Y - s * 0.9f, s * 0.28f, s * 1.1f), StoneMark);
                 DrawRect(new Rect2(c.X - s * 0.3f, c.Y - s * 1.05f, s * 0.6f, s * 0.18f), RoofDark);
                 break;
-            case PlaceSeeds.Kind.Cairn:
-                DrawCircle(c + new Vector2(-s * 0.22f, 0), s * 0.2f, StoneMark);
-                DrawCircle(c + new Vector2(s * 0.22f, 0), s * 0.2f, StoneMark);
-                DrawCircle(c + new Vector2(0, -s * 0.28f), s * 0.18f, StoneMark.Lightened(0.1f));
+            case SiteType.CairnField:
+                DrawCircle(c + new Vector2(-s * 0.34f, s * 0.06f), s * 0.17f, StoneMark);
+                DrawCircle(c + new Vector2(s * 0.3f, s * 0.12f), s * 0.17f, StoneMark);
+                DrawCircle(c + new Vector2(-0.02f * s, -s * 0.26f), s * 0.16f, StoneMark.Lightened(0.1f));
+                DrawCircle(c + new Vector2(s * 0.05f, s * 0.34f), s * 0.13f, StoneMark.Darkened(0.1f));
                 break;
-            case PlaceSeeds.Kind.Grove:
+            case SiteType.OldBarrow:
+                // A long mound with a doorway stone — old earth, not loose stones.
+                DrawColoredPolygon(new[]
+                {
+                    c + new Vector2(-s * 0.75f, s * 0.3f),
+                    c + new Vector2(-s * 0.35f, -s * 0.32f),
+                    c + new Vector2(s * 0.35f, -s * 0.32f),
+                    c + new Vector2(s * 0.75f, s * 0.3f),
+                }, Land.Lightened(0.18f));
+                DrawRect(new Rect2(c.X - s * 0.12f, c.Y - s * 0.05f, s * 0.24f, s * 0.35f), StoneMark.Darkened(0.2f));
+                break;
+            case SiteType.SacredGrove:
                 DrawTree(c + new Vector2(-s * 0.35f, s * 0.15f), s * 0.9f);
                 DrawTree(c + new Vector2(s * 0.3f, s * 0.05f), s * 1.1f);
                 DrawTree(c + new Vector2(0, s * 0.4f), s * 0.7f);
                 break;
-            case PlaceSeeds.Kind.Shrine:
+            case SiteType.Shrine:
                 DrawRect(new Rect2(c.X - s * 0.16f, c.Y - s * 0.5f, s * 0.32f, s * 0.75f), StoneMark);
                 DrawRect(new Rect2(c.X - s * 0.3f, c.Y - s * 0.62f, s * 0.6f, s * 0.14f), StoneMark.Darkened(0.15f));
                 DrawCircle(c + new Vector2(0, -s * 0.8f), s * 0.11f, Ui.Gold);
                 break;
-            case PlaceSeeds.Kind.Camp:
+            case SiteType.WildernessCamp:
                 DrawTent(c + new Vector2(-s * 0.3f, s * 0.25f), s * 0.6f);
                 DrawTent(c + new Vector2(s * 0.32f, s * 0.3f), s * 0.45f);
                 break;
-            case PlaceSeeds.Kind.Ford:
+            case SiteType.RiverFord:
                 DrawLine(c + new Vector2(-s * 0.6f, -s * 0.12f), c + new Vector2(s * 0.6f, -s * 0.12f), Sea.Lightened(0.25f) with { A = 0.8f }, Mathf.Max(1.2f, s * 0.1f));
                 DrawLine(c + new Vector2(-s * 0.6f, s * 0.16f), c + new Vector2(s * 0.6f, s * 0.16f), Sea.Lightened(0.25f) with { A = 0.8f }, Mathf.Max(1.2f, s * 0.1f));
                 for (int i = -1; i <= 1; i++)
                     DrawLine(c + new Vector2(i * s * 0.3f, -s * 0.3f), c + new Vector2(i * s * 0.3f, s * 0.34f), Timber, Mathf.Max(1.4f, s * 0.14f));
                 break;
-            case PlaceSeeds.Kind.FarmCluster:
+            case SiteType.Farmstead:
                 DrawRect(new Rect2(c.X - s * 0.7f, c.Y - s * 0.05f, s * 0.85f, s * 0.26f), FieldGold with { A = 0.85f });
                 DrawRect(new Rect2(c.X - s * 0.55f, c.Y + s * 0.3f, s * 0.85f, s * 0.26f), FieldGold.Darkened(0.12f) with { A = 0.85f });
                 DrawHut(c + new Vector2(s * 0.45f, -s * 0.3f), s * 0.5f);
                 break;
-            case PlaceSeeds.Kind.MarketHamlet:
+            case SiteType.MarketVillage:
                 DrawHut(c + new Vector2(-s * 0.35f, 0), s * 0.55f);
                 DrawHut(c + new Vector2(s * 0.3f, s * 0.2f), s * 0.45f);
+                DrawHut(c + new Vector2(0, -s * 0.38f), s * 0.4f);
                 DrawRect(new Rect2(c.X + s * 0.05f, c.Y + s * 0.42f, s * 0.4f, s * 0.16f), Thatch);
                 break;
-            case PlaceSeeds.Kind.Ruins:
-                DrawRect(new Rect2(c.X - s * 0.4f, c.Y - s * 0.45f, s * 0.18f, s * 0.6f), StoneMark with { A = 0.8f });
-                DrawRect(new Rect2(c.X + s * 0.15f, c.Y - s * 0.2f, s * 0.18f, s * 0.35f), StoneMark with { A = 0.7f });
-                DrawLine(c + new Vector2(-s * 0.15f, s * 0.25f), c + new Vector2(s * 0.45f, s * 0.12f), StoneMark with { A = 0.6f }, Mathf.Max(1.2f, s * 0.12f));
+            case SiteType.FishingDock:
+                // Planks running out over the water, a hut on the shore end.
+                DrawLine(c + new Vector2(-s * 0.2f, -s * 0.05f), c + new Vector2(s * 0.7f, s * 0.25f), Timber, Mathf.Max(1.6f, s * 0.16f));
+                DrawLine(c + new Vector2(-s * 0.2f, s * 0.18f), c + new Vector2(s * 0.55f, s * 0.45f), Timber.Darkened(0.12f), Mathf.Max(1.4f, s * 0.13f));
+                DrawHut(c + new Vector2(-s * 0.42f, 0), s * 0.5f);
                 break;
         }
     }
@@ -659,8 +715,9 @@ public partial class MapView : Control
         var r = World!.Regions[_hoverRegion];
         var c = P(r.X, r.Y);
         string holder = r.ControllingFactionId is string fid ? World.Factions[fid].Name : "unclaimed";
+        int places = World.Sites.ForRegion(r.Id).Count;
         string l1 = r.Name;
-        string l2 = $"{r.TerrainType} · {holder} · {PlaceSeeds.Label(PlaceSeeds.KindOf(World, r))}";
+        string l2 = $"{r.TerrainType} · {holder} · {places} place{(places == 1 ? "" : "s")}";
         float w = Mathf.Max(font.GetStringSize(l1, HorizontalAlignment.Center, -1, 14).X,
                             font.GetStringSize(l2, HorizontalAlignment.Center, -1, 11).X);
         var rect = new Rect2(c.X - w / 2f - 8, c.Y - regionR - 46, w + 16, 38);
@@ -669,6 +726,38 @@ public partial class MapView : Control
             HorizontalAlignment.Center, w, 14, Ui.Parchment);
         DrawString(font, new Vector2(rect.Position.X + 8, rect.Position.Y + 31), l2,
             HorizontalAlignment.Center, w, 11, Ui.RowBorder);
+    }
+
+    // 8a'. site name tags: each real place names itself once the lens is close enough
+    // (SiteTagZoom), and the inspected land's places are always named — the Region Lens
+    // lists them, so the map must answer where they stand. Overlap-skip keeps it legible:
+    // a missing tag beats two unreadable ones.
+    private void DrawSiteTags(List<Rect2> placed)
+    {
+        bool showAll = _zoom >= SiteTagZoom;
+        foreach (var (pos, r, id) in _siteScreen)
+        {
+            var site = World!.Sites.Get(id);
+            bool sel = site.Id == SelectedSiteId;
+            bool inLens = site.RegionId == SelectedRegionId;
+            if (!sel && !showAll && !inLens) continue;
+            string name = site.Name;
+            string sub = SiteIndex.TypeLabel(site.Type);
+            float w = Mathf.Max(Ui.SerifBold.GetStringSize(name, HorizontalAlignment.Left, -1, 11).X,
+                                Ui.SmallCaps.GetStringSize(sub, HorizontalAlignment.Left, -1, 9).X);
+            var rect = new Rect2(pos.X - w / 2f - 6, pos.Y + r + 2, w + 12, 28);
+            if (!sel)
+            {
+                if (placed.Any(p => p.Intersects(rect))) rect.Position += new Vector2(0, 30);
+                if (placed.Any(p => p.Intersects(rect))) continue;
+            }
+            placed.Add(rect);
+            (sel ? PlaceTagSelected : PlaceTag).Draw(GetCanvasItem(), rect);
+            DrawString(Ui.SerifBold, rect.Position + new Vector2(6, 12), name,
+                HorizontalAlignment.Left, -1, 11, Ui.InkDeep);
+            DrawString(Ui.SmallCaps, rect.Position + new Vector2(6, 24), sub,
+                HorizontalAlignment.Left, -1, 9, Ui.Faded);
+        }
     }
 
     // 8b. watched-soul name tags: at most a handful of souls are ever followed, so this stays
@@ -936,6 +1025,16 @@ public partial class MapView : Control
             else PersonPicked?.Invoke(bestId);
             return;
         }
+
+        // A site marker beats the land beneath it: places are now real click targets.
+        int siteBest = -1;
+        float siteD = float.MaxValue;
+        foreach (var sd in _siteScreen)
+        {
+            float dist = pos.DistanceTo(sd.pos);
+            if (dist <= sd.r + 3 && dist < siteD) { siteD = dist; siteBest = sd.id; }
+        }
+        if (siteBest >= 0 && SitePicked is not null) { SitePicked(siteBest); return; }
 
         int region = NearestRegion(pos);
         if (region >= 0) RegionPicked?.Invoke(region);

@@ -456,7 +456,7 @@ public partial class Main : Node
 
         var root = _root;
 
-        _map = new MapView { PersonPicked = OnPersonPicked, SoulPicked = OnSoulGlimpse, FactionPicked = OnFactionPicked, RegionPicked = OnRegionPicked };
+        _map = new MapView { PersonPicked = OnPersonPicked, SoulPicked = OnSoulGlimpse, FactionPicked = OnFactionPicked, RegionPicked = OnRegionPicked, SitePicked = OnSitePicked };
         root.AddChild(_map);
         _map.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         _map.OffsetRight = -FeedWidth;
@@ -929,6 +929,7 @@ public partial class Main : Node
             _inspectorPanel.Visible = false;
             _map.SelectedFactionId = null;
             _map.SelectedRegionId = -1;
+            _map.SelectedSiteId = -1;
             // Forget the selection too, or a later canon save re-renders (and re-opens)
             // an inspector the player deliberately dismissed.
             _selectedPersonId = null;
@@ -2689,6 +2690,7 @@ public partial class Main : Node
         _selectedFactionId = null;
         _map.SelectedFactionId = null;
         _map.SelectedRegionId = -1;
+        _map.SelectedSiteId = -1;
         _glimpsePanel.Visible = false;
         _lensFactionBtn.Visible = false;
         _regionBtn.Visible = false;
@@ -2775,6 +2777,7 @@ public partial class Main : Node
     {
         if (link.StartsWith("e:") && int.TryParse(link[2..], out var eid)) OpenCatchup(eid);
         else if (link.StartsWith("r:") && int.TryParse(link[2..], out var rid)) OnRegionPicked(rid);
+        else if (link.StartsWith("s:") && int.TryParse(link[2..], out var sid)) OnSitePicked(sid);
         else if (link.StartsWith("f:")) OnFactionPicked(link[2..]);
         else if (link.StartsWith("canon:")) OpenCanonEditor(link[6..], fromGuardCard);
     }
@@ -2885,6 +2888,7 @@ public partial class Main : Node
         _selectedFactionId = null;
         _map.SelectedFactionId = null;
         _map.SelectedRegionId = regionId;
+        _map.SelectedSiteId = -1;
         _glimpsePanel.Visible = false;
         _curseBtn.Visible = false;
         _blessBtn.Visible = false;
@@ -2918,7 +2922,15 @@ public partial class Main : Node
         // Culture made visible where you stand (M7 surfaced): the holder's hardened ways.
         if (holder is not null && holder.CustomOriginEvent.Count > 0)
             sb.AppendLine($"ways of the holder: [color=#{Ui.Hex(Ui.Violet)}]{string.Join(", ", holder.CustomOriginEvent.Keys.OrderBy(c => c))}[/color]");
-        sb.AppendLine($"map hint: {PlaceSeeds.Label(PlaceSeeds.KindOf(_world, region))} — a viewer's mark, not sim state");
+        sb.AppendLine();
+        // Sites V1: the land's real places — deterministic, terrain-honest, clickable.
+        var localSites = _world.Sites.ForRegion(regionId);
+        sb.AppendLine(SectionCap("Places of this land"));
+        if (localSites.Count == 0)
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]the sea claimed every cell of this land — no places stand[/color]");
+        foreach (var s in localSites)
+            sb.AppendLine($"{Link("s:" + s.Id, s.Name)} — {SiteIndex.TypeLabel(s.Type)}"
+                + (s.IsSeat ? $"  [color=#{Ui.Hex(Ui.Faded)}]· the seat[/color]" : ""));
         sb.AppendLine();
         // The player's hand: what this place is said to be.
         if (CanonBlock($"r:{regionId}", CanonNoteType.PlaceLegend) is string legend)
@@ -2980,12 +2992,90 @@ public partial class Main : Node
         sb.AppendLine();
         sb.AppendLine(SectionCap("Not yet in the record"));
         sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]people are not yet site-anchored — the atlas scatters each people across their lands[/color]");
-        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]settlements are not modeled yet — the place marker is a map hint only[/color]");
+        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]the places above are a real site layer — true positions on this land — but tales do not yet anchor to single places, only to lands[/color]");
         sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]much of history carries no place anchor yet — a followed land speaks only when tales are anchored here or lives are remembered here[/color]");
 
         _inspector.Text = sb.ToString();
         _cast.SetCollapsed(true);   // panel economy: the inspector takes the column, the cast folds to sigils
         _inspectorPanel.Visible = true;
+    }
+
+    // The Site Card (Sites V1): a small parchment card for one real place. Every line is
+    // honest data — the site contract (name/type/cell/region), the region's live holder,
+    // and the LAND's anchored tales clearly labeled as such (events do not yet anchor to
+    // single places; that contract is deferred and said plainly). No population, no
+    // buildings, no daily life — those are not modeled, so the card never claims them.
+    private void OnSitePicked(int siteId)
+    {
+        if (siteId < 0 || siteId >= _world.Sites.All.Count) return;
+        var site = _world.Sites.Get(siteId);
+        var region = _world.Regions[site.RegionId];
+        var holder = region.ControllingFactionId is string hid ? _world.Factions[hid] : null;
+
+        _selectedPersonId = null;
+        _selectedFactionId = null;
+        _map.SelectedFactionId = null;
+        _map.SelectedRegionId = site.RegionId;   // the land lights up; its places stay named
+        _map.SelectedSiteId = siteId;
+        _glimpsePanel.Visible = false;
+        _curseBtn.Visible = false;
+        _blessBtn.Visible = false;
+        _protectBtn.Visible = false;
+        _doomBtn.Visible = false;
+        _omenBtn.Visible = false;
+        _forestBtn.Visible = false;
+        _springBtn.Visible = false;
+        _followBtn.Visible = false;
+        _soulBtn.Visible = false;
+        _regionBtn.Visible = false;
+        _lensFactionId = null;
+        _lensFactionBtn.Visible = false;
+
+        _inspectorTitle.Text = site.Name;
+        _inspectorSub.Text = $"{SiteIndex.TypeLabel(site.Type)} · {region.Name}";
+
+        var sb = new StringBuilder();
+        if (_followedRegions.Contains(region.Id))
+            sb.AppendLine($"[color=#8a5d12][b]★ a place of {region.Name}, a land you watch[/b][/color]\n");
+        if (OmenActive(region.Id))
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Violet)}][b]✶ an omen hangs over {region.Name}[/b] — and so over this place[/color]\n");
+        sb.AppendLine(SectionCap("The place"));
+        sb.AppendLine($"a {SiteIndex.TypeLabel(site.Type)}"
+            + (site.IsSeat ? $" — the seat of {region.Name}" : ""));
+        string ground = _world.Surface.TerrainAt(site.CellX, site.CellY).ToString().ToLowerInvariant();
+        sb.AppendLine($"stands on {ground} ground in {Link("r:" + region.Id, region.Name)} ({region.TerrainType})");
+        sb.AppendLine(holder is null
+            ? "held by no one — this land is unclaimed wilderness"
+            : $"held, with all {region.Name}, by {Link("f:" + holder.Id, holder.Name)}");
+        sb.AppendLine();
+        // The land's legend covers its places in V1 — legends attach to lands, said plainly.
+        if (CanonBlock($"r:{region.Id}", CanonNoteType.PlaceLegend) is string legend)
+        { sb.Append(legend); sb.AppendLine(); }
+        else if (!_canon.ReadOnly)
+        { sb.AppendLine(Link($"canon:legend:r:{region.Id}", $"✎ set a legend for {region.Name} and its places")); sb.AppendLine(); }
+        sb.AppendLine(SectionCap("Tales at this place"));
+        var recent = _regionActivity.RecentFor(region.Id);
+        if (recent.Count == 0)
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]no recorded tales here yet[/color]");
+        else
+        {
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]the chronicle anchors tales to lands, not yet to single places — these belong to {region.Name}[/color]");
+            for (int i = recent.Count - 1; i >= 0; i--)   // newest first
+            {
+                var e = _world.Chronicle.Get(recent[i]);
+                var cls = Ui.ClassOf(e.Type);
+                sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color] [color=#{Ui.Hex(cls.Color)}]{cls.Glyph}[/color] {Link("e:" + e.Id, e.Text)}");
+            }
+        }
+        sb.AppendLine();
+        sb.AppendLine(SectionCap("Not yet in the record"));
+        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]no one dwells here by name — people are not yet site-anchored[/color]");
+        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]this place claims no population, buildings, or stores — its presence on the land is all the record holds[/color]");
+
+        _inspector.Text = sb.ToString();
+        _cast.SetCollapsed(true);   // panel economy: the inspector takes the column, the cast folds to sigils
+        _inspectorPanel.Visible = true;
+        _map.FocusSite(siteId);     // a place card is a "find it" ask — ease the lens onto it
     }
 
     private static string MarkLabel(MapView.MarkKind kind) => kind switch
@@ -3002,6 +3092,7 @@ public partial class Main : Node
         _selectedFactionId = fid;
         _map.SelectedFactionId = fid;
         _map.SelectedRegionId = -1;
+        _map.SelectedSiteId = -1;
         _glimpsePanel.Visible = false;
         _lensFactionBtn.Visible = false;
         _regionBtn.Visible = false;
@@ -3046,8 +3137,7 @@ public partial class Main : Node
             foreach (var c in customs)
                 sb.AppendLine($"[color=#{Ui.Hex(Ui.Violet)}]❧[/color] {c}");
         }
-        // "Map role" is viewer language — the deterministic place marker drawn on the map,
-        // not sim settlement data (the sim has no settlements yet).
+        // Each held land names its seat — a real Sites V1 place, not a viewer hint.
         var lands = fac.ControlledRegions.Select(int.Parse).OrderBy(i => i)
             .Select(i => _world.Regions[i]).ToList();
         if (lands.Count > 0)
@@ -3055,7 +3145,11 @@ public partial class Main : Node
             sb.AppendLine();
             sb.AppendLine(SectionCap("Their lands"));
             foreach (var r in lands.Take(8))
-                sb.AppendLine($"{Link("r:" + r.Id, r.Name)} — {r.TerrainType} · map role: {PlaceSeeds.Label(PlaceSeeds.KindOf(_world, r))}");
+            {
+                var seat = _world.Sites.SeatOf(r.Id);
+                sb.AppendLine($"{Link("r:" + r.Id, r.Name)} — {r.TerrainType}"
+                    + (seat is not null ? $" · seat: {Link("s:" + seat.Id, seat.Name)}" : ""));
+            }
             if (lands.Count > 8)
                 sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]…and {lands.Count - 8} more[/color]");
         }
