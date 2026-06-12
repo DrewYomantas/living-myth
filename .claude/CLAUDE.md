@@ -13,15 +13,18 @@ separate from logic. Never let simulation logic leak into Godot nodes.
 ## Layout
 - `src/LivingMyth.Sim/` — the sim (Rng, Models, Chronicle, World, Scoring, Echoes, Feed; WorldSurface
   — the editable terrain cell grid; the DivinePressure ledger in Models/World) plus pure
-  read-models over it (StoryGrammar — proven causal connectors; PlayerCanon — the player-telling
-  store, never read by World). net8.0.
-- `src/LivingMyth.Console/` — proof runner (run | divergence | surface | verify | homes | story | canon).
+  read-models over it (StoryGrammar — proven causal connectors; Sites — the deterministic local
+  place layer; Replay — replay-ready beat helper; PlayerCanon — the player-telling store, never
+  read by World; PlayerWorld — the world-save input journal, never read by World). net8.0.
+- `src/LivingMyth.Console/` — proof runner (run | divergence | surface | verify | homes | story |
+  canon | divine | save | sites).
 - `godot/` — the viewer (.NET build), references the Sim: `Main.cs` (tick loop, pacing + dramatic
   auto-slow, live feed, inspectors, curse tool, causal catch-up, Follow/Yours channel, focus guard +
-  memorial cards, chapter recaps, canon wiring), `MapView.cs` (map render, clicks, pulses, place/home
-  marks), `UiTheme.cs` (Ui.* styling, single-sourced accents), `RegionActivity.cs` (per-region event
-  index, two channels), `PlaceSeeds.cs` (deterministic viewer place hints), `StoryCopy.cs` (ALL
-  connector/canon English + glossary), `CanonPanel.cs` (the canon writing desk),
+  memorial cards, chapter recaps, canon wiring, world-save journaling + resume fast-forward, the
+  Site Card), `MapView.cs` (map render, clicks, pulses, place/home marks, Sites V1 markers/tags),
+  `UiTheme.cs` (Ui.* styling, single-sourced accents), `RegionActivity.cs` (per-region event
+  index, two channels), `PlaceSeeds.cs` (legacy hash helpers; its map hints retired by Sites V1),
+  `StoryCopy.cs` (ALL connector/canon English + glossary), `CanonPanel.cs` (the canon writing desk),
   `PersonSigils.cs` (deterministic per-soul marks), `CastPanel.cs` (the dramatis-personae roster),
   `FateLedger.cs` (the god-hand's act-and-consequence sheet).
 
@@ -59,9 +62,19 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   authored BUT rules, Fate Ledger right sheet, map payoff marks (binding table in VISUAL_STYLE.md).
   New gate `divine` (the `surface` name was taken by the surfacing demo). Baseline held exactly
   884/699/567/706 — deliberately unmoved.
-- **Next** — Drew's F5 feel-test of the atlas surface + god-hand; pressure/edit persistence
-  (session-only today); timeline scrubbing; baseline-moving sim contracts (battle sites,
-  per-region economy, peace faction ids, sites/settlements).
+- **Persistence + Sites V1** (2026-06-12, sim + viewer + two gates) — the player-shaped world
+  survives relaunch and places became real data. `PlayerWorld.cs`: the world save as an INPUT
+  JOURNAL (`user://world_seed{N}.json` — acts with year + identity snapshot, follows, last-seen,
+  resume year; never a snapshot); the viewer fast-forwards to the resume year re-applying acts
+  in place (deterministic sim ⇒ byte-identical world back), journals every act/follow, saves on
+  pause/close/heartbeat; drifted targets quarantine. `Sites.cs`: 3–7 terrain-honest named sites
+  per region — a baseline-inert READ-MODEL off the pristine surface (Event.SiteId deliberately
+  DEFERRED; the `sites` gate asserts the field is ABSENT). `Replay.cs`: replay-ready beats.
+  Viewer: site markers replace PlaceSeeds hints, site tags/cards/lens places, seat banners +
+  roads. New gates `save` + `sites`. Baseline held exactly 884/699/567/706.
+- **Next** — Drew's F5 feel-test of persistence + sites (and the still-unwatched Cast arc);
+  timeline scrubbing; baseline-moving sim contracts (Event.SiteId anchoring conventions, battle
+  sites, per-region economy, peace faction ids); fresh-world affordance (today: delete the save).
 
 ## Commands
 ```bash
@@ -71,6 +84,8 @@ dotnet run --project src/LivingMyth.Console -- homes           # home/anchor con
 dotnet run --project src/LivingMyth.Console -- story           # causal-grammar gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- canon           # player-canon contract gate (must pass)
 dotnet run --project src/LivingMyth.Console -- divine          # god-hand + surface gate (must pass; --years N)
+dotnet run --project src/LivingMyth.Console -- save            # world-save journal gate (must pass; --years N)
+dotnet run --project src/LivingMyth.Console -- sites           # sites contract gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- run --seed 42
 dotnet run --project src/LivingMyth.Console -- divergence --seed 18
 dotnet run --project src/LivingMyth.Console -- surface --seed 1
@@ -151,6 +166,19 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
   stream), never read by the tick; terraform edits are journaled and bump `Version` — the
   viewer's ONLY texture-rebuild signal (never rebuild per frame). The `divine` gate hashes
   surface state across double runs.
+- **Sites derive from the PRISTINE surface, structurally.** `World.BuildSurface()` constructs
+  the `SiteIndex` in the same breath as `WorldSurface`, so no terraform edit can exist before
+  the index does — the `sites` gate proves it by editing FIRST in one of its double runs. Site
+  type honesty is cell-checked (`SiteIndex.FitsCell` is the shared rule both generation and
+  the gate use). `Event.SiteId` does not exist — the gate asserts the ABSENCE; adding it is a
+  deliberate baseline-moving milestone with documented anchoring conventions, never a patch.
+- **The world save is an input journal, never sim truth.** `PlayerWorldStore` persists the
+  player's HAND (acts with years + identity snapshots), not world state: replaying it against
+  the same seed reproduces the world because acts are the only player input the sim feels.
+  ApplyDue is the only door from the store into a World (the `save` gate proves an unapplied
+  journal leaves a clean run byte-identical); the viewer must journal through the same
+  DivinePressure the act created (JournalAct), never hand-build entries — and resume replay
+  must call the SAME World verbs the live session did, or the chronicles diverge.
 - **No new island assumptions** (World Forge plan, GAME_DESIGN.md): the world shape lives
   behind one seam in WorldSurface; new features must not hardcode disk topology or "the
   island" copy. Maps become data (`maps/*.json`) in a future milestone; famous-IP maps
@@ -188,5 +216,5 @@ _Last updated: 2026-06-12_
 - MCP server(s) **unity-mcp** are loaded but never used. Consider removing them to reduce per-session overhead.
 
 ### Prompt Quality
-- **6%** of your prompts are under 10 words. Include specific file paths, function names, and expected outcomes to reduce clarification rounds.
+- **5%** of your prompts are under 10 words. Include specific file paths, function names, and expected outcomes to reduce clarification rounds.
 <!-- TOKENOMICS:END -->
