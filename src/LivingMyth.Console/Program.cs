@@ -19,8 +19,9 @@ switch (cmd)
     case "surface": SurfaceCmd(Seed(1), Years(120)); break;
     case "verify": VerifyCmd(); break;
     case "homes": HomesCmd(Years(120)); break;
+    case "story": StoryCmd(Years(120)); break;
     default:
-        Console.WriteLine("commands: run | divergence | surface | verify | homes");
+        Console.WriteLine("commands: run | divergence | surface | verify | homes | story");
         break;
 }
 return;
@@ -357,6 +358,133 @@ void HomesCmd(int years)
         if (bad.Count > 0) failures++;
     }
     Console.WriteLine(failures == 0 ? "\nHOME CONTRACT HOLDS." : $"\n{failures} SEED(S) BROKE THE CONTRACT.");
+    Environment.Exit(failures == 0 ? 0 : 1);
+}
+
+// -------------------------------------------------------------------------- story
+
+// Proof gate for the causal story grammar (PROJECT_STATE.md "Truth model V1"): every
+// connector the viewer could voice is proven against recorded evidence — the named cause
+// is literally in the effect's Causes, gaps are real arithmetic, "but" fires only from
+// the authored rule set, "unresolved until" is recomputed independently from person
+// state, honest unknowns stay inside the allow-list, and all of it is deterministic.
+void StoryCmd(int years)
+{
+    Console.WriteLine($"Story grammar gate ({years} yrs): every connector proven, gaps real arithmetic,");
+    Console.WriteLine("honest unknowns authored-only, all of it deterministic.");
+    int failures = 0;
+    foreach (int seed in new[] { 1, 18, 42, 7 })
+    {
+        var (c1, n1) = Load();
+        var w = new World(seed, c1, n1); w.Run(years);
+        var bad = new List<string>();
+        var ruleFires = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        int links = 0, th = 0, bu = 0, un = 0, unknownRoots = 0;
+
+        foreach (var e in w.Chronicle.Events)
+        {
+            if (e.Causes.Count > 0)
+            {
+                var link = StoryGrammar.ProximateLink(w, e)!;
+                links++;
+                ruleFires[link.RuleId] = ruleFires.GetValueOrDefault(link.RuleId) + 1;
+                if (link.Kind == ConnectorKind.Therefore) th++;
+                else if (link.Kind == ConnectorKind.But) bu++;
+                else un++;
+
+                // Evidence reality: the claimed cause must be recorded, past, and the gap real.
+                if (!e.Causes.Contains(link.CauseEventId))
+                    bad.Add($"event #{e.Id} claims cause {link.CauseEventId} not in its Causes");
+                var cause = w.Chronicle.Get(link.CauseEventId);
+                if (cause.Year > e.Year)
+                    bad.Add($"event #{e.Id} claims a cause from the future (#{cause.Id})");
+                if (link.GapYears != e.Year - cause.Year)
+                    bad.Add($"event #{e.Id} gap {link.GapYears} != real {e.Year - cause.Year}");
+
+                // "But" is authored-only; the blessed-union → war edge must never read as therefore.
+                if (link.Kind == ConnectorKind.But && !StoryGrammar.ButRules.Contains(link.RuleId))
+                    bad.Add($"event #{e.Id} BUT from non-authored rule '{link.RuleId}'");
+                if (e.Type == "war" && cause.Type == "romance" && cause.Tags.Contains("peace")
+                    && link.Kind != ConnectorKind.But)
+                    bad.Add($"war #{e.Id} over an eased-tension union must be BUT, got {link.Kind}");
+
+                // Unresolved-until, recomputed independently of the rule table.
+                if (link.Kind == ConnectorKind.UnresolvedUntil)
+                {
+                    bool proven = e.Type == "murder" && e.Tags.Contains("revenge")
+                        && cause.Type == "murder" && cause.Participants.Count > 0
+                        && e.Participants.Count > 0
+                        && w.People[cause.Participants[0]].MurderEventId == cause.Id
+                        && w.People[cause.Participants[0]].Avenged
+                        && w.People[cause.Participants[0]].KillerId == e.Participants[0];
+                    if (!proven) bad.Add($"event #{e.Id} UNRESOLVED-UNTIL not provable from person state");
+                }
+                // Converse: every revenge murder with a cause must classify unresolved-until.
+                if (e.Type == "murder" && e.Tags.Contains("revenge")
+                    && link.Kind != ConnectorKind.UnresolvedUntil)
+                    bad.Add($"revenge murder #{e.Id} classified '{link.RuleId}' instead of unresolved-until");
+            }
+            else
+            {
+                var origin = StoryGrammar.ClassifyOrigin(e);
+                if (origin.Kind == OriginKind.HonestUnknown)
+                {
+                    unknownRoots++;
+                    bool allowed = e.Type == "prophet" || e.Type == "schism"
+                        || (e.Type == "romance" && e.Tags.Contains("forbidden"));
+                    if (!allowed)
+                        bad.Add($"event #{e.Id} ({e.Type}) claims honest-unknown outside the allow-list");
+                }
+                if (e.Type == "prophet"
+                    && (origin.Kind != OriginKind.HonestUnknown || origin.SubjectPersonId != e.Participants[0]))
+                    bad.Add($"prophet #{e.Id} misclassified ({origin.Kind})");
+            }
+        }
+
+        // Annotate integrity: same membership as Trace, ordered by id (causes precede effects).
+        for (int id = 0; id < w.Chronicle.Events.Count; id++)
+        {
+            var ann = StoryGrammar.Annotate(w, id);
+            var trace = w.Chronicle.Trace(id);
+            if (ann.Steps.Count != trace.Count
+                || !ann.Steps.Select(s => s.Event.Id).OrderBy(i => i)
+                      .SequenceEqual(trace.Select(t => t.Id).OrderBy(i => i)))
+            { bad.Add($"annotate #{id} chain membership differs from Trace"); break; }
+            for (int i = 1; i < ann.Steps.Count; i++)
+                if (ann.Steps[i].Event.Id <= ann.Steps[i - 1].Event.Id)
+                { bad.Add($"annotate #{id} steps not in record order"); break; }
+        }
+
+        // Determinism: a second identical run must yield byte-identical grammar output.
+        string Canon(World ww)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var e in ww.Chronicle.Events)
+            {
+                if (e.Causes.Count > 0)
+                {
+                    var l = StoryGrammar.ProximateLink(ww, e)!;
+                    sb.Append(e.Id).Append('|').Append(l.RuleId).Append('|').Append(l.Kind)
+                      .Append('|').Append(l.CauseEventId).Append('|').Append(l.GapYears).Append('\n');
+                }
+                else
+                {
+                    var o = StoryGrammar.ClassifyOrigin(e);
+                    sb.Append(e.Id).Append('|').Append(o.Kind).Append('|').Append(o.CopyKey).Append('\n');
+                }
+            }
+            return sb.ToString();
+        }
+        var (c2, n2) = Load();
+        var w2 = new World(seed, c2, n2); w2.Run(years);
+        if (Canon(w) != Canon(w2)) bad.Add("grammar output differs between identical runs");
+
+        Console.WriteLine($"  seed {seed,3}: {(bad.Count == 0 ? "OK" : "FAIL")}  {w.Chronicle.Events.Count} events, {links} links ({th} therefore, {bu} but, {un} unresolved), {unknownRoots} honest-unknown roots");
+        Console.WriteLine($"           rules: {string.Join(", ", ruleFires.Select(kv => $"{kv.Key} {kv.Value}"))}");
+        foreach (var b in bad.Take(5)) Console.WriteLine($"           {b}");
+        if (bad.Count > 0) failures++;
+    }
+    Console.WriteLine(failures == 0 ? "\nSTORY GRAMMAR HOLDS." : $"\n{failures} SEED(S) BROKE THE GRAMMAR.");
     Environment.Exit(failures == 0 ? 0 : 1);
 }
 
