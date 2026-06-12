@@ -1,36 +1,276 @@
 {
-  "island_names": ["Korthal", "Ysmere", "Veldros", "Hethen", "Aurun", "Skarn"],
+  "island_names": [
+    "Korthal",
+    "Ysmere",
+    "Veldros",
+    "Hethen",
+    "Aurun",
+    "Skarn"
+  ],
   "religions": {
-    "highland": { "name": "the Stone Covenant", "deity": "the Mountain Father" },
-    "shore":    { "name": "the Tide Faith",     "deity": "the Deep Mother" },
-    "wood":     { "name": "the Green Rite",     "deity": "the Antlered One" }
+    "highland": {
+      "name": "the Stone Covenant",
+      "deity": "the Mountain Father"
+    },
+    "shore": {
+      "name": "the Tide Faith",
+      "deity": "the Deep Mother"
+    },
+    "wood": {
+      "name": "the Green Rite",
+      "deity": "the Antlered One"
+    }
   },
   "faith_fragments": {
-    "prefix": ["the Order of", "the Cult of", "the Children of", "the Way of", "the Church of", "the Flame of", "the Disciples of"],
-    "concept": ["the Pale Star", "the Drowned King", "the First Ash", "the Hollow Sun", "the Weeping Stone", "the Seven Names", "the Unborn God", "the Broken Wheel", "the Last Light", "the Serpent Below", "the Silent Saint", "the Burning Word"]
+    "prefix": [
+      "the Order of",
+      "the Cult of",
+      "the Children of",
+      "the Way of",
+      "the Church of",
+      "the Flame of",
+      "the Disciples of"
+    ],
+    "concept": [
+      "the Pale Star",
+      "the Drowned King",
+      "the First Ash",
+      "the Hollow Sun",
+      "the Weeping Stone",
+      "the Seven Names",
+      "the Unborn God",
+      "the Broken Wheel",
+      "the Last Light",
+      "the Serpent Below",
+      "the Silent Saint",
+      "the Burning Word"
+    ]
   },
   "given_names": {
     "highland": {
-      "m": ["Bram", "Doran", "Kael", "Torv", "Halmir", "Ewan", "Garr", "Roduin", "Sten", "Voll", "Aldric", "Hraun", "Edrin", "Maelor", "Gorm"],
-      "f": ["Mara", "Sela", "Bryn", "Eira", "Hilda", "Roesia", "Tava", "Vela", "Astrid", "Greta", "Maeve", "Sif", "Edda", "Wren", "Hala"]
+      "m": [
+        "Bram",
+        "Doran",
+        "Kael",
+        "Torv",
+        "Halmir",
+        "Ewan",
+        "Garr",
+        "Roduin",
+        "Sten",
+        "Voll",
+        "Aldric",
+        "Hraun",
+        "Edrin",
+        "Maelor",
+        "Gorm"
+      ],
+      "f": [
+        "Mara",
+        "Sela",
+        "Bryn",
+        "Eira",
+        "Hilda",
+        "Roesia",
+        "Tava",
+        "Vela",
+        "Astrid",
+        "Greta",
+        "Maeve",
+        "Sif",
+        "Edda",
+        "Wren",
+        "Hala"
+      ]
     },
     "shore": {
-      "m": ["Coren", "Faro", "Nilo", "Dax", "Tarus", "Vey", "Oren", "Lios", "Calder", "Mero", "Pell", "Soral", "Ander", "Quill", "Marek"],
-      "f": ["Lira", "Nessa", "Cala", "Mira", "Sorin", "Tide", "Vesna", "Oma", "Pell", "Sela", "Nira", "Cove", "Asha", "Merin", "Yara"]
+      "m": [
+        "Coren",
+        "Faro",
+        "Nilo",
+        "Dax",
+        "Tarus",
+        "Vey",
+        "Oren",
+        "Lios",
+        "Calder",
+        "Mero",
+        "Pell",
+        "Soral",
+        "Ander",
+        "Quill",
+        "Marek"
+      ],
+      "f": [
+        "Lira",
+        "Nessa",
+        "Cala",
+        "Mira",
+        "Sorin",
+        "Tide",
+        "Vesna",
+        "Oma",
+        "Pell",
+        "Sela",
+        "Nira",
+        "Cove",
+        "Asha",
+        "Merin",
+        "Yara"
+      ]
     },
     "wood": {
-      "m": ["Fenn", "Ash", "Rowan", "Bram", "Corwin", "Eldas", "Thorn", "Wud", "Niall", "Sorrel", "Brackin", "Holt", "Vesk", "Dern", "Oka"],
-      "f": ["Ivy", "Fern", "Mossa", "Wila", "Brae", "Thessa", "Linden", "Saola", "Reia", "Holla", "Nyx", "Sage", "Wenna", "Briar", "Orla"]
+      "m": [
+        "Fenn",
+        "Ash",
+        "Rowan",
+        "Bram",
+        "Corwin",
+        "Eldas",
+        "Thorn",
+        "Wud",
+        "Niall",
+        "Sorrel",
+        "Brackin",
+        "Holt",
+        "Vesk",
+        "Dern",
+        "Oka"
+      ],
+      "f": [
+        "Ivy",
+        "Fern",
+        "Mossa",
+        "Wila",
+        "Brae",
+        "Thessa",
+        "Linden",
+        "Saola",
+        "Reia",
+        "Holla",
+        "Nyx",
+        "Sage",
+        "Wenna",
+        "Briar",
+        "Orla"
+      ]
     }
   },
   "region_names": {
-    "forest": ["the Thornwood", "the Deep Green", "the Tangled Wood", "Ashgrove",
-               "the Old Forest", "Fernhollow", "the Dark Boughs"],
-    "highland": ["Iron Pass", "the Stone Crown", "Greyspire", "the High Crags",
-                 "Coldpeak", "the Broken Ridge", "Stormwall"],
-    "coast": ["Storm Bay", "the Salt Shore", "Tidecrag", "the Grey Shallows",
-              "Whitecap Reach", "the Sunken Bay", "Driftmouth"],
-    "plains": ["the Open Vale", "Greenfield", "the Long Meadow", "Dustplain",
-               "the Flats", "Windgrass", "the Wide Common"]
+    "forest": [
+      "the Thornwood",
+      "the Deep Green",
+      "the Tangled Wood",
+      "Ashgrove",
+      "the Old Forest",
+      "Fernhollow",
+      "the Dark Boughs"
+    ],
+    "highland": [
+      "Iron Pass",
+      "the Stone Crown",
+      "Greyspire",
+      "the High Crags",
+      "Coldpeak",
+      "the Broken Ridge",
+      "Stormwall"
+    ],
+    "coast": [
+      "Storm Bay",
+      "the Salt Shore",
+      "Tidecrag",
+      "the Grey Shallows",
+      "Whitecap Reach",
+      "the Sunken Bay",
+      "Driftmouth"
+    ],
+    "plains": [
+      "the Open Vale",
+      "Greenfield",
+      "the Long Meadow",
+      "Dustplain",
+      "the Flats",
+      "Windgrass",
+      "the Wide Common"
+    ]
+  },
+  "site_name_roots": [
+    "Alder",
+    "Ash",
+    "Briar",
+    "Crow",
+    "Dun",
+    "Elder",
+    "Fen",
+    "Gorse",
+    "Hart",
+    "Hazel",
+    "Heron",
+    "Holly",
+    "Lark",
+    "Mor",
+    "Nettle",
+    "Oat",
+    "Otter",
+    "Raven",
+    "Reed",
+    "Rowan",
+    "Sedge",
+    "Sloe",
+    "Thorn",
+    "Wren",
+    "Yew",
+    "Birch",
+    "Bracken",
+    "Stag",
+    "Tarn",
+    "Whin"
+  ],
+  "site_patterns": {
+    "market_village": [
+      "{root}wick",
+      "{root}stead",
+      "{root}ham"
+    ],
+    "watch_post": [
+      "{root} Watch",
+      "the {root} Ward"
+    ],
+    "sacred_grove": [
+      "the {root} Grove",
+      "{root}hallow"
+    ],
+    "old_barrow": [
+      "{root} Barrow",
+      "the {root} Howe"
+    ],
+    "river_ford": [
+      "{root}ford",
+      "the {root} Crossing"
+    ],
+    "farmstead": [
+      "{root}croft",
+      "the {root} Fields"
+    ],
+    "hill_fort": [
+      "{root}burgh",
+      "the {root} Fastness"
+    ],
+    "fishing_dock": [
+      "{root} Landing",
+      "{root} Strand"
+    ],
+    "shrine": [
+      "the {root} Shrine",
+      "{root}stone"
+    ],
+    "cairn_field": [
+      "the {root} Cairns",
+      "the {root} Stones"
+    ],
+    "wilderness_camp": [
+      "{root} Camp",
+      "the {root} Clearing"
+    ]
   }
 }

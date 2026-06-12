@@ -23,8 +23,9 @@ switch (cmd)
     case "canon": CanonCmd(); break;
     case "divine": DivineCmd(Years(200)); break;
     case "save": SaveCmd(Years(60)); break;
+    case "sites": SitesCmd(Years(120)); break;
     default:
-        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine | save");
+        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine | save | sites");
         break;
 }
 return;
@@ -812,6 +813,123 @@ void DivineCmd(int years)
 
     Console.WriteLine(bad.Count == 0 ? "\nDIVINE PRESSURE HOLDS." : $"\n{bad.Count} CHECK(S) BROKE THE CONTRACT.");
     Environment.Exit(bad.Count == 0 ? 0 : 1);
+}
+
+// -------------------------------------------------------------------------- sites
+
+// Proof gate for Sites V1 (the local place layer, a read-model — see Sites.cs): generation
+// is deterministic across double runs, every site stands on a real cell of its own region,
+// type honesty holds cell-by-cell (a ford by the river, a dock on the shore), names are
+// unique, no event carries a SiteId (the deferred contract is asserted ABSENT), the
+// RegionId/HomeRegionId channels still hold, and the replay-beat helper never invents a place.
+void SitesCmd(int years)
+{
+    Console.WriteLine($"Sites gate ({years} yrs): deterministic terrain-honest sites, no fake anchors,");
+    Console.WriteLine("Event.SiteId provably deferred, replay beats honest.");
+    int failures = 0;
+
+    // The deferral is structural: the Event type has no SiteId at all, so nothing in the
+    // sim CAN assign a fake site anchor. When the contract ships for real, this check is
+    // deliberately the one that breaks first.
+    bool deferred = typeof(Event).GetProperty("SiteId") is null && typeof(Event).GetField("SiteId") is null;
+    Console.WriteLine($"  Event.SiteId deferred (absent): {(deferred ? "OK" : "FAIL")}");
+    if (!deferred) failures++;
+
+    foreach (int seed in new[] { 1, 18, 42, 7 })
+    {
+        var (c1, n1) = Load();
+        var w = new World(seed, c1, n1); w.Run(years);
+        var sites = w.Sites;
+        var bad = new List<string>();
+
+        // Coverage + per-site honesty.
+        var nameSeen = new HashSet<string>(StringComparer.Ordinal);
+        int min = int.MaxValue, max = 0;
+        foreach (var region in w.Regions)
+        {
+            var local = sites.ForRegion(region.Id);
+            min = Math.Min(min, local.Count);
+            max = Math.Max(max, local.Count);
+            if (local.Count is < 3 or > 7)
+                bad.Add($"region {region.Id} has {local.Count} sites (want 3..7)");
+            if (local.Count > 0 && !local[0].IsSeat)
+                bad.Add($"region {region.Id} first site is not the seat");
+        }
+        for (int si = 0; si < sites.All.Count; si++)
+        {
+            var s = sites.All[si];
+            if (s.Id != si) bad.Add($"site id {s.Id} is not its index {si}");
+            if (s.RegionId < 0 || s.RegionId >= w.Regions.Count)
+                bad.Add($"site {s.Id} names region {s.RegionId} which does not exist");
+            if (s.CellX < 0 || s.CellX >= WorldSurface.Size || s.CellY < 0 || s.CellY >= WorldSurface.Size)
+                bad.Add($"site {s.Id} cell ({s.CellX},{s.CellY}) out of bounds");
+            else
+            {
+                if (w.Surface.RegionAt(s.CellX, s.CellY) != s.RegionId)
+                    bad.Add($"site {s.Id} ({s.Name}) stands outside its own region");
+                if (!SiteIndex.FitsCell(w.Surface, s.CellX, s.CellY, s.Type))
+                    bad.Add($"site {s.Id} ({s.Name}) claims {s.Type} on land that contradicts it");
+            }
+            if (string.IsNullOrWhiteSpace(s.Name)) bad.Add($"site {s.Id} has no name");
+            else if (!nameSeen.Add(s.Name)) bad.Add($"site name '{s.Name}' is not unique");
+            // The holder is derived, never stored: it must equal the region's holder, always.
+            string? holder = SiteIndex.HolderOf(w, s);
+            if (holder != w.Regions[s.RegionId].ControllingFactionId)
+                bad.Add($"site {s.Id} holder drifted from its region's holder");
+        }
+
+        // Determinism: a second identical run yields a byte-identical site index — and the
+        // index built AFTER terraform edits is identical too (it derives from the pristine
+        // surface by construction).
+        var (c2, n2) = Load();
+        var w2 = new World(seed, c2, n2);
+        w2.SeedWorld();
+        _ = w2.SeedForest(w2.Regions[0].Id);   // edit FIRST — sites must not see it
+        for (int i = 0; i < years; i++) w2.Tick();
+        if (sites.CanonString() != w2.Sites.CanonString())
+            bad.Add("site index differs between identical runs (or saw a terraform edit)");
+
+        // Anchor channels still hold (the homes gate proves this fully; re-assert cheaply).
+        foreach (var e in w.Chronicle.Events.Where(e => e.Type is "birth" or "death" or "murder"))
+            if (e.RegionId is not null) { bad.Add($"life event #{e.Id} claims a literal place"); break; }
+
+        // Replay beats: honest and deterministic. Walk the most-caused event's chain.
+        var target = w.Chronicle.Events.LastOrDefault(e => e.Causes.Count > 0);
+        if (target is not null)
+        {
+            // Beats compare against a CLEAN identical run — w2 carries a terraform edit,
+            // whose recorded event honestly shifts its chronicle ids.
+            var (c3, n3) = Load();
+            var w3 = new World(seed, c3, n3); w3.Run(years);
+            var beats = Replay.BeatsFor(w, target.Id);
+            var beats2 = Replay.BeatsFor(w3, target.Id);
+            for (int i = 1; i < beats.Count; i++)
+                if (beats[i].EventId <= beats[i - 1].EventId)
+                { bad.Add("replay beats not in record order"); break; }
+            foreach (var b in beats)
+            {
+                var e = w.Chronicle.Get(b.EventId);
+                if (b.SiteId is not null) { bad.Add($"replay beat #{b.EventId} invented a site anchor"); break; }
+                if (b.RegionId != e.RegionId) { bad.Add($"replay beat #{b.EventId} re-aimed its region anchor"); break; }
+                if (b.CauseEventId is int cid && !e.Causes.Contains(cid))
+                { bad.Add($"replay beat #{b.EventId} claims a cause not in its Causes"); break; }
+            }
+            string Canon(List<ReplayBeat> bs) => string.Join("\n", bs.Select(b =>
+                $"{b.EventId}|{b.Year}|{b.RegionId?.ToString() ?? "-"}|{b.Connector}|{b.CauseEventId?.ToString() ?? "-"}|{b.Category}"));
+            if (Canon(beats) != Canon(beats2)) bad.Add("replay beats differ between identical runs");
+        }
+
+        var typeCounts = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        foreach (var s in sites.All)
+            typeCounts[SiteIndex.TypeLabel(s.Type)] = typeCounts.GetValueOrDefault(SiteIndex.TypeLabel(s.Type)) + 1;
+        Console.WriteLine($"  seed {seed,3}: {(bad.Count == 0 ? "OK" : "FAIL")}  {sites.All.Count} sites over {w.Regions.Count} regions ({min}-{max}/region)");
+        Console.WriteLine($"           {string.Join(", ", typeCounts.Select(kv => $"{kv.Key} {kv.Value}"))}");
+        foreach (var b in bad.Take(5)) Console.WriteLine($"           {b}");
+        if (bad.Count > 0) failures++;
+    }
+
+    Console.WriteLine(failures == 0 ? "\nSITES CONTRACT HOLDS." : $"\n{failures} CHECK(S) BROKE THE CONTRACT.");
+    Environment.Exit(failures == 0 ? 0 : 1);
 }
 
 // --------------------------------------------------------------------------- save

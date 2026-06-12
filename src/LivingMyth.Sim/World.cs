@@ -55,7 +55,24 @@ public sealed class World
     /// so touching it can never move the verify baseline. The viewer renders it; the
     /// god-hand terrain verbs edit it through recorded events.</summary>
     private WorldSurface? _surface;
-    public WorldSurface Surface => _surface ??= new WorldSurface(Seed, Regions);
+    public WorldSurface Surface => _surface ??= BuildSurface();
+
+    /// <summary>Sites V1 (Sites.cs): the local place layer — a read-model, never read by
+    /// the tick. Built in the same breath as the surface, so it always derives from the
+    /// PRISTINE terrain: no terraform edit can exist before the index does (edits go
+    /// through Surface, which constructs both first). Zero Rng draws — baseline-inert.</summary>
+    private SiteIndex? _sites;
+    public SiteIndex Sites
+    {
+        get { _ = Surface; return _sites!; }
+    }
+
+    private WorldSurface BuildSurface()
+    {
+        var surface = new WorldSurface(Seed, Regions);
+        _sites = new SiteIndex(Seed, Regions, surface, Names);
+        return surface;
+    }
 
     private sealed class War
     {
