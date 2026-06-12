@@ -921,7 +921,9 @@ public partial class Main : Node
         row.AddThemeStyleboxOverride("panel", normal);
         row.MouseEntered += () => row.AddThemeStyleboxOverride("panel", hover);
         row.MouseExited += () => row.AddThemeStyleboxOverride("panel", normal);
-        row.TooltipText = (soul ? "a watched soul is in this tale — " : "") + $"weight {imp} — click: how we got here";
+        row.TooltipText = (soul ? "a watched soul is in this tale — " : "")
+            + (e.Causes.Count > 0 ? "follows from an earlier tale — " : "")
+            + $"weight {imp} — click: how we got here";
         int eventId = e.Id;
         row.GuiInput += ev =>
         {
@@ -963,7 +965,8 @@ public partial class Main : Node
         type.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         type.MouseFilter = Control.MouseFilterEnum.Ignore;
         header.AddChild(type);
-        var year = new Label { Text = $"Yr {e.Year}", MouseFilter = Control.MouseFilterEnum.Ignore };
+        // ⤷ marks a tale with recorded causes — Causes.Count only, no grammar on the hot path.
+        var year = new Label { Text = (e.Causes.Count > 0 ? "⤷ " : "") + $"Yr {e.Year}", MouseFilter = Control.MouseFilterEnum.Ignore };
         year.AddThemeFontSizeOverride("font_size", 11);
         year.AddThemeColorOverride("font_color", Ui.Faded);
         header.AddChild(year);
@@ -1222,6 +1225,13 @@ public partial class Main : Node
                 : $"remembered in {hrn}, the home of their line")}[/color]"
             : memorial ? $"  [color=#{Ui.Hex(Ui.Faded)}]· the chronicle records no place for this passing[/color]" : "";
         sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color]  [color=#{Ui.Hex(cls.Color)}]{cls.Glyph} {cls.Label.ToUpperInvariant()}[/color]  [b]{e.Text}[/b]{where}");
+        // Why this touched your guard: the one proven cause behind the moment, voiced
+        // through the grammar — never invented. Clicking it walks into the full thread.
+        if (StoryGrammar.ProximateLink(_world, e) is ChainLink why)
+        {
+            var causeEv = _world.Chronicle.Get(why.CauseEventId);
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.FadedSub)}][i]{StoryCopy.WhyLead(why)}[/i] Yr {causeEv.Year} —[/color] {Link("e:" + causeEv.Id, causeEv.Text)}");
+        }
         // Said only when the mark truly stands (cairn-worthy lives only — a follow alone never
         // raises one): home-memory language, never a death place. A murder's cairn belongs to
         // the slain's line — the card's focus may be the killer, so "their" would misattribute.
@@ -1687,22 +1697,30 @@ public partial class Main : Node
         Ui.StyleButton(_catchupQuickBtn, _catchupQuick);
         Ui.StyleButton(_catchupFullBtn, !_catchupQuick);
 
-        var chain = _world.Chronicle.Trace(id);   // event + all its causes, in year order
-        var target = chain.FirstOrDefault(e => e.Id == id);
+        // The annotated chain: same membership as Trace, in record order (causes always
+        // precede effects), with every proven connector attached. Card-open one-shot.
+        var ann = StoryGrammar.Annotate(_world, id);
+        var target = _world.Chronicle.Get(id);
 
         var sb = new StringBuilder();
-        sb.AppendLine($"[b]{(target is null ? "" : target.Text)}[/b]");
+        sb.AppendLine($"[b]{target.Text}[/b]");
         sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]{(_catchupQuick ? "the turning points" : "the full thread")} that led here[/color]");
         sb.AppendLine();
 
         var shown = _catchupQuick
-            ? chain.Where(e => e.Id == id || e.Type is not ("birth" or "death" or "marriage")).ToList()
-            : chain;
+            ? ann.Steps.Where(s => s.Event.Id == id || s.Event.Type is not ("birth" or "death" or "marriage")).ToList()
+            : ann.Steps;
         if (shown.Count <= 1)
             sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}](this one stands alone — no deeper causes recorded)[/color]");
-        foreach (var e in shown)
+        var rendered = new HashSet<int>();
+        foreach (var step in shown)
         {
+            var e = step.Event;
             bool isTarget = e.Id == id;
+            // Voice the proven connector only when its cause row is visible above — a
+            // connector is never aimed at a row the current view has hidden.
+            if (step.Link is ChainLink link && rendered.Contains(link.CauseEventId))
+                sb.AppendLine($"      [color=#{Ui.Hex(Ui.FadedSub)}][i]{StoryCopy.ConnectorPhrase(link)}[/i][/color]");
             var cls = Ui.ClassOf(e.Type);
             string year = $"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color]";
             string chip = $"[color=#{Ui.Hex(cls.Color)}]{cls.Glyph} {cls.Label.ToUpperInvariant()}[/color]";
@@ -1711,9 +1729,20 @@ public partial class Main : Node
                 ? $"  [color=#{Ui.Hex(Ui.Faded)}]· in {rn}[/color]" : "";
             string line = $"{year}  {chip}  {body}{where}";
             sb.AppendLine(isTarget ? $"[bgcolor=#{Ui.Hex(Ui.RowBgWarm)}]{line}[/bgcolor]" : line);
+            rendered.Add(e.Id);
+            // A war fed by many grievances says so — Causes.Count is recorded fact.
+            if (e.Type == "war" && e.Causes.Count > 1)
+                sb.AppendLine($"      [color=#{Ui.Hex(Ui.FadedSub)}][i]fed by {e.Causes.Count} recorded grievances[/i][/color]");
+            // An honest unknown at a chain root is said plainly, under its row.
+            if (step.Origin is OriginInfo origin && StoryCopy.OriginLine(origin, _world) is string oline)
+                sb.AppendLine($"      [color=#{Ui.Hex(Ui.Faded)}][i]{oline}[/i][/color]{CanonGapAffordance(origin, e)}");
         }
         _catchup.Text = sb.ToString();
     }
+
+    // The door into the player's telling for an honest gap — filled by the canon
+    // authorship slice; until then the gap line stands alone.
+    private string CanonGapAffordance(OriginInfo origin, Event e) => "";
 
     private void OnCursePressed()
     {
