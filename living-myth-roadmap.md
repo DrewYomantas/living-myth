@@ -83,17 +83,10 @@ real, but the player can't hold the cast — names are the only identity handle,
 are introduced at their deaths, and your story shares one channel with the world's
 churn. Fixing that beats adding anything new.
 
-- **The Cast** (viewer-only). A persistent, capped dramatis-personae panel (followed
-  souls + auto-promoted key figures: leaders of followed lands, living heads of
-  followed lines) — identity mark, name, role line, last beat. Deterministic person
-  sigils on the PlaceSeeds pattern: a stable seeded mark per soul, shown everywhere
-  the name appears, recognition without portrait debt. Living introductions — a
-  glimpse-pattern card when someone *enters* your story, plus mid-life "their story so
-  far" at milestones, so the memorial stops doing the introduction's job. Feed
-  separation: your story pinned and distinct, the world compressed toward a digest
-  while you're focused. Person cards lead with why-you-care. (medium)
-- Tuning from the feel-test: followed populous lands flood YOURS with rooted
-  births/deaths — gate or soften the boost for region-yours life events. (small)
+- **The Cast** — SHIPPED 2026-06-12 (viewer-only): sigils, the dramatis-personae panel,
+  living introductions + mid-life tale-so-far, your-story/world feed channels,
+  why-you-care-first person cards, and the followed-land life-event flood fix. Awaiting
+  its own feel-test; portraits remain the aspirational upgrade (Batch 2).
 - Surface culture and gossip in the viewer — both engines are nearly invisible today.
   Value axes, held customs, the rumor mill as a readable social weather. (medium)
 - Timeline scrubbing. The one Phase A leftover — and north-star Batch 2's Chronicle

@@ -166,6 +166,22 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       memory copy ("{name}'s name darkens: little known → whispered against") + glossary
       hints. New gates `story` + `canon` green; verify held **exactly 884/699/567/706**
       throughout (zero sim-behavior changes — the grammar is a pure read-model).
+- [x] The Cast (2026-06-12, viewer-only): the answer to the first playtest's cast-tracking
+      overwhelm — identity and attention, no new content. Person sigils (`PersonSigils.cs`,
+      PlaceSeeds pattern: deterministic seeded mark + inked tint per soul, same mark on the
+      cast panel, feed rows, care lines, memorial names — the V1 stand-in for portraits).
+      Cast panel (`CastPanel.cs`): a capped persistent dramatis-personae roster — followed
+      souls, eldest of a followed line, leaders of followed peoples, holders of watched
+      lands — with role lines, ages, and last-sighting tooltips; membership recomputes only
+      on dirty (follow toggles, YOURS events, or a dead implied member — present-tense roles
+      may never outlive their holder). Living introductions: ambient "A NEW THREAD" cards
+      when someone enters your story (watched-seat heirs, a followed soul's child/spouse,
+      whoever slays one of yours), each soul introduced once; guard cards gained a mid-life
+      "their tale so far" so the memorial stops being the first framing. Feed channels:
+      "Your story" pinned above "The world" (own windows 14/60), world rows compress to one
+      line while focused; followed-land plain births/deaths half-boosted and beat-free
+      (feel-test flood fix) — Region Lens/recap memory channels untouched. Person cards
+      open with why-you-care. verify exact 884/699/567/706 throughout.
 - [ ] Later — battle sites and per-region
       economy (add events/RNG and move the verify baseline; together they extend place memory to
       battles/famine and let war's-peace / famine's-end close chapters); mythic glosses / entity
@@ -545,14 +561,15 @@ close to the shipped causal grammar) — pending placement in `Visual references
 with the same honest/aspirational/forbidden discipline as Batch 1.
 
 ## Next session starts with
-**The Cast milestone (viewer-only, baseline-safe):** a persistent capped dramatis-personae
-panel (followed souls + auto-promoted key figures, identity mark + role line + last beat);
-deterministic person sigils (PlaceSeeds pattern — same mark everywhere a name appears);
-living introductions ("a new thread begins" glimpse-pattern card when someone enters your
-story) + mid-life person recaps at milestones; feed separation (your story pinned/distinct,
-world compressed toward digest while focused); person cards lead with "why you care"
-(connection to follows). Plus the predicted tuning: followed populous lands flooding YOURS
-with rooted births/deaths.
+**F5 feel-test of The Cast** (shipped 2026-06-12, not yet watched): follow a soul + a land
++ a people, then judge — does the cast panel make names stick? do sigils read at a glance
+(and never read as event chips)? do thread cards introduce at the right rate (too chatty /
+too quiet)? does the your-story/world split calm the flood without muting the world? does
+a watched land still speak enough after the life-event tuning (YoursBoost/2)? does the
+mid-life "tale so far" make the eventual memorial land harder? Tune: YoursWindow (14),
+the intro trigger set, the quiet-region-life boost divisor, cast cap (8). Drew also opens
+the Godot editor → commit the new `*.cs.uid` sidecars it generates for PersonSigils/
+CastPanel. Then: surface culture + gossip, or timeline scrubbing.
 
 The original feel-test checklist (kept for the items not yet judged in a long sitting):
 - Pacing basics (oldest unseen work): 1× readability, dramatic auto-slow depth/length
