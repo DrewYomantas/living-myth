@@ -27,8 +27,9 @@ public sealed partial class CastPanel : PanelContainer
     private Action<int> _onPick = null!;
 
     private VBoxContainer _list = null!;
+    private HBoxContainer _compactRow = null!;
     private Button _toggle = null!;
-    private bool _collapsed;
+    private bool _collapsed = true;   // Watch Mode default: sigils + a name or two, not a roster
     private List<(int Pid, string Role)> _members = new();
     private string _signature = "";
 
@@ -69,20 +70,31 @@ public sealed partial class CastPanel : PanelContainer
         cap.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         cap.TooltipText = "the souls your follows make matter — marks are a viewer's hand, not sim state";
         hdr.AddChild(cap);
-        _toggle = new Button { Text = "—", CustomMinimumSize = new Vector2(24, 22), TooltipText = "fold the cast away" };
+        _toggle = new Button { CustomMinimumSize = new Vector2(24, 22) };
         Ui.StyleButton(_toggle);
-        _toggle.Pressed += () =>
-        {
-            _collapsed = !_collapsed;
-            _list.Visible = !_collapsed;
-            _toggle.Text = _collapsed ? "❖" : "—";
-            _toggle.TooltipText = _collapsed ? "unfold the cast" : "fold the cast away";
-        };
+        _toggle.Pressed += () => SetCollapsed(!_collapsed);
         hdr.AddChild(_toggle);
+
+        // Compact voice: one row of sigil chips plus the first names — recognition, not reading.
+        _compactRow = new HBoxContainer();
+        _compactRow.AddThemeConstantOverride("separation", 4);
+        vb.AddChild(_compactRow);
 
         _list = new VBoxContainer();
         _list.AddThemeConstantOverride("separation", 4);
         vb.AddChild(_list);
+        SetCollapsed(_collapsed);
+    }
+
+    /// <summary>Fold the cast to its sigil strip (or back). Main folds it whenever an
+    /// inspector takes the left column — one major panel at a time.</summary>
+    public void SetCollapsed(bool collapsed)
+    {
+        _collapsed = collapsed;
+        _list.Visible = !collapsed;
+        _compactRow.Visible = collapsed;
+        _toggle.Text = collapsed ? "❖" : "—";
+        _toggle.TooltipText = collapsed ? "unfold the cast — full roles and ages" : "fold the cast to its marks";
     }
 
     /// <summary>Refresh the roster. Pass membershipDirty=true when a follow changed or a
@@ -115,6 +127,56 @@ public sealed partial class CastPanel : PanelContainer
         foreach (var (pid, role) in _members)
             if (w.People.TryGetValue(pid, out var p))
                 _list.AddChild(BuildEntry(w, p, role));
+
+        // The compact strip rebuilds under the same signature gate — O(cap).
+        foreach (var child in _compactRow.GetChildren()) child.QueueFree();
+        var names = new List<string>();
+        foreach (var (pid, role) in _members)
+            if (w.People.TryGetValue(pid, out var p))
+            {
+                _compactRow.AddChild(BuildCompactChip(w, p, role));
+                if (names.Count < 2) names.Add(p.Name);
+            }
+        var nameL = new Label
+        {
+            Text = string.Join(", ", names) + (_members.Count > 2 ? $" +{_members.Count - 2}" : ""),
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        nameL.AddThemeFontSizeOverride("font_size", 11);
+        nameL.AddThemeColorOverride("font_color", Ui.FadedSub);
+        _compactRow.AddChild(nameL);
+    }
+
+    // A 20px sigil chip: hover names them, click finds them (inspect + lens).
+    private Control BuildCompactChip(World w, Person p, string role)
+    {
+        var sig = PersonSigils.Of(w, p.Id);
+        var chip = new PanelContainer
+        {
+            CustomMinimumSize = new Vector2(20, 20),
+            MouseFilter = Control.MouseFilterEnum.Stop,
+            TooltipText = $"{p.Name} — {role} · click to find them",
+        };
+        chip.AddThemeStyleboxOverride("panel", Ui.ChipBox(sig.Tint));
+        int pid = p.Id;
+        chip.GuiInput += ev =>
+        {
+            if (ev is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
+                _onPick(pid);
+        };
+        var glyph = new Label
+        {
+            Text = sig.Glyph,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+        glyph.AddThemeFontSizeOverride("font_size", 10);
+        glyph.AddThemeColorOverride("font_color", Ui.ParchmentHi);
+        chip.AddChild(glyph);
+        return chip;
     }
 
     // Membership, in player-intent order: explicit soul follows first, then the figures the

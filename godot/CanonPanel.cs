@@ -47,21 +47,24 @@ public sealed partial class CanonPanel : Control
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Ignore;   // children handle input; the veil swallows the rest
 
-        // The same ink veil the memorial uses — the world waits while the player writes.
+        // A light ink wash, not the memorial's deep veil: it keeps the edit atomic (clicks
+        // can't change the inspected world beneath mid-write) while the map stays readable.
         var veil = new ColorRect
         {
-            Color = Ui.InkDeep with { A = 0.42f },
+            Color = Ui.InkDeep with { A = 0.22f },
             MouseFilter = MouseFilterEnum.Stop,
         };
         AddChild(veil);
         veil.SetAnchorsPreset(LayoutPreset.FullRect);
 
+        // The writing drawer: docked to the right edge (over the feed rail), never a floating
+        // card stacked on an inspector. Closing returns to whatever was inspected, untouched.
         var panel = new Panel();
         AddChild(panel);
-        panel.AnchorLeft = 0.5f; panel.AnchorRight = 0.5f;
-        panel.AnchorTop = 0.5f; panel.AnchorBottom = 0.5f;
-        panel.OffsetLeft = -290; panel.OffsetRight = 290;
-        panel.OffsetTop = -185; panel.OffsetBottom = 185;
+        panel.AnchorLeft = 1; panel.AnchorRight = 1;
+        panel.AnchorTop = 0; panel.AnchorBottom = 1;
+        panel.OffsetLeft = -428; panel.OffsetRight = -8;
+        panel.OffsetTop = 10; panel.OffsetBottom = -84;
         var box = Ui.PanelBox(12);
         box.BorderColor = Ui.Gold;
         box.SetBorderWidthAll(2);

@@ -34,8 +34,12 @@ public partial class Main : Node
         "sweep — a century in a quarter minute",
         "ages — centuries sweep past",
     };
-    private const int FeedWidth = 320;
-    private const int BottomH = 96;
+    // Map-first panel economy (docs/VISUAL_STYLE.md "Panel economy contract"): the map owns
+    // the screen unless the player explicitly opens the chronicle. Watch Mode keeps panels
+    // compact; Inspect Mode docks one inspector to the left column; Chronicle Mode (catch-up
+    // full thread, recap, memorial, writing desk) is the only license to cover more.
+    private const int FeedWidth = 300;
+    private const int BottomH = 78;
 
     private World _world = null!;
     private Control _root = null!;
@@ -135,6 +139,11 @@ public partial class Main : Node
     // never changes how many times or in what order Tick() runs.
     private enum GuardMode { Off, Followed, All }
     private GuardMode _guardMode = GuardMode.Followed;
+    // Watch Mode guard voice: a compact top toast (why-chip + the tale + verbs) instead of
+    // the center card. The full card opens only on an explicit click — or immediately for
+    // a memorial, the one moment that has earned the ceremony.
+    private PanelContainer _guardToast = null!;
+    private RichTextLabel _guardToastBody = null!;
     private Button _guardBtn = null!;
     private Label _guardLabel = null!;                    // year-card "guard watches…" signal
     private Panel _guardPanel = null!;
@@ -325,8 +334,8 @@ public partial class Main : Node
         BuildFeed(root);
         BuildBottomBar(root);
         BuildYearCard(root);
-        BuildCastPanel(root);
-        BuildInspector(root);
+        BuildLeftDock(root);    // cast + inspector share one left column — structurally unstackable
+        BuildThreadCard(root);
         BuildCatchup(root);
         BuildGlimpse(root);
         BuildRecap(root);
@@ -419,13 +428,25 @@ public partial class Main : Node
         vb.AddChild(_guardLabel);
     }
 
-    private void BuildCastPanel(Control root)
+    // The left column: cast on top (compact by default), the one inspector surface below.
+    // A VBox makes stacking impossible — the old bug was both panels pinned at (12,132).
+    private void BuildLeftDock(Control root)
     {
-        _cast = new CastPanel { Position = new Vector2(12, 132) };   // under the year card
-        root.AddChild(_cast);
+        var dock = new VBoxContainer();
+        root.AddChild(dock);
+        dock.AnchorLeft = 0; dock.AnchorTop = 0; dock.AnchorRight = 0; dock.AnchorBottom = 1;
+        dock.OffsetLeft = 12; dock.OffsetTop = 132;
+        dock.OffsetRight = 12 + 330; dock.OffsetBottom = -(BottomH + 10);
+        dock.AddThemeConstantOverride("separation", 8);
+
+        _cast = new CastPanel { SizeFlagsVertical = Control.SizeFlags.ShrinkBegin };
+        dock.AddChild(_cast);
+        // A cast click is "find them": inspect AND lean the lens onto their place in the world.
         _cast.Setup(() => _world, _followedSouls, _seedPeople, _marked, _markedFactions,
-                    _followedRegions, _lastSeenEvent, OnPersonPicked);
-        BuildThreadCard(root);
+                    _followedRegions, _lastSeenEvent,
+                    pid => { OnPersonPicked(pid); _map.FocusPerson(pid); });
+
+        BuildInspector(dock);
     }
 
     // The introduction card: top-center, ambient (glimpse rank — below every pausing card),
@@ -630,12 +651,14 @@ public partial class Main : Node
         bar.AddThemeStyleboxOverride("panel", Ui.PanelBox(12));
 
         var margin = new MarginContainer();
-        foreach (var s in new[] { "left", "right", "top", "bottom" })
+        foreach (var s in new[] { "left", "right" })
             margin.AddThemeConstantOverride($"margin_{s}", 10);
+        foreach (var s in new[] { "top", "bottom" })
+            margin.AddThemeConstantOverride($"margin_{s}", 5);
         bar.AddChild(margin);
 
         var hb = new HBoxContainer();
-        hb.AddThemeConstantOverride("separation", 14);
+        hb.AddThemeConstantOverride("separation", 12);
         margin.AddChild(hb);
 
         // --- Time group: play, speed ladder, drama ---
@@ -723,14 +746,12 @@ public partial class Main : Node
             Ui.StyleButton(btn, Mathf.IsEqualApprox(sp, _speed));
     }
 
-    private void BuildInspector(Control root)
+    private void BuildInspector(Control parent)
     {
-        _inspectorPanel = new Panel { Visible = false };
-        root.AddChild(_inspectorPanel);
-        _inspectorPanel.AnchorLeft = 0; _inspectorPanel.AnchorTop = 0;
-        _inspectorPanel.AnchorRight = 0; _inspectorPanel.AnchorBottom = 0;
-        _inspectorPanel.OffsetLeft = 12; _inspectorPanel.OffsetTop = 132;
-        _inspectorPanel.OffsetRight = 12 + 330; _inspectorPanel.OffsetBottom = 132 + 400;
+        // Lives inside the left dock under the cast: docked side inspector, fills the
+        // column down to the bottom bar, never floats over another panel.
+        _inspectorPanel = new Panel { Visible = false, SizeFlagsVertical = Control.SizeFlags.ExpandFill };
+        parent.AddChild(_inspectorPanel);
         _inspectorPanel.AddThemeStyleboxOverride("panel", Ui.PanelBox());
 
         var margin = new MarginContainer();
@@ -823,12 +844,15 @@ public partial class Main : Node
 
     private void BuildCatchup(Control root)
     {
+        // A right side sheet over the feed rail, not a center modal: quick beats read beside
+        // the living map. "Full thread" widens the sheet — that deeper read is Chronicle Mode,
+        // entered on purpose. RenderCatchup drives the width.
         _catchupPanel = new Panel { Visible = false };
         root.AddChild(_catchupPanel);
-        _catchupPanel.AnchorLeft = 0.5f; _catchupPanel.AnchorRight = 0.5f;
-        _catchupPanel.AnchorTop = 0.5f; _catchupPanel.AnchorBottom = 0.5f;
-        _catchupPanel.OffsetLeft = -300; _catchupPanel.OffsetRight = 300;
-        _catchupPanel.OffsetTop = -250; _catchupPanel.OffsetBottom = 250;
+        _catchupPanel.AnchorLeft = 1; _catchupPanel.AnchorRight = 1;
+        _catchupPanel.AnchorTop = 0; _catchupPanel.AnchorBottom = 1;
+        _catchupPanel.OffsetLeft = -408; _catchupPanel.OffsetRight = -8;
+        _catchupPanel.OffsetTop = 10; _catchupPanel.OffsetBottom = -(BottomH + 6);
         _catchupPanel.AddThemeStyleboxOverride("panel", Ui.PanelBox());
 
         var margin = new MarginContainer();
@@ -846,7 +870,7 @@ public partial class Main : Node
         vb.AddChild(hb);
         var title = new Label { Text = "How We Got Here", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         title.AddThemeFontOverride("font", Ui.SerifBold);
-        title.AddThemeFontSizeOverride("font_size", 21);
+        title.AddThemeFontSizeOverride("font_size", 18);
         title.AddThemeColorOverride("font_color", Ui.InkDeep);
         hb.AddChild(title);
         _catchupQuickBtn = new Button { Text = "Quick beats" };
@@ -872,7 +896,7 @@ public partial class Main : Node
             FitContent = true,
             ScrollActive = false,
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(548, 0),
+            CustomMinimumSize = new Vector2(340, 0),
         };
         _catchup.AddThemeColorOverride("default_color", Ui.Ink);
         _catchup.AddThemeFontOverride("bold_font", Ui.SerifBold);
@@ -1262,6 +1286,12 @@ public partial class Main : Node
         text.AddThemeColorOverride("font_color", Ui.Ink);
         body.AddChild(text);
 
+        // While focused, the world's quiet rows recede a step — they stay readable but never
+        // compete with your story. Loud rows (NotableBar+) keep full presence; only notable
+        // rows ever get the pulse tween, so the dim is never overwritten.
+        if (!yours && FollowingAnything() && imp < NotableBar)
+            row.Modulate = new Color(1, 1, 1, 0.78f);
+
         return row;
     }
 
@@ -1473,9 +1503,46 @@ public partial class Main : Node
         if (memorial && (e.RegionId ?? e.HomeRegionId) is int prid) _map.PulseRegion(prid);
 
         _guardBody.Text = BuildGuardBody(e, focusPid, isDeath, memorial, prevSeen);
-        _guardBackdrop.Visible = memorial;
-        _guardPanel.Visible = true;
-        RememberSeen(e);   // the card itself is a sighting
+        if (memorial)
+        {
+            // The one earned ceremony: the world dims and the card takes the center.
+            _catchupPanel.Visible = false;   // a reading sheet never sits under the veil
+            _guardBackdrop.Visible = true;
+            _guardPanel.Visible = true;
+        }
+        else
+        {
+            // Every other guard moment pauses but stays out of the way: a compact toast.
+            _guardBackdrop.Visible = false;
+            ShowGuardToast(e, focusPid);
+        }
+        RememberSeen(e);   // the toast/card itself is a sighting
+    }
+
+    // The Watch Mode guard voice: why you care first, then the tale (with honest place
+    // language), then the verbs. The map stays the stage — a true place pulses under it.
+    private void ShowGuardToast(Event e, int? focusPid)
+    {
+        var cls = Ui.ClassOf(e.Type);
+        bool yours = focusPid is not null || _guardIsDeath || RegionYours(e);
+        string why = _guardIsDeath ? "a tale of a bloodline you follow closes"
+            : focusPid is not null ? "fate touches what you follow"
+            : RegionYours(e) ? "fate touches a land you watch"
+            : "a great deed marks the age";
+        // Honest anchors only: "in {X}" for a true place; a home anchor is memory, said in
+        // remembered-home language with its own warm tint; no anchor stays silent.
+        string where = e.RegionId is int rid && _world.RegionName(rid) is string rn
+            ? $"  [color=#{Ui.Hex(Ui.Faded)}]· in {rn}[/color]"
+            : e.HomeRegionId is int hrid && _world.RegionName(hrid) is string hrn
+            ? $"  [color=#8a5d12]· {(e.Type == "birth" ? "of a line rooted in" : "remembered in")} {hrn}[/color]"
+            : "";
+        _guardToastBody.Text =
+            $"[color=#{Ui.Hex(Ui.Gold)}]{(yours ? "★" : "✦")} {why}[/color] [color=#{Ui.Hex(Ui.FadedSub)}]— the world waits[/color]\n"
+            + $"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color] [color=#{Ui.Hex(cls.Color)}]{cls.Glyph}[/color] [b]{e.Text}[/b]{where}";
+        if (e.RegionId is int prid) _map.PulseRegion(prid);   // point the eye at the true place
+        _threadTween?.Kill();
+        _threadCard.Visible = false;   // the toast and an introduction never share the slot
+        _guardToast.Visible = true;
     }
 
     // Re-render the held card's body from the stored moment — used when the writing desk
@@ -1751,6 +1818,75 @@ public partial class Main : Node
             _guardBackdrop.Visible = _guardWasMemorial;
             _guardPanel.Visible = true;
         };
+
+        BuildGuardToast(root);
+    }
+
+    // The compact guard toast: top-center, two lines + verbs, never covers the map's heart.
+    private void BuildGuardToast(Control root)
+    {
+        _guardToast = new PanelContainer { Visible = false };
+        root.AddChild(_guardToast);
+        _guardToast.AnchorLeft = 0.5f; _guardToast.AnchorRight = 0.5f;
+        _guardToast.AnchorTop = 0; _guardToast.AnchorBottom = 0;
+        _guardToast.OffsetLeft = -270; _guardToast.OffsetRight = 270;
+        _guardToast.OffsetTop = 10;
+        var box = Ui.PanelBox(8);
+        box.BorderColor = Ui.Gold;
+        box.SetBorderWidthAll(2);
+        _guardToast.AddThemeStyleboxOverride("panel", box);
+
+        var margin = new MarginContainer();
+        foreach (var s in new[] { "left", "right" }) margin.AddThemeConstantOverride($"margin_{s}", 12);
+        foreach (var s in new[] { "top", "bottom" }) margin.AddThemeConstantOverride($"margin_{s}", 8);
+        _guardToast.AddChild(margin);
+
+        var vb = new VBoxContainer();
+        vb.AddThemeConstantOverride("separation", 6);
+        margin.AddChild(vb);
+
+        _guardToastBody = new RichTextLabel
+        {
+            BbcodeEnabled = true,
+            FitContent = true,
+            ScrollActive = false,
+            CustomMinimumSize = new Vector2(512, 0),
+        };
+        _guardToastBody.AddThemeFontSizeOverride("normal_font_size", 13);
+        _guardToastBody.AddThemeColorOverride("default_color", Ui.Ink);
+        _guardToastBody.AddThemeFontOverride("bold_font", Ui.SerifBold);
+        vb.AddChild(_guardToastBody);
+
+        var btns = new HBoxContainer();
+        btns.AddThemeConstantOverride("separation", 8);
+        vb.AddChild(btns);
+        var resume = new Button { Text = "▶ Resume" };
+        Ui.StyleButton(resume, active: true);
+        resume.Pressed += () => { _guardToast.Visible = false; _running = true; };
+        btns.AddChild(resume);
+        var open = new Button { Text = "the full tale", TooltipText = "Open the full guard card" };
+        Ui.StyleButton(open);
+        open.Pressed += () =>
+        {
+            _guardToast.Visible = false;
+            _guardBackdrop.Visible = _guardWasMemorial;
+            _guardPanel.Visible = true;
+        };
+        btns.AddChild(open);
+        var thread = new Button { Text = "↳ how we got here", TooltipText = "Trace the causes behind this moment" };
+        Ui.StyleButton(thread);
+        thread.Pressed += () =>
+        {
+            _guardToast.Visible = false;
+            if (_guardEventId >= 0) OpenCatchup(_guardEventId);
+        };
+        btns.AddChild(thread);
+        var spacer = new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        btns.AddChild(spacer);
+        var close = new Button { Text = "✕", CustomMinimumSize = new Vector2(26, 26), TooltipText = "Close (stay paused)" };
+        Ui.StyleButton(close);
+        close.Pressed += () => _guardToast.Visible = false;
+        btns.AddChild(close);
     }
 
     private void CloseGuardCard()
@@ -1809,6 +1945,7 @@ public partial class Main : Node
         _queuedRecap = null;
         _running = false;
         _glimpsePanel.Visible = false;
+        _catchupPanel.Visible = false;   // one major reading surface at a time
         _guardReturnable = true;
         _returnIsRecap = true;
         _guardReturnBtn.Text = "↩ Return to the chapter";
@@ -2053,6 +2190,9 @@ public partial class Main : Node
         if (_catchupEventId is not int id) return;
         Ui.StyleButton(_catchupQuickBtn, _catchupQuick);
         Ui.StyleButton(_catchupFullBtn, !_catchupQuick);
+        // Quick beats stay a slim sheet; the full thread earns reading width (Chronicle Mode).
+        _catchupPanel.OffsetLeft = _catchupQuick ? -408 : -628;
+        _catchup.CustomMinimumSize = new Vector2(_catchupQuick ? 340 : 560, 0);
 
         // The annotated chain: same membership as Trace, in record order (causes always
         // precede effects), with every proven connector attached. Card-open one-shot.
@@ -2338,6 +2478,7 @@ public partial class Main : Node
         }
 
         _inspector.Text = sb.ToString();
+        _cast.SetCollapsed(true);   // panel economy: the inspector takes the column, the cast folds to sigils
         _inspectorPanel.Visible = true;
     }
 
@@ -2546,6 +2687,7 @@ public partial class Main : Node
         sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]much of history carries no place anchor yet — a followed land speaks only when tales are anchored here or lives are remembered here[/color]");
 
         _inspector.Text = sb.ToString();
+        _cast.SetCollapsed(true);   // panel economy: the inspector takes the column, the cast folds to sigils
         _inspectorPanel.Visible = true;
     }
 
@@ -2616,6 +2758,7 @@ public partial class Main : Node
             sb.AppendLine($"{p.Name} — age {p.Age(_world.Year)}{(p.IsLeader ? $"  [color=#8a5d12]· leader[/color]" : "")}");
 
         _inspector.Text = sb.ToString();
+        _cast.SetCollapsed(true);   // panel economy: the inspector takes the column, the cast folds to sigils
         _inspectorPanel.Visible = true;
     }
 
@@ -2663,8 +2806,9 @@ public partial class Main : Node
         _playBtn.Text = _running ? "❚❚ Pause" : "▶ Play";
         _chatLabel.Text = $"chattiness ≥ {(int)_chatSlider.Value}";
         if (_running) _guardReturnable = false;   // time moved on; the held moment has passed
+        if (_running && _guardToast.Visible) _guardToast.Visible = false;   // the moment passed unread
         bool cardUp = _guardPanel.Visible || _catchupPanel.Visible || _recapPanel.Visible
-            || _pendingGuardEventId is not null || _canonPanel.IsOpen;
+            || _guardToast.Visible || _pendingGuardEventId is not null || _canonPanel.IsOpen;
         _guardReturnBtn.Visible = _guardReturnable && !cardUp;
         // A queued recap shows on the transition INTO a pause (never over another card —
         // the focus guard always outranks it) and otherwise waits on its chip.

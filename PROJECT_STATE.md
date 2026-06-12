@@ -182,6 +182,27 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       line while focused; followed-land plain births/deaths half-boosted and beat-free
       (feel-test flood fix) — Region Lens/recap memory channels untouched. Person cards
       open with why-you-care. verify exact 884/699/567/706 throughout.
+- [x] Map-First Followability + Panel Economy V1 (2026-06-12, viewer-only): the map made the
+      primary stage again after The Cast's panels crowded it. Binding panel economy contract in
+      docs/VISUAL_STYLE.md — three modes (Watch / Inspect / Chronicle), a full surface
+      classification table, one-major-panel rule, center-map blocking reserved for Chronicle
+      Mode + ceremony. As built: guard moments now voice as a compact top toast (why-you-care
+      chip + the tale with honest place language + Resume / the full tale / how we got here);
+      the full gold card opens only on click — the memorial keeps its unasked center ceremony;
+      true-place toasts pulse the region, home-only anchors get remembered-home language in the
+      memory tint and pulse nothing. Cast + inspector now share one left VBox column
+      (stacking structurally impossible — they previously both sat at (12,132)); the cast is
+      compact by default (sigil chips + 1–2 names, full roles on unfold) and folds whenever an
+      inspector takes the column. How We Got Here is a right side sheet over the feed rail
+      (quick beats 400px; full thread widens to 620px — the explicit Chronicle Mode read). The
+      writing desk became a right drawer with a light ink wash (edit stays atomic; closing
+      still returns to the inspected object). Feed rail 320→300 with world rows receding
+      (0.78 alpha) while focused unless loud; bottom dock 96→78. Map-first verbs:
+      MapView.FocusPerson/FocusRegion — a cast click inspects AND eases the lens onto their
+      deterministic scatter region (dead/landless fall back to the line's home, honestly
+      nowhere if null); manual pan/zoom cancels any automated lens move. Feel-checked live via
+      window captures: toast → full card → thread escalation, side sheet, left dock, compact
+      cast all verified in-game. verify exact 884/699/567/706 throughout.
 - [ ] Later — battle sites and per-region
       economy (add events/RNG and move the verify baseline; together they extend place memory to
       battles/famine and let war's-peace / famine's-end close chapters); mythic glosses / entity
@@ -190,6 +211,18 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       followed-faith audit. ← NEXT
 
 ## Session log
+- [2026-06-12] Session: Map-First Followability + Panel Economy V1 (viewer-only, 5 files:
+  Main.cs, CastPanel.cs, CanonPanel.cs, MapView.cs, docs/VISUAL_STYLE.md). Audited every panel
+  and found the structural stacking bug (cast + inspector both pinned at (12,132)); wrote the
+  binding panel economy contract (Watch / Inspect / Chronicle modes + classification table)
+  into VISUAL_STYLE.md. Guard toast replaces the default center guard card; left dock VBox for
+  cast (compact default) + inspector; catch-up → right side sheet (full thread widens);
+  writing desk → right drawer; feed 300px + world-row recede; bottom dock 78px; cast clicks
+  ease the lens via MapView.FocusPerson (manual camera always wins). Verified live by driving
+  the running game (window captures at ~1366×768): recap-on-pause, side sheet quick/full,
+  Region Lens left dock, follow-land → compact cast strip, guard toast firing with honest
+  "in the Deep Green" place language, toast → full card escalation. All gates green: verify +
+  homes + story + canon, exact 884/699/567/706; Godot build clean.
 - [2026-06-07] Session: built M0→M2 + longevity pass (carrying capacity + perf refactor, proven
   identity-preserving). 6 commits pushed to DrewYomantas/living-myth. Set up isolated nested git repo
   (home dir was an accidental repo).

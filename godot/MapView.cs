@@ -96,6 +96,13 @@ public partial class MapView : Control
     private const float FollowZoom = 1.9f;
     private const float ManualCamCooldownSecs = 4f;
 
+    // Find-them focus: an explicit player ask (cast click) eases the lens onto a normalized
+    // map point. Outranks the drama camera and ignores its cooldown; any manual pan/zoom
+    // cancels it — the lens never fights the player.
+    private Vector2 _focusNorm;
+    private float _focusRemaining;
+    private const float FocusEaseSecs = 1.4f;
+
     private const float RegionRadiusNorm = 0.072f;
     private const float Pad = 18f;
     private float MapSide() => Mathf.Min(Size.X, Size.Y) - Pad * 2f;
@@ -178,9 +185,21 @@ public partial class MapView : Control
             else _soulPulses[id] = v;
         }
 
+        // Find-them focus first: an explicit ask beats the drama camera.
+        if (_focusRemaining > 0f)
+        {
+            _focusRemaining -= dt;
+            float side = MapSide();
+            var center = Size / 2f;
+            var origin = new Vector2((Size.X - side) / 2f, (Size.Y - side) / 2f);
+            _zoom = Mathf.Lerp(_zoom, Mathf.Max(_zoom, FollowZoom), dt * 3f);
+            var b = origin + _focusNorm * side;
+            _pan = _pan.Lerp(-(b - center) * _zoom, dt * 3f);
+            ClampPan();
+        }
         // Drama camera: lean toward the pulsing region while its pulse lives, unless the player
         // just took manual control. Eases zoom + pan together; clamped to map bounds.
-        if (CameraFollow && _manualCamCooldown <= 0f && _easeTargetRegion >= 0 && World is not null
+        else if (CameraFollow && _manualCamCooldown <= 0f && _easeTargetRegion >= 0 && World is not null
             && _easeTargetRegion < World.Regions.Count && _regionPulses.ContainsKey(_easeTargetRegion))
         {
             float side = MapSide();
@@ -200,6 +219,42 @@ public partial class MapView : Control
     // ----- camera control (called by buttons in Main and by wheel/drag below) -----
 
     public void ZoomBy(float factor) => ZoomAt(_zoom * factor, Size / 2f);
+
+    // Ease the lens onto a region's heart — the "find it" verb for places.
+    public void FocusRegion(int regionId)
+    {
+        if (World is null || regionId < 0 || regionId >= World.Regions.Count) return;
+        var r = World.Regions[regionId];
+        _focusNorm = new Vector2(r.X, r.Y);
+        _focusRemaining = FocusEaseSecs;
+        _manualCamCooldown = 0f;
+        _easeTargetRegion = -1;
+    }
+
+    // Ease the lens onto a person: their deterministic scatter region while alive (the same
+    // placement DrawPeople uses — no new precision implied), else the home of their line.
+    // Honest fallthrough: a dead, homeless soul moves the lens nowhere.
+    public void FocusPerson(int personId)
+    {
+        if (World is null || !World.People.TryGetValue(personId, out var p)) return;
+        if (p.Alive)
+        {
+            var regs = new List<Region>();
+            foreach (var r in World.Regions)
+                if (r.ControllingFactionId == p.FactionId) regs.Add(r);
+            if (regs.Count > 0)
+            {
+                var rg = regs[p.Id % regs.Count];   // same stable region as DrawPeople
+                _focusNorm = new Vector2(rg.X, rg.Y);
+                _focusRemaining = FocusEaseSecs;
+                _manualCamCooldown = 0f;
+                _easeTargetRegion = -1;
+                PulseSoul(personId);
+                return;
+            }
+        }
+        if (p.HomeRegionId is int hr) FocusRegion(hr);
+    }
 
     public void ResetCamera() { _zoom = 1f; _pan = Vector2.Zero; MarkManual(); QueueRedraw(); }
 
@@ -221,7 +276,7 @@ public partial class MapView : Control
         _pan = new Vector2(Mathf.Clamp(_pan.X, -over, over), Mathf.Clamp(_pan.Y, -over, over));
     }
 
-    private void MarkManual() { _manualCamCooldown = ManualCamCooldownSecs; _easeTargetRegion = -1; }
+    private void MarkManual() { _manualCamCooldown = ManualCamCooldownSecs; _easeTargetRegion = -1; _focusRemaining = 0f; }
 
     private static float Frac(float v) => v - Mathf.Floor(v);
 

@@ -263,9 +263,66 @@ but invisible · ✖ not modeled, forbidden to render):
 - ◐ Mark coverage is bounded by what carries a true `Event.RegionId` (territory +
   culture today) — broader memory waits on the anchoring contract.
 
+## Panel economy contract (Map-First V1, 2026-06-12 — binding)
+
+The map owns the screen unless the player explicitly opens the chronicle. Every viewer
+surface belongs to exactly one of three modes, and every new panel must declare its row
+in the classification table before it ships.
+
+**The three modes:**
+
+1. **Watch Mode** (default, running) — the map dominates. Panels are compact HUD or
+   toasts; nothing covers the map's center. At 1366×768 the map must stay visually
+   dominant (the left column and feed rail are the only standing chrome).
+2. **Inspect Mode** (player selected a person / region / faction) — exactly one
+   inspector surface, docked in the left column under the cast. Opening it folds the
+   cast to its sigil strip. Never floats, never stacks, never covers center map.
+3. **Chronicle Mode** (player chose to read) — full-width reading and ceremony: the
+   catch-up full thread, chapter recap, memorial, and the writing drawer. These may
+   cover more of the screen because the player asked to read.
+
+**Classification (as built):**
+
+| Surface | Class | Placement |
+|---|---|---|
+| Year card + guard signal | persistent HUD | top-left |
+| Recap chip / return chip | persistent HUD chip | by the year card / top-center |
+| The Cast | persistent HUD, compact by default | left column top; collapsed = sigil chips + 1–2 names, expanded = full roles/ages |
+| Saga feed | persistent HUD rail | right, 300px; world rows recede (0.78 alpha, 1 line) while focused unless loud |
+| Bottom dock | persistent HUD | bottom, 78px |
+| "A NEW THREAD" card | compact toast | top-center, ambient, self-fades |
+| **Guard toast** | compact toast | top-center: why-you-care chip + the tale + Resume / the full tale / how we got here; pauses but never covers the map |
+| Living soul glimpse | compact toast | near the marker, clamped to map |
+| Person/Faction/Region inspector | side inspector | left column, under the folded cast |
+| How We Got Here (quick beats) | side sheet | right, 400px over the feed rail |
+| How We Got Here (full thread) | chronicle sheet | right, widened to 620px — the explicit deeper read |
+| Chapter recap | chronicle modal | center; only on an intentional pause or chip click |
+| Full Focus Guard card | chronicle modal | center; only via toast/return-chip click |
+| **Memorial** | ceremony modal | center + ink veil — the one earned interruption |
+| Writing desk (canon) | writing drawer | right drawer over the feed + light ink wash (0.22, edit stays atomic); closing returns to the inspected object |
+
+**The rules:**
+
+- One major panel at a time: chronicle/ceremony surfaces (catch-up sheet, recap, full
+  guard card, memorial, writing drawer) are mutually exclusive — opening one closes or
+  outranks the others. A side inspector may coexist with a right sheet (opposite
+  edges, no overlap), never with a second inspector.
+- Stacking is structural, not behavioral: the cast and inspector share one left
+  VBox column (overlap is impossible); reading surfaces share the right edge.
+- Center-map blocking is reserved for Chronicle Mode and ceremony. The guard's
+  default voice is the compact toast; the full card opens only on click. The memorial
+  is the single event allowed to take the center unasked.
+- Toasts point at the map, honestly: a true `RegionId` pulses the place; a
+  home-only anchor gets remembered-home language in the gold-brown memory tint and
+  pulses nothing.
+- Map-first verbs: a cast click is "find them" — inspect + ease the lens onto their
+  place (`MapView.FocusPerson`, the same deterministic scatter the dots use; dead and
+  landless souls fall back to the home of their line, honestly nowhere if null).
+  Manual pan/zoom always cancels an automated lens move.
+
 **Attention (the player's divine gaze, in rank order)**
 1. **Memorial** (followed soul's death) — dimmed world, ceremonial frame. Outranks all.
-2. **Guard card** — gold-bordered pause card.
+2. **Guard toast → card** — the compact pause toast (Map-First V1); the gold center card only on click.
 3. **Chapter recap** — queued chip, never interrupts a guard card.
 4. **Living glimpse / soul halo / saga side rule / pulses** — ambient, non-modal,
    never pause, never compete with the above.
