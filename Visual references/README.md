@@ -18,6 +18,12 @@ Everything in this folder is **art-direction reference material, not game conten
 | `gpt-northstar-region-view-ashen-vale.png` | North star: region view + gazetteer card |
 | `gpt-northstar-site-view-greymarket.png` | North star: local/site diorama view |
 | `gpt-northstar-chronicle-replay.png` | North star: chronicle replay path |
+| `gpt-b2-soul-follow-card.png` | Batch 2: followed-soul card on the atlas (last-seen, recent beats) |
+| `gpt-b2-person-glimpse-portraits.png` | Batch 2: person glimpse cards with portraits + faith chips |
+| `gpt-b2-faction-lens-filters.png` | Batch 2: faction lens, chronicle filters, sigil banners |
+| `gpt-b2-remembered-places.png` | Batch 2: "Remembered Places" place-memory panel |
+| `gpt-b2-memorial-in-memoriam.png` | Batch 2: In-Memoriam memorial card (epitaph = the shipped inscription slot) |
+| `gpt-b2-pulse-turning-point.png` | Batch 2: turning-point pulse constellation + chronicle pulse timeline |
 | `Metropolis 1998*.PNG` | Primary influence: readable dense 2D places |
 | `parkitect*.PNG` | Secondary influence: diorama composition |
 | `Rimworld*.PNG` | Tertiary influence: lived-in local density |

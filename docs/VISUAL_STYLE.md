@@ -31,6 +31,32 @@ are **concept references only**, never in-game assets):
 | `gpt-northstar-site-view-greymarket.png` | Local/site view | One settlement as a social subject: market lanes, people, features list, person hover ("Maia — click to inspect") |
 | `gpt-northstar-chronicle-replay.png` | Chronicle replay | "How We Got Here" as a glowing path across the world: numbered turning points, alternate-path ghost, event detail card, timeline scrubber |
 
+### Batch 2 references (2026-06-12) — identity and attention
+
+Six more concept images (`Visual references/gpt-b2-*.png`, concept-reference-only): the
+style settles into a **stylized semi-realistic fantasy pixel diorama** presented as the
+living mythic atlas. What Batch 2 locks beyond Batch 1 is the *identity language* — and
+it arrived alongside the playtest verdict that cast-tracking is the build's weak point:
+
+| File | What it locks |
+|---|---|
+| `gpt-b2-soul-follow-card.png` | The followed-soul card: portrait/mark + role line + "you last saw" + recent beats + follow verbs — much already shipped in text form |
+| `gpt-b2-person-glimpse-portraits.png` | Person glimpse with portrait, age, reputation label, children, faith chip |
+| `gpt-b2-faction-lens-filters.png` | Faction lens with sigil banner, leader portrait, lands list, anchored tales; chronicle category filters |
+| `gpt-b2-remembered-places.png` | "Remembered Places" — Place Memory surfaced as a panel of scarred sites |
+| `gpt-b2-memorial-in-memoriam.png` | The In-Memoriam card — its italic epitaph line IS the shipped memorial-inscription slot (player canon) |
+| `gpt-b2-pulse-turning-point.png` | Turning-point pulse constellation between faction nodes + a chronicle-pulse timeline |
+
+Honest today or one slice away: everything The Cast milestone builds (identity marks,
+role lines, last-beat), the epitaph slot (shipped), last-seen/last-deeds (shipped),
+follow verbs (shipped), chronicle filters (cheap). **Aspirational:** portraits (the
+deterministic sigil is the V1 stand-in), the pulse constellation, Remembered Places as
+a panel. **Forbidden until modeled:** resource counts with deltas, "recent beats" of
+unmodeled daily life (trained with the guard, spoke at the hearth), attitude chips
+(devout/steadfast as *checkboxes* — devout exists only as a custom), trade routes,
+watcher posts, sites, omen intensity, mechanical effect labels ("+10% loyalty",
+"chance of secession"), battle/drought place marks (no battle/drought events exist).
+
 ### Reference interpretation — honest / aspirational / forbidden
 
 Each image mixes three kinds of content. Read them with this discipline:

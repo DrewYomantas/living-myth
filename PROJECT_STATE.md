@@ -530,10 +530,31 @@ of them move the verify baseline (new RNG draws and/or new ordered iteration):
 - **Terrain geography.** Regions are points (X/Y + radius circles). Contract: deterministic region
   polygons/bands so the atlas can read as landforms instead of circles.
 
+## Playtest verdict (2026-06-12, Drew — the F5 feel-test happened)
+The causal arc landed: following a region, a bloodline, and a soul is much easier, and
+investment in *how and why* is real. The new problem is **cast-tracking overwhelm**: following
+a land + one soul, only 1–2 names stick; the flood from follows plus the world's own churn
+evicts the rest. Cards help but arrive mostly at death — the memorial is doing the
+introduction's job. Diagnosis (lead-dev): not primarily an art problem — (1) names are the
+only identity handle (no stable per-person visual mark), (2) people are introduced at death,
+not when they enter your story, (3) yours and the world share one feed channel (gold trim is
+decoration, not separation). **Decision: next milestone is "The Cast" (viewer-only)** — see
+the roadmap. Also received: north-star Batch 2 (four concept images — the stylized
+semi-realistic pixel-diorama atlas, settlement views, a Chronicle Replay screen remarkably
+close to the shipped causal grammar) — pending placement in `Visual references/`, to be read
+with the same honest/aspirational/forbidden discipline as Batch 1.
+
 ## Next session starts with
-**Open the Godot viewer (F5, mono build) and feel-test everything shipped since the pacing arc —
-none of it has been seen running.** One sitting: follow a young soul AND a land, watch ~200 years
-at mixed speeds, and judge by feel, tuning named consts as you go (rebuild + commit between tweaks):
+**The Cast milestone (viewer-only, baseline-safe):** a persistent capped dramatis-personae
+panel (followed souls + auto-promoted key figures, identity mark + role line + last beat);
+deterministic person sigils (PlaceSeeds pattern — same mark everywhere a name appears);
+living introductions ("a new thread begins" glimpse-pattern card when someone enters your
+story) + mid-life person recaps at milestones; feed separation (your story pinned/distinct,
+world compressed toward digest while focused); person cards lead with "why you care"
+(connection to follows). Plus the predicted tuning: followed populous lands flooding YOURS
+with rooted births/deaths.
+
+The original feel-test checklist (kept for the items not yet judged in a long sitting):
 - Pacing basics (oldest unseen work): 1× readability, dramatic auto-slow depth/length
   (`BaseInterval`, `SlowdownWindow`/`SlowdownFactor`), echoes as punctuation
   (`EchoArchetypeCooldown`/`EchoSignificanceBar`/`EchoWindowCap`), drama-camera lean
