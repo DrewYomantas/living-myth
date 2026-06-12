@@ -41,7 +41,13 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   (PlaceSeeds pattern), the capped dramatis-personae panel, living introductions ("A NEW THREAD"
   cards) + mid-life tale-so-far on guard cards, your-story/world feed channels, why-you-care-first
   person cards, followed-land life-event flood tuning. Baseline held exactly 884/699/567/706.
-- **Next** — F5 feel-test of The Cast + the myth-authorship surfaces; surface culture + gossip in the viewer; timeline scrubbing; baseline-moving sim contracts (battle sites, per-region economy, peace faction ids).
+- **Map-First Panel Economy V1** (2026-06-12, viewer-only) — the map made primary again: binding
+  three-mode panel contract (Watch/Inspect/Chronicle) in docs/VISUAL_STYLE.md; guard toast (full
+  card on click, memorial keeps the ceremony); cast+inspector in one left dock column; cast compact
+  by default; How We Got Here → right side sheet; writing desk → right drawer; feed 300/world rows
+  recede while focused; bottom dock 78; MapView.FocusPerson/FocusRegion (cast click = find them).
+  Baseline held exactly 884/699/567/706.
+- **Next** — Drew's F5 feel-test of the map-first pass + myth-authorship surfaces; surface culture + gossip in the viewer; timeline scrubbing; baseline-moving sim contracts (battle sites, per-region economy, peace faction ids).
 
 ## Commands
 ```bash
@@ -139,7 +145,7 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 <!-- TOKENOMICS:START -->
 ## Token Optimization Insights
 
-_Last updated: 2026-06-11_
+_Last updated: 2026-06-12_
 
 ### Context Management
 - Your context snowballs at **turn 19** on average (39% of sessions). Use `/compact` proactively after turn 17-19 on long sessions to prevent unbounded growth.
