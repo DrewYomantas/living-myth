@@ -265,15 +265,63 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       inputs). Live-driven feel-check: followed a land + called a spring, killed the viewer,
       relaunched — resumed paused at Yr 242 with the spring replayed, the follow restored,
       and the Fate Ledger intact.
-- [ ] Later — Event.SiteId anchoring conventions (baseline-moving, documented above); battle
-      sites and per-region economy (add events/RNG and move the verify baseline; together they
-      extend place memory to battles/famine and let war's-peace / famine's-end close chapters);
-      a fresh-world/new-seed affordance (today: delete `user://world_seed{N}.json`); mythic
-      glosses / entity links; relationship constellation; local site-scale view; memorial
-      tableau upgrade; visual/UX pass (surface culture + gossip in the viewer); echo packs;
-      timeline scrubbing; followed-faith audit. ← NEXT
+- [x] Chronicle Replay + Site-Anchored Memory V1 (2026-06-12, sim + viewer + new gate): history
+      made visible across the atlas, and the first events that truly belong to a single place.
+      **Event.SiteId shipped** (the deferral above, lifted deliberately) — a fourth, conservative
+      anchor channel governed by ONE authored convention table (`SiteAnchors.Expected`, Sites.cs):
+      territory+founding/abandonment → the region's seat; territory+war → its stronghold (hill
+      fort → watch post → river ford); custom-born/fade → its sacred site (shrine → grove →
+      barrow → cairn). Everything else stays null; births/deaths/murders never anchor (memory
+      channel only). Picks are immutable-site, type-priority, lowest-id — **zero Rng**, so the
+      baseline did not move: verify held EXACTLY 884/699/567/706 (6–14 site-anchored events/seed).
+      **Replay V2** (`Replay.cs`): `ChainFor` returns the focal event's cause beats + a bounded
+      (cap 8) direct-consequence rail; each `ReplayBeat` copies its anchors VERBATIM and carries
+      an honest Status (site-anchored / region-only / memory-only / unanchored) + authored copy
+      key + faction ids; `TurningPointKind` is a bounded authored pivot classifier (war/peace,
+      land lost/abandoned, violent succession, faith torn/proclaimed, ways hardened, divine-
+      influenced, far-reaching). **Viewer**: How We Got Here gained a turning-point header (who/
+      peoples/place), an honest anchor phrase per row ("at {site}" only for a true SiteId), a
+      "What grew from this" consequence rail, and a ⟲ Replay button that retells the chain on a
+      dimmed atlas — numbered marks on honestly anchored beats along real cause edges (spine bold),
+      a beat card + scrubber, memory-only/unanchored beats living ONLY in the rail (never a fake
+      pin); turning-point diamonds pulse on the map (placeless pivots never mark); Remembered
+      Places panel (`RememberedPlaces.cs`) lists every truly-touched place with honest filters +
+      anchor language; the Site Card grew real site memory ("known for" from recorded counts,
+      site-anchored tales, the hand upon the land). All copy authored in `StoryCopy.cs`. New gate
+      `replay` green (deterministic chains, verbatim anchors, honest statuses, bounded real
+      consequences, authored turning points, save-safe); `sites` gate rewritten to PROVE the
+      anchoring contract event-by-event. Live-driven feel-check: turning-point thread header, the
+      ⟲ retelling stepped 1→10 with the focal seizure pinned at Morburgh, unanchored schism beats
+      staying pinless, Remembered Places war filter, the Morburgh Site Card "known for: fought
+      over 2 times; a people's first hold was raised here".
+- [ ] Later — battle sites and per-region economy (add events/RNG and move the verify baseline;
+      extend place memory to battles/famine, let war's-peace / famine's-end close chapters);
+      person↔site anchoring (a home site, not just a home region); a fresh-world/new-seed
+      affordance (today: delete `user://world_seed{N}.json`); relationship constellation; local
+      site-scale view; memorial tableau upgrade; visual/UX pass (surface culture + gossip in the
+      viewer); echo packs; timeline scrubbing; followed-faith audit. ← NEXT
 
 ## Session log
+- [2026-06-12] Session: Chronicle Replay + Site-Anchored Memory V1 (five commits). (1) Replay
+  read-model + gate: `Event.SiteId` shipped through the ONE authored convention table
+  (`SiteAnchors.Expected` — founding/abandonment→seat, war→stronghold, ways→sacred site;
+  zero Rng); `Replay.ChainFor` (cause beats + bounded consequence rail, verbatim anchors,
+  honest Status) + `TurningPointKind` (bounded authored classifier); `LinkBetween` for literal
+  edges; new `replay` gate (deterministic chains, verbatim anchors, honest statuses, bounded
+  real consequences, authored turning points, save-safe) + `sites` gate rewritten to PROVE the
+  anchoring contract event-by-event. (2) Site memory + Remembered Places: RegionActivity gained
+  a site channel + "known for" kind tallies; `RememberedPlaces.cs` panel (honest filters +
+  anchor language); Site Card grew real site memory. (3) Chronicle Replay viewer: turning-point
+  thread header + "What grew from this" rail + honest anchor phrases + ⟲ Replay button; dimmed-
+  atlas overlay (numbered marks on anchored beats, real cause edges, spine bold), beat card +
+  scrubber, no fake pins. (4) Turning-point pulses on the live map (placeless pivots never
+  mark). (5) Docs. verify held EXACTLY 884/699/567/706 throughout (SiteId picks draw no Rng;
+  everything else is read-model/viewer); all EIGHT gates green (verify/homes/story/canon/divine/
+  save/sites/replay) + Godot build clean, zero warnings. Feel-checked live by driving the running
+  game: schism thread turning-point header, the ⟲ retelling stepped beat 1→10 with the focal
+  Iron-Pass seizure pinned at Morburgh and the unanchored bond/schism beats staying pinless,
+  Remembered Places war-&-land filter, the Morburgh Site Card ("known for: fought over 2 times;
+  a people's first hold was raised here"). Test save deleted afterwards.
 - [2026-06-12] Session: Persistence + Sites V1 (four commits). (1) PlayerWorldStore — the
   world save as an input journal (acts + follows + attention + resume year), viewer
   journaling/fast-forward/restore, the `save` gate (11 checks: roundtrip, byte-identical
@@ -694,21 +742,63 @@ What a site IS: a stable id (index order), a region id, an authored-fragment nam
 surface cell inside its own region, and a seat flag (first site, nearest the region's
 heart, typed from its own cell). Holder is DERIVED live from the region — never stored.
 What a site may NOT claim until modeled: population, named dwellers, buildings, stores,
-daily life, loyalty/defense, or events of its own. **Event.SiteId is deferred** — the
-`sites` gate asserts the field does not exist, so nothing can assign a fake site anchor;
-when the contract ships it must come with per-event-type anchoring conventions and a
-deliberate baseline move. `RegionId` still means where an event happened; `HomeRegionId`
-still means where a life is remembered; sites add no third anchor channel yet.
-Site types V1: market village, watch post, sacred grove, old barrow, river ford,
-farmstead, hill fort, fishing dock, shrine, cairn field, wilderness camp.
+daily life, loyalty/defense. (A site now CAN carry events of its own — see the anchoring
+contract below.) Site types V1: market village, watch post, sacred grove, old barrow,
+river ford, farmstead, hill fort, fishing dock, shrine, cairn field, wilderness camp.
+
+## Event.SiteId — anchoring conventions V1 (binding, shipped 2026-06-12)
+
+A FOURTH anchor channel, the most conservative. `Event.SiteId` is the single modeled place
+an event truly belongs to. It is set by exactly ONE authored table — `SiteAnchors.Expected`
+(Sites.cs) — called at record time and recomputed by the `sites` gate per event, so the rule
+can never drift in `World` alone. The conventions:
+- **territory + founding** → the region's SEAT (a people's first hold is its seat).
+- **territory + abandonment** → the region's SEAT (the hold that falls silent).
+- **territory + war (seized)** → the region's STRONGHOLD: hill fort → watch post → river ford
+  (the defensible place the fighting was over); none present ⇒ region-only, honestly.
+- **custom born / fade** → the region's SACRED site: shrine → sacred grove → old barrow →
+  cairn field (where a people's ways are sworn and shed); none present ⇒ region-only.
+- **everything else** → null. Births/deaths/murders never carry RegionId at all (memory
+  channel only), so they can never carry SiteId; rumor/divine/trade/war stay region-or-less
+  because no rule honestly places them.
+
+The four channels, never mixed: **SiteId** = the modeled place it belongs to; **RegionId** =
+where it happened; **HomeRegionId** = where a life is remembered (never a location); null =
+the chronicle does not place it. SiteId is never set without RegionId, and the anchored site
+always lies inside that region. Picks are immutable-site, type-priority, lowest-id — **zero
+Rng**, so adding the field did not move the verify baseline (held EXACTLY 884/699/567/706;
+6–14 site-anchored events/seed over 120 yrs). The `sites` gate proves SiteId equals the
+convention table for EVERY event (the old absence-assertion, inverted into a presence proof).
+
+## Chronicle Replay V2 — the replay contract (binding, shipped 2026-06-12)
+
+`Replay.ChainFor(world, eventId)` is a pure, deterministic, Rng-free read-model: the focal
+event's annotated cause chain (record order, via StoryGrammar) plus a bounded direct-
+consequence rail (cap 8; the real total is reported even past the cap; each consequence's
+connector names the literal focal→consequence edge, proven by the grammar). Every
+`ReplayBeat` copies RegionId/SiteId/HomeRegionId VERBATIM — never inferred, never substituted
+— and carries a Status that names exactly what the anchors allow: **site-anchored** (true
+SiteId), **region-only** (RegionId, no place), **memory-only** (HomeRegionId — remembered,
+NOT where it happened; the viewer must never pin it), **unanchored** (placeless — rail/
+timeline only). The viewer's replay overlay marks ONLY honestly anchored beats on the map,
+along real recorded cause edges (proximate-cause spine bold, real branches faint); memory-
+only and unanchored beats live only in the rail and beat card — no fake pins, ever.
+`Replay.TurningPointKind` is a bounded authored pivot classifier (war-pivot, peace-pivot,
+land-lost, land-abandoned, violent-succession, faith-torn, faith-proclaimed, ways-hardened,
+divine-influenced, far-reaching) — deterministic over (event content, consequence count),
+each premise gate-checked. All replay/anchor/turning-point/known-for English lives in
+`StoryCopy.cs`. The `replay` gate proves determinism, verbatim anchors, honest statuses,
+bounded real consequences, the authored classifier, and survival of the world-save journal.
 
 ## Region Lens — data contracts still missing (design notes, not promises)
 The viewer-side lens is honest about these; each needs a deliberate sim-side milestone because
 they move the verify baseline (new RNG draws and/or new ordered iteration):
 - **Person ↔ site anchoring.** People have no home site; the atlas scatter (p.Id % regions)
   is presentation only. (Person.HomeRegionId shipped; the SITE granularity did not.)
-- **Event ↔ site anchoring.** Sites exist (read-model) but events anchor only to lands;
-  Event.SiteId is the deferred contract above.
+- **Event ↔ site anchoring.** SHIPPED 2026-06-12 — `Event.SiteId` via the conservative
+  convention table above (foundings/abandonment → seat, war → stronghold, ways → sacred site).
+  Still missing: BATTLE sites (war casualties anchor nowhere yet — needs a sim battle event),
+  rumor/trade place anchors (no honest rule), and per-site population/economy.
 - **Terrain geography.** Region POLYGONS are no longer needed (the WorldSurface cell bridge
   ships real landforms); what remains is making famous-shape worlds data (`maps/*.json`).
 
@@ -727,15 +817,23 @@ close to the shipped causal grammar) — pending placement in `Visual references
 with the same honest/aspirational/forbidden discipline as Batch 1.
 
 ## Next session starts with
-**Drew's F5 feel-test of Persistence + Sites V1** (new this session): start a world, follow
-things, bless/curse/terraform, quit mid-story, relaunch — does the resume feel like *your*
-world returning (paused at the saved year, ledger intact, follows alive)? Do the site
-markers and tags make the land read as a place without cluttering fit zoom (SiteTagZoom
-2.4 — too eager/too shy)? Does the Site Card feel worth clicking? Does the Region Lens
-places list invite exploring? Known liveable limits to judge: resume replays the world
-from year 0 (a long game = a few seconds of fast-forward), the feed rebuilds only recent
-rows, chapters/echoes restart at the resume year, and a fresh world needs the save file
-deleted by hand (`%APPDATA%\Godot\app_userdata\Living Myth\world_seed7.json`).
+**Drew's F5 feel-test of Chronicle Replay + Site-Anchored Memory V1** (new this session):
+open How We Got Here on a war or a custom-born event — does the turning-point header land
+(who/peoples/place)? Press ⟲ Replay — does the dimmed-atlas retelling read as "watching the
+map-table retell the past": numbered marks tracing the cause edges, the beat card + scrubber
+clear, the focal beat pinned at its true place? Confirm the honesty holds: unanchored beats
+(schisms, forbidden bonds) stay in the rail with NO map pin, memory-only life events say
+"remembered at a home — not where it happened". Do the turning-point diamonds on the live
+map feel meaningful, not spammy? Does Remembered Places (❖ places) read as the atlas's
+memory, with every row's anchor named honestly ("at {site}" / "in {land}" / "remembered
+in")? Does the Site Card's "known for" + site-anchored tales make a place feel remembered?
+Known liveable limits: turning marks only appear for events with a true place anchor (far-
+reaching pivots surface later, through the thread header — consequences aren't known at
+stream time); replay marks need a SiteId or RegionId, so a chain of all-unanchored beats
+draws no path (rail only); the consequence rail caps at 8 (the real total is still stated).
+Then the still-unwatched **Persistence + Sites V1** feel-test (resume, site tags, Site Card):
+quit mid-story, relaunch — does the resume feel like *your* world returning? Fresh world
+still needs the save deleted by hand (`%APPDATA%\Godot\app_userdata\Living Myth\world_seed7.json`).
 
 Then the previous sitting's checklist (still valid):
 **F5 feel-test of The Cast** (shipped 2026-06-12, not yet watched): follow a soul + a land

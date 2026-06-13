@@ -118,6 +118,14 @@ The goal is to let the player say: “I want to follow this place for a while,�
 
 ## Replay / Chronicle Playback Mode
 
+**V1 SHIPPED (2026-06-12, Chronicle Replay V2 read-model).** How We Got Here gained a ⟲ Replay
+button that retells the cause chain on a dimmed atlas: numbered marks on the honestly anchored
+beats, the proximate-cause spine drawn bold along real recorded edges, a beat card + scrubber
+(step / jump). The core honesty rule — **the map never invents a place** — is structural: a
+beat draws a pin only if it carries a true SiteId or RegionId; memory-only and unanchored beats
+(births, schisms, forbidden bonds) live only in the side rail. Split-scale, timelapse auto-play,
+and feed-isolation remain future polish; the path, the scrubber, and the honesty are in.
+
 The current “How We Got Here” popup is valuable because it explains causality. A future official replay mode should go beyond reading the cause chain and **show the chain playing out**.
 
 Instead of only listing events that led to a war, murder, plague, migration, or prophecy, the player should be able to trigger a short replay/timelapse:
@@ -172,18 +180,27 @@ Do not jump straight into a giant settlement sim. Build this in slices.
    with name tags, click-to-inspect Site Cards, seat banners, and local paths; the
    Region Lens lists the land's places. (A deeper dedicated region view remains future.)
 
-4. **Event anchoring slice** — DEFERRED DELIBERATELY (the `sites` gate asserts
-   `Event.SiteId` does not exist yet, so no fake anchor can ship by accident).
-   - Add optional site/settlement ids to events — needs the tick to know sites, a
-     baseline-moving milestone with per-event-type anchoring conventions documented
-     up front (founding→seat, customs→seat/grove/shrine, rumors→market are candidate
-     conventions, not commitments).
-   - Replay groundwork shipped: `Replay.BeatsFor` emits replay-ready beats
-     (event/region/participants/proven connector/cause) with SiteId honestly null.
+4. **Event anchoring slice** — ✅ SHIPPED as **Event.SiteId** (2026-06-12), conservatively.
+   - `Event.SiteId` is a fourth anchor channel governed by ONE authored convention table
+     (`SiteAnchors.Expected`): foundings/abandonment → the region's seat, war seizures → its
+     stronghold (hill fort → watch post → ford), ways sworn/shed → its sacred site (shrine →
+     grove → barrow → cairn). Everything else stays null; life events never anchor. Picks draw
+     zero Rng (immutable sites, type-priority, lowest id), so the verify baseline did not move.
+   - The `sites` gate now PROVES the contract event-by-event (was: asserted the field absent).
+   - Still deferred: battle sites (war casualties anchor nowhere — needs a sim battle event),
+     rumor/trade place anchors (no honest rule), person↔site home anchoring.
 
-5. **Local memory slice**
-   - Sites remember important events, rumors, faith changes, deaths, migrations, and conflicts.
-   - Site inspector becomes emotionally meaningful.
+5. **Local memory slice** — ◐ FIRST HALF SHIPPED (2026-06-12, Site-Anchored Memory V1).
+   - Sites now remember the events that truly belong to them (Event.SiteId): the Site Card shows
+     site-anchored tales, a "known for" line from real recorded counts, and the divine hand upon
+     the land. Remembered Places lists every truly-touched place with honest anchor language.
+   - Still to come: rumors/faith/migration site-anchored (needs those event types to anchor),
+     and the dedicated emotional site inspector (today the Site Card is a panel, not a view).
+
+   **Chronicle Replay V1 shipped alongside** (the replay direction below, first slice): How We
+   Got Here gained a ⟲ Replay that retells a cause chain on a dimmed atlas — numbered marks on
+   honestly anchored beats along real cause edges, a scrubber, turning-point pulses on the live
+   map. Honesty: unanchored/memory-only beats live only in the side rail, never a fake map pin.
 
 6. **Hybrid peoples / migration / plague integration**
    - Settlement population makeup becomes useful.

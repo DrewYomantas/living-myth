@@ -554,20 +554,23 @@ was touched by accident — stop and investigate, never re-baseline silently.
    label balance, territory de-emphasis. Viewer-only.
 3. **Region Lens V3** — gazetteer card layout (honest fields only), richer anchored
    tales, local identity framing. Viewer-only.
-4. **Chronicle Replay Prototype** — glowing causal path over the atlas for
-   region-anchored events; numbered beats; timeline scrub comes with the separately
-   planned timeline-scrubbing milestone. Viewer-only.
+4. **Chronicle Replay Prototype** — ✅ SHIPPED (2026-06-12, Chronicle Replay V2): glowing
+   causal path over the dimmed atlas, numbered beats on honestly anchored events only, a
+   beat scrubber, turning-point pulses. The binding rules are in "Chronicle Replay + turning
+   points" above. Future polish: split-scale zoom, timelapse auto-play (with the separately
+   planned timeline-scrubbing milestone), feed-isolation during replay. Viewer-only.
 5. **Terrain Geometry / Diorama Exploration** — viewer-side region polygons (Voronoi
    or authored bands) so the atlas reads as landforms; gateway to diorama rendering.
    Viewer-only, deterministic from seed.
-6. **Site/Settlement Data Contract** — ◐ FIRST HALF SHIPPED (Sites V1, 2026-06-12):
-   3–7 deterministic, terrain-honest sites per region as a baseline-inert read-model
-   (pure hashes off the pristine surface, never read by the tick — verify did not
-   move), rendered as markers/tags/Site Cards/Region-Lens place lists. STILL FUTURE:
-   `Event.SiteId` (deliberately deferred — the `sites` gate asserts the field is
-   absent), people-at-site, settlement populations, buildings/features. Those need
-   the tick to know sites — a deliberate baseline-moving milestone; everything in the
-   "forbidden" list above graduates to "honest" only through that gate.
+6. **Site/Settlement Data Contract** — ◐ MOSTLY SHIPPED (Sites V1 2026-06-12 + Event.SiteId
+   2026-06-12): 3–7 deterministic, terrain-honest sites per region (baseline-inert read-model),
+   PLUS `Event.SiteId` — events now anchor to a single place where one authored convention
+   honestly assigns it (foundings/abandonment→seat, war→stronghold, ways→sacred site; zero Rng,
+   verify did not move). Rendered as markers/tags/Site Cards/Region-Lens place lists with real
+   site memory ("known for", site-anchored tales). STILL FUTURE: battle sites, rumor/trade
+   anchors, people-at-site, settlement populations, buildings/features — those need new sim
+   events/RNG and a deliberate baseline-moving milestone; the remaining "forbidden" items
+   graduate to "honest" only through that gate.
 
 ### Sites V1 surface (binding, as built 2026-06-12)
 
@@ -579,15 +582,55 @@ What a site may claim, and the map/card payoff for each:
 | position | a real surface cell inside its own region | the marker stands on that cell; clicks hit it before the land |
 | ground it stands on | `Surface.TerrainAt(cell)` | Site Card "stands on {terrain} ground" |
 | holder | DERIVED live from the region's `ControllingFactionId` | seat banner on the map; "held, with all {region}, by {people}" on the card |
-| tales | NONE of its own — events anchor to LANDS | card shows the region's anchored tales labeled as the land's, or "no recorded tales here yet" |
+| tales | the events `Event.SiteId` anchors HERE (shipped 2026-06-12), plus the wider land's, clearly apart | card "Tales at this place" + a "known for" line from recorded counts; the land's other tales under "Tales of {region}" |
 
 Forbidden on any site surface until modeled: population, named dwellers,
-buildings/stores, daily life, loyalty/defense values, site-anchored events. The Site
-Card says these plainly under "Not yet in the record". Site name tags appear at
+buildings/stores, daily life, loyalty/defense values. (Site-anchored events are now
+honest — see "Event.SiteId" below — but only those the convention table truly places.)
+The Site Card says the rest plainly under "Not yet in the record". Site name tags appear at
 `SiteTagZoom` (2.4) and always for the inspected land's sites; overlap-skip applies.
 Roads run seat-to-seat between same-faction neighbours; fainter local paths run from
 each seat to its region's other sites. The inspected site gets a small `LensGold` ring
 (beside, never replacing, the region lens ring).
+
+## Anchor language (binding — four channels, never mixed; shipped 2026-06-12)
+
+Every place-naming phrase reads its anchor honestly. Single-sourced in `StoryCopy.cs`
+(`AnchorPhrase`, `StatusLabel`); this is the review checklist:
+
+- **`at {site}, in {region}`** — ONLY for a true `Event.SiteId` (the convention table placed it).
+- **`in {region}`** — `RegionId` only: a land, no single place.
+- **`remembered in {region}`** — `HomeRegionId` only: where a life is remembered, NEVER where it
+  happened. (The Life Memory rules above still govern its wording.)
+- **(nothing / "the chronicle does not place this")** — no anchor at all.
+
+Replay-beat Status words (one per `ReplayBeat.Status`): site-anchored = "a true place",
+region-only = "a land, no single place", memory-only = "remembered at a home — not where it
+happened", unanchored = "unplaced — the chronicle does not say where". Forbidden: "at {site}"
+for anything but a real SiteId; pinning a memory-only or unanchored beat to the map; inferring
+a site from a region.
+
+## Chronicle Replay + turning points (binding, shipped 2026-06-12)
+
+The replay overlay is a retelling on the dimmed atlas, never a new simulation. Rules:
+
+- The dim is a translucent warm-dark wash over the whole map; the live feed/world recede.
+- Numbered parchment marks appear ONLY on honestly anchored beats (a true SiteId cell, else the
+  region heart). Memory-only and unanchored beats get NO mark — they live only in the side rail
+  (the catch-up sheet) and the beat card. This is the load-bearing honesty: **the map never
+  claims a place the record does not hold.**
+- Edges between marks are real recorded cause links only. The proximate-cause spine draws bold
+  (gold glow under a bright core); any other real branch draws faint. No alternate/speculative
+  paths are ever drawn.
+- The current beat's mark is larger and breathes; the beat card names the connector (the same
+  authored StoryGrammar phrase), the honest anchor + status, and "open this tale's thread".
+- Entering replay pauses time (Chronicle Mode) and restores the prior pace on close.
+
+Turning points (the live map, not replay): a small ember-gold diamond + slow halo on each
+recent pivot, aged by sim year. Marks appear ONLY for pivots with a true place anchor; placeless
+pivots (most schisms, prophet calls) surface through the thread header instead, never a fake pin.
+The thread header names the authored kind ("✦ TURNING POINT — {label}"), who it touches, their
+peoples, and the honest place. Kinds and labels are single-sourced in `StoryCopy.cs`.
 
 ## Current viewer audit (2026-06-11, post-Living-Diorama-V1)
 
