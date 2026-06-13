@@ -27,6 +27,8 @@ public static class StoryCopy
         _ => link.RuleId switch
         {
             "war-of-whispers" => "the whispers fed it — therefore,",
+            "war-to-battle" => "the war reached the field — therefore,",
+            "battle-death" => "the fighting took them — therefore,",
             "curse-death" => "the curse found another life — therefore,",
             "famine-under-doom" => "the doom upon them bore down — therefore,",
             _ => link.GapYears >= 3 ? $"{link.GapYears} years passed — therefore," : "therefore —",
@@ -116,6 +118,7 @@ public static class StoryCopy
         "abandonment" => "holds fell silent here",
         "ways-sworn" => count > 1 ? $"ways were sworn here {count} times" : "ways were sworn here",
         "ways-shed" => "old ways were shed here",
+        "battle" => count > 1 ? $"{count} battles were fought here" : "a battle was fought here",
         _ => count > 1 ? $"{count} recorded {kind}s" : $"a recorded {kind}",
     };
 

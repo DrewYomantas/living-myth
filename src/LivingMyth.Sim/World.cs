@@ -79,6 +79,10 @@ public sealed class World
         public (string, string) Pair;
         public int YearsLeft;
         public Event DeclaredEvent = null!;
+        public int BattlesFought;    // running tally: ordinal battle naming + the peace toll
+        public int Fallen;           // souls killed across all this war's battles
+        // Note: the front is recomputed per battle (RecordBattle) so it follows the map as
+        // control shifts — there's deliberately no stored front to drift out of date.
     }
 
     public World(int seed, ConfigData config, NamesData names)
@@ -1454,6 +1458,44 @@ public sealed class World
 
     // ---------- war ----------
 
+    /// <summary>Does this region carry a stronghold — the defensible ground a war is fought
+    /// over (a hill fort, watch post, or river ford)? Pure read over the immutable site
+    /// index; no Rng.</summary>
+    private bool HasStronghold(int rid)
+        => Sites.FirstOfTypes(rid, SiteType.HillFort, SiteType.WatchPost, SiteType.RiverFord) is not null;
+
+    /// <summary>The border region a war between two peoples is fought over: a region held by
+    /// one combatant whose land touches the other's. Prefers a region carrying a stronghold
+    /// (the defensible ground worth the blood), then lowest id. Null when the two hold no
+    /// adjacent land — the war has no fixed front and its battles are placeless raids. Zero
+    /// Rng (a read over current control + the fixed adjacency graph), so resolving the front
+    /// can never move the verify baseline.</summary>
+    private int? FrontRegion(string fa, string fb)
+    {
+        bool HeldBy(int rid, string fid) => rid >= 0 && rid < Regions.Count && Regions[rid].ControllingFactionId == fid;
+        var candidates = new List<int>();
+        foreach (var r in Regions)
+        {
+            string? owner = r.ControllingFactionId;
+            if (owner != fa && owner != fb) continue;
+            string foe = owner == fa ? fb : fa;
+            if (r.AdjacentRegionIds.Any(id => HeldBy(id, foe))) candidates.Add(r.Id);
+        }
+        if (candidates.Count == 0) return null;
+        return candidates.OrderByDescending(HasStronghold).ThenBy(rid => rid).First();
+    }
+
+    /// <summary>Both sides' current leaders, so war / battle / peace events are
+    /// faction-attributed — the chapter-closing gap the recaps noted (peace once carried no
+    /// faction ids). Deterministic, no Rng.</summary>
+    private List<int>? WarLeaders(string fa, string fb)
+    {
+        var ids = new List<int>();
+        if (Factions[fa].LeaderId is int la) ids.Add(la);
+        if (Factions[fb].LeaderId is int lb) ids.Add(lb);
+        return ids.Count > 0 ? ids : null;
+    }
+
     private void MaybeDeclareWars()
     {
         var atWar = _activeWars.Select(w => w.Pair).ToHashSet();
@@ -1479,8 +1521,13 @@ public sealed class World
                 text = $"War breaks out between {Factions[fa].Name} and {Factions[fb].Name}.";
                 tags = new() { "war" };
             }
+            // The front (a real border region) is resolved with zero Rng, so it must be read
+            // BEFORE the YearsLeft draw to keep the stream's only war-declaration draw unmoved.
+            int? front = FrontRegion(fa, fb);
             var ev = Chronicle.Record(Year, "war", text,
-                causes: grievanceIds.Count > 0 ? new List<int>(grievanceIds) : null, tags: tags);
+                participants: WarLeaders(fa, fb),
+                causes: grievanceIds.Count > 0 ? new List<int>(grievanceIds) : null, tags: tags,
+                regionId: front, siteId: AnchorSite("war", tags, front));
             _activeWars.Add(new War { Pair = key, YearsLeft = Rng.RandInt(1, 2), DeclaredEvent = ev });
             Tension[key] = 1.0;
         }
@@ -1491,7 +1538,12 @@ public sealed class World
         foreach (var war in _activeWars.ToList())
         {
             string fa = war.Pair.Item1, fb = war.Pair.Item2;
-            var decl = war.DeclaredEvent;
+            // The year's fighting becomes a recorded BATTLE the first time blood is drawn —
+            // lazily, so a standoff year (both sides roll zero) records no battle and the
+            // chronicle never invents a fight that did not happen. The casualty rolls below
+            // are the exact ones the war already made; wrapping them in a battle adds events
+            // without touching the Rng stream (verify moves only by the battle count).
+            Event? battleEv = null;
             foreach (var fid in new[] { fa, fb })
             {
                 var members = FactionMembers(fid).Where(p => p.Age(Year) >= 16).ToList();
@@ -1501,20 +1553,60 @@ public sealed class World
                     if (members.Count == 0) break;
                     var fallen = Rng.Pick(members.OrderBy(p => p.Id).ToList());
                     members.Remove(fallen);
-                    Kill(fallen, reason: "in the war", cause: decl);
+                    battleEv ??= RecordBattle(war);
+                    Kill(fallen, reason: "in the fighting", cause: battleEv);
+                    war.Fallen++;
                 }
             }
             war.YearsLeft -= 1;
             if (war.YearsLeft <= 0)
             {
                 _activeWars.Remove(war);
-                var peace = Chronicle.Record(Year, "peace",
-                    $"{Factions[fa].Name} and {Factions[fb].Name} make peace, though the grudge lingers.",
-                    causes: new() { decl.Id }, tags: new() { "war", "peace" });
+                var peace = Chronicle.Record(Year, "peace", PeaceText(war),
+                    participants: WarLeaders(fa, fb),
+                    causes: new() { war.DeclaredEvent.Id }, tags: new() { "war", "peace" });
                 TransferTerritory(Factions[fa], Factions[fb], peace.Id);
                 Tension[war.Pair] = 2.0;
             }
         }
+    }
+
+    /// <summary>Record one battle of an ongoing war at its front — called once per war-year,
+    /// the first time blood is drawn. Anchored to the front region and (when one stands
+    /// there) its stronghold, via the one authored convention table; both leaders witness it;
+    /// caused by the war's declaration. Draws no Rng — it only narrates casualties the war
+    /// already rolled, so it adds an event without disturbing the stream.</summary>
+    private Event RecordBattle(War war)
+    {
+        string fa = war.Pair.Item1, fb = war.Pair.Item2;
+        var tags = new List<string> { "war", "battle" };
+        int? front = FrontRegion(fa, fb);   // recomputed each battle — the front follows the map
+        int? siteId = AnchorSite("battle", tags, front);
+        string place = siteId is int sid ? $" at {Sites.Get(sid).Name}"
+            : front is int fr ? $" in {Regions[fr].Name}"
+            : "";
+        string na = Factions[fa].Name, nb = Factions[fb].Name;
+        string text = war.BattlesFought == 0
+            ? $"{na} and {nb} meet in battle{place}."
+            : $"{na} and {nb} clash again{place}.";
+        var ev = Chronicle.Record(Year, "battle", text,
+            participants: WarLeaders(fa, fb),
+            causes: new() { war.DeclaredEvent.Id }, tags: tags,
+            regionId: front, siteId: siteId);
+        war.BattlesFought++;
+        return ev;
+    }
+
+    /// <summary>The peace event's line — names both peoples and the war's toll (battles
+    /// fought, souls fallen), so a chapter can close on a war's end. No Rng.</summary>
+    private string PeaceText(War war)
+    {
+        string na = Factions[war.Pair.Item1].Name, nb = Factions[war.Pair.Item2].Name;
+        if (war.BattlesFought == 0)
+            return $"{na} and {nb} make peace, the war spent without a pitched battle.";
+        string battles = war.BattlesFought == 1 ? "a single battle" : $"{war.BattlesFought} battles";
+        string fallen = war.Fallen == 1 ? "one soul" : $"{war.Fallen} souls";
+        return $"After {battles} and {fallen} fallen, {na} and {nb} make peace, though the grudge lingers.";
     }
 
     /// <summary>The end of a war redraws the map: the stronger side (more living members; a coin

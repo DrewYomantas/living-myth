@@ -327,15 +327,24 @@ public sealed class SiteIndex
 ///  - territory + war (seized) → the region's STRONGHOLD: hill fort, then watch post,
 ///                               then river ford — the defensible place the fighting was
 ///                               truly over; none present = region-only, honestly
+///  - war declared / battle    → the FRONT region's STRONGHOLD (same priority list): the
+///                               defensible ground a war is fought over. The front is a real
+///                               border region World resolves deterministically; none present
+///                               (or no front) = region-only / placeless, honestly.
 ///  - custom born / fade       → the region's SACRED site: shrine, then sacred grove, then
 ///                               old barrow, then cairn field — where a people's ways are
-///                               sworn and shed; none present = region-only
+///                               sworn and shed; none present = region-only.
 ///  - everything else          → null. Births/deaths/murders never carry RegionId at all
-///                               (memory channel only); rumor/divine/trade/war stay
+///                               (memory channel only); rumor/divine/trade/peace stay
 ///                               region-or-less because no rule honestly places them.
 /// </summary>
 public static class SiteAnchors
 {
+    /// <summary>The defensible-place priority a war is fought over — shared by territory+war
+    /// seizures, war declarations, and battles, so the stronghold rule lives in one spot.</summary>
+    private static int? Stronghold(World w, int rid)
+        => w.Sites.FirstOfTypes(rid, SiteType.HillFort, SiteType.WatchPost, SiteType.RiverFord)?.Id;
+
     public static int? Expected(World w, string etype, IReadOnlyList<string> tags, int? regionId)
     {
         if (regionId is not int rid) return null;
@@ -345,9 +354,11 @@ public static class SiteAnchors
                 if (tags.Contains("founding") || tags.Contains("abandonment"))
                     return w.Sites.SeatOf(rid)?.Id;
                 if (tags.Contains("war"))
-                    return w.Sites.FirstOfTypes(rid,
-                        SiteType.HillFort, SiteType.WatchPost, SiteType.RiverFord)?.Id;
+                    return Stronghold(w, rid);
                 return null;
+            case "war":      // a war declared over a real front, and the battles fought there:
+            case "battle":   // anchored to the front region's stronghold (the ground it is over)
+                return Stronghold(w, rid);
             case "custom":
                 if (tags.Contains("clash") || tags.Contains("diffusion")) return null;
                 return w.Sites.FirstOfTypes(rid,

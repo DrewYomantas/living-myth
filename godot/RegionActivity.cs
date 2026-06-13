@@ -61,6 +61,7 @@ public sealed class RegionActivity
         "territory" when e.Tags.Contains("founding") => "founding",
         "territory" when e.Tags.Contains("war") => "war",
         "territory" when e.Tags.Contains("abandonment") => "abandonment",
+        "battle" => "battle",
         "custom" when e.Tags.Contains("fade") => "ways-shed",
         "custom" => "ways-sworn",
         _ => e.Type,

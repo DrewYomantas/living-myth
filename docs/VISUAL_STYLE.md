@@ -55,7 +55,8 @@ a panel. **Forbidden until modeled:** resource counts with deltas, "recent beats
 unmodeled daily life (trained with the guard, spoke at the hearth), attitude chips
 (devout/steadfast as *checkboxes* — devout exists only as a custom), trade routes,
 watcher posts, sites, omen intensity, mechanical effect labels ("+10% loyalty",
-"chance of secession"), battle/drought place marks (no battle/drought events exist).
+"chance of secession"), drought place marks (no drought events exist; battle marks
+SHIPPED 2026-06-13 — battle events now carry a real front anchor).
 
 ### Reference interpretation — honest / aspirational / forbidden
 
@@ -411,6 +412,7 @@ As built, against what's honestly anchored today:
 | territory seized in war | scorch + snapped banner pole (`✕`) |
 | territory abandonment (extinct people) | cairn (`∴`) |
 | custom born / faded / clash / diffusion | culture ribbon (`❧`, violet) |
+| **battle** (Battle Sites V1, 2026-06-13) | **crossed swords (`⚔`, ember)** — full-length crossed blades at the front, brighter and pole-free so it reads apart from the war scorch |
 | rumor | **no mark by design** — gossip is social, not a physical scar |
 
 Constraints honored: marks age/fade deterministically by sim-year (no RNG, no wall
@@ -420,9 +422,12 @@ capped at 4 per region (the oldest yields), drawn beneath place markers and labe
 the land" section lists the real event behind every mark as a catch-up link, and says
 "unmarked" honestly when nothing recorded has scarred a place.
 
-Deferred to the event-anchoring **sim contract** (PROJECT_STATE.md): battle scars at
-the battlefield, prophecy omens, plenty/famine land mood — none of those events carry
-a `RegionId` yet, so they may not mark. (Murder/death cairns shipped 2026-06-11 as
+Battle scars at the front **SHIPPED** (2026-06-13, Battle Sites V1): the `battle` event
+carries a real `RegionId` (the war's front) + `SiteId` (its stronghold), so it marks like
+any anchored event — crossed swords, drawn from the same `MapView.MarkKind` channel.
+Still deferred to the event-anchoring **sim contract** (PROJECT_STATE.md): prophecy omens,
+plenty/famine land mood (the per-region economy half) — none of those events carry a
+`RegionId` yet, so they may not mark. (Murder/death cairns shipped 2026-06-11 as
 **memorial cairns** on the separate home-memory channel — see below.)
 
 ### Memorial cairns — SHIPPED (2026-06-11, viewer-only, Place Memory V2 first slice)

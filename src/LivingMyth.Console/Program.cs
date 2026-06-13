@@ -829,6 +829,7 @@ void SitesCmd(int years)
     Console.WriteLine($"Sites gate ({years} yrs): deterministic terrain-honest sites, anchoring");
     Console.WriteLine("conventions hold event-by-event (SiteAnchors.Expected), replay beats honest.");
     int failures = 0;
+    int suiteBattles = 0, suiteBattlesSited = 0;
 
     foreach (int seed in new[] { 1, 18, 42, 7 })
     {
@@ -907,6 +908,19 @@ void SitesCmd(int years)
             }
         }
 
+        // Battle Sites V1: war/battle events anchor to the front's stronghold; battle deaths
+        // stay home-remembered, never claiming the battle's ground (the channels never mix).
+        int battles = w.Chronicle.Events.Count(e => e.Type == "battle");
+        int battlesSited = w.Chronicle.Events.Count(e => e.Type == "battle" && e.SiteId is not null);
+        suiteBattles += battles; suiteBattlesSited += battlesSited;
+        foreach (var e in w.Chronicle.Events.Where(e => e.Type == "battle"))
+        {
+            if (e.HomeRegionId is not null)
+            { bad.Add($"battle #{e.Id} carries a home anchor (battles are placed, not remembered)"); break; }
+            if (e.SiteId is not null && e.RegionId is null)
+            { bad.Add($"battle #{e.Id} has a site but no region"); break; }
+        }
+
         // Replay beats: honest and deterministic. Walk the most-caused event's chain.
         var target = w.Chronicle.Events.LastOrDefault(e => e.Causes.Count > 0);
         if (target is not null)
@@ -936,11 +950,17 @@ void SitesCmd(int years)
         var typeCounts = new SortedDictionary<string, int>(StringComparer.Ordinal);
         foreach (var s in sites.All)
             typeCounts[SiteIndex.TypeLabel(s.Type)] = typeCounts.GetValueOrDefault(SiteIndex.TypeLabel(s.Type)) + 1;
-        Console.WriteLine($"  seed {seed,3}: {(bad.Count == 0 ? "OK" : "FAIL")}  {sites.All.Count} sites over {w.Regions.Count} regions ({min}-{max}/region) · {anchored} site-anchored events");
+        Console.WriteLine($"  seed {seed,3}: {(bad.Count == 0 ? "OK" : "FAIL")}  {sites.All.Count} sites over {w.Regions.Count} regions ({min}-{max}/region) · {anchored} site-anchored events · {battles} battles ({battlesSited} sited)");
         Console.WriteLine($"           {string.Join(", ", typeCounts.Select(kv => $"{kv.Key} {kv.Value}"))}");
         foreach (var b in bad.Take(5)) Console.WriteLine($"           {b}");
         if (bad.Count > 0) failures++;
     }
+
+    // Non-vacuous: the battle convention must actually have been exercised across the suite,
+    // and at least one battle must have anchored to a real stronghold site.
+    Console.WriteLine($"  battles across the suite: {suiteBattles} ({suiteBattlesSited} site-anchored)");
+    if (suiteBattles == 0) { Console.WriteLine("           no battles fought — the war engine recorded none"); failures++; }
+    if (suiteBattlesSited == 0) { Console.WriteLine("           no battle ever anchored to a site (convention vacuous?)"); failures++; }
 
     Console.WriteLine(failures == 0 ? "\nSITES CONTRACT HOLDS." : $"\n{failures} CHECK(S) BROKE THE CONTRACT.");
     Environment.Exit(failures == 0 ? 0 : 1);

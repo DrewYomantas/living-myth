@@ -1716,6 +1716,7 @@ public partial class Main : Node
         "territory" when e.Tags.Contains("war") => MapView.MarkKind.WarScar,
         "territory" when e.Tags.Contains("abandonment") => MapView.MarkKind.AbandonCairn,
         "custom" => MapView.MarkKind.CultureRibbon,
+        "battle" => MapView.MarkKind.Battle,
         _ => null,
     };
 

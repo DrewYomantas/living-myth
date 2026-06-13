@@ -124,6 +124,7 @@ public sealed partial class RememberedPlaces : Panel
     private static string FilterOf(Event e) => e.Type switch
     {
         "territory" => "war",
+        "battle" => "war",
         "custom" => "ways",
         "divine" when e.Tags.Contains("terrain") => "terrain",
         "divine" => "divine",

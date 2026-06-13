@@ -232,6 +232,10 @@ public static class StoryGrammar
         if (effect.Type == "war")
             return (ConnectorKind.Therefore, "war-from-grievance");
 
+        // A war brings armies to its front, and the fighting falls upon a place.
+        if (effect.Type == "battle" && cause.Type == "war")
+            return (ConnectorKind.Therefore, "war-to-battle");
+
         if (effect.Type == "peace" && cause.Type == "war")
             return (ConnectorKind.Therefore, "peace-made");
         if (effect.Type == "territory" && effect.Tags.Contains("war") && cause.Type == "peace")
@@ -253,6 +257,8 @@ public static class StoryGrammar
 
         if (effect.Type == "death" && cause.Type == "famine")
             return (ConnectorKind.Therefore, "famine-death");
+        if (effect.Type == "death" && cause.Type == "battle")
+            return (ConnectorKind.Therefore, "battle-death");
         if (effect.Type == "death" && cause.Type == "war")
             return (ConnectorKind.Therefore, "war-death");
         // A blessed life ends anyway: the multiplier truly leaned this very roll, so the

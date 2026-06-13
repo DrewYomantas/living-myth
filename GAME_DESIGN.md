@@ -187,7 +187,12 @@ Do not jump straight into a giant settlement sim. Build this in slices.
      grove → barrow → cairn). Everything else stays null; life events never anchor. Picks draw
      zero Rng (immutable sites, type-priority, lowest id), so the verify baseline did not move.
    - The `sites` gate now PROVES the contract event-by-event (was: asserted the field absent).
-   - Still deferred: battle sites (war casualties anchor nowhere — needs a sim battle event),
+   - **Battle sites SHIPPED** (2026-06-13, Theater of War — Battle Sites V1): war casualties now
+     happen at recorded `battle` events anchored to the war's front + its stronghold (the
+     convention table extended to `war`/`battle`). Battles wrap the war's existing casualty rolls
+     (zero new Rng), so the baseline moved by exactly the battle count (894/705/574/715). Peace
+     gained faction attribution + the toll; the first place-keyed echo, The Field of Bones, fires.
+   - Still deferred: per-region economy (famine/plenty anchored to the land — the paired half),
      rumor/trade place anchors (no honest rule), person↔site home anchoring.
 
 5. **Local memory slice** — ◐ FIRST HALF SHIPPED (2026-06-12, Site-Anchored Memory V1).

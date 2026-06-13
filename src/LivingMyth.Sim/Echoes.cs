@@ -327,6 +327,31 @@ public static class Echoes
         return echoes;
     }
 
+    /// <summary>A single modeled place that armies returned to again and again — three or more
+    /// battles anchored to ONE site, across the wars of the age. The first echo keyed on a
+    /// place (Event.SiteId), the chronicle remembering ground soaked by repeated war.</summary>
+    public static List<Echo> DetectFieldOfBones(World world)
+    {
+        var bySite = new Dictionary<int, List<Event>>();
+        foreach (var e in world.Chronicle.Events)
+            if (e.Type == "battle" && e.SiteId is int sid)
+            {
+                if (!bySite.TryGetValue(sid, out var list)) { list = new(); bySite[sid] = list; }
+                list.Add(e);
+            }
+        var echoes = new List<Echo>();
+        foreach (var sid in bySite.Keys.OrderBy(k => k))
+        {
+            var battles = bySite[sid];
+            if (battles.Count < 3) continue;
+            var span = (battles[0].Year, battles[^1].Year);
+            string name = world.Sites.Get(sid).Name;
+            string label = $"{name} saw {battles.Count} battles {SpanPhrase(span.Item1, span.Item2)} — a field of bones.";
+            echoes.Add(new Echo("The Field of Bones", label, battles.Select(e => e.Id).ToList(), span));
+        }
+        return echoes;
+    }
+
     public static List<Echo> DetectAll(World world)
     {
         var echoes = new List<Echo>();
@@ -343,6 +368,7 @@ public static class Echoes
         echoes.AddRange(DetectVanishedWay(world));
         echoes.AddRange(DetectBlackenedName(world));
         echoes.AddRange(DetectRumorWar(world));
+        echoes.AddRange(DetectFieldOfBones(world));
 
         var seen = new HashSet<(string, string)>();
         var unique = new List<Echo>();

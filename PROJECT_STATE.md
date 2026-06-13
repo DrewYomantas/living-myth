@@ -294,14 +294,57 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       ⟲ retelling stepped 1→10 with the focal seizure pinned at Morburgh, unanchored schism beats
       staying pinless, Remembered Places war filter, the Morburgh Site Card "known for: fought
       over 2 times; a people's first hold was raised here".
-- [ ] Later — battle sites and per-region economy (add events/RNG and move the verify baseline;
-      extend place memory to battles/famine, let war's-peace / famine's-end close chapters);
-      person↔site anchoring (a home site, not just a home region); a fresh-world/new-seed
-      affordance (today: delete `user://world_seed{N}.json`); relationship constellation; local
-      site-scale view; memorial tableau upgrade; visual/UX pass (surface culture + gossip in the
-      viewer); echo packs; timeline scrubbing; followed-faith audit. ← NEXT
+- [x] Theater of War — Battle Sites V1 (2026-06-13, sim + read-models + viewer + gate; the
+      first DELIBERATE baseline move since M8): war stopped being abstract yearly attrition and
+      became battles fought at real places. A new `battle` event is recorded the first time
+      blood is drawn in a war-year (lazy — a standoff year records none), anchored to the war's
+      **front** (a real border region World resolves deterministically) and, when one stands
+      there, its **stronghold** site (hill fort → watch post → river ford) via the ONE authored
+      convention table (`SiteAnchors.Expected`, now covering `war`/`battle` alongside
+      territory+war). War casualties cause-link to the battle ("dies in the fighting"); the war
+      declaration is anchored to its front and both events carry their peoples' leaders, so the
+      peace event finally carries faction attribution **and the toll** ("After 2 battles and 3
+      souls fallen, … make peace") — closing the chapter-closing gap the recaps noted. **The
+      determinism keystone:** battles WRAP the war's existing casualty rolls — `FrontRegion` and
+      the battle record draw ZERO Rng, so the stream stays byte-identical and population balance
+      is provably preserved; `verify` moved by EXACTLY the battle-event count (884/699/567/706 →
+      **894/705/574/715**, i.e. +10/+6/+7/+9 battles per seed at 120 yr). New showcase echo **The
+      Field of Bones** — the first echo keyed on a place (`Event.SiteId`): a single site that saw
+      ≥3 battles across the wars of the age. Authored grammar rules `war-to-battle` and
+      `battle-death` (full coverage, no generic fallback); Scoring weight `battle`=50; battles are
+      NOT a turning-point kind by design (only the war/peace/land pivots are — a far-reaching
+      battle surfaces via the existing ≥4-consequence fallback), so `Replay`/the replay gate were
+      untouched. Battle deaths stay home-remembered (the four anchor channels never mix). Viewer:
+      crossed-swords battle scar (Place Memory), battle events in Remembered Places' war filter +
+      the Site Card "known for" ("N battles were fought here"), catch-up connectors for the new
+      edges; war-pivots now pin the map at their front (war events gained RegionId+SiteId). The
+      `sites` gate rewritten to PROVE the battle convention non-vacuously (32 battles / 22
+      site-anchored across the suite). All EIGHT gates green; Godot build clean. Full Battle Sites
+      contract below ("Battle Sites V1 — the battle contract").
+- [ ] Later — **per-region economy** (the paired half: famine/plenty become a region's harvest so
+      they anchor to the land that starved, letting famine's-end close chapters — add RNG, moves
+      the baseline); person↔site anchoring (a home site, not just a home region); a fresh-world/
+      new-seed affordance (today: delete `user://world_seed{N}.json`); relationship constellation;
+      local site-scale view; memorial tableau upgrade; visual/UX pass (surface culture + gossip in
+      the viewer); echo packs; timeline scrubbing; followed-faith audit. ← NEXT
 
 ## Session log
+- [2026-06-13] Session: Theater of War — Battle Sites V1 (lead dev + recon/viewer/review
+  subagent team). The first deliberate baseline move since M8, executed as a zero-new-Rng
+  additive slice: `World.RecordBattle` wraps the existing war casualty rolls into a lazily
+  recorded `battle` event anchored to the war's deterministic `FrontRegion` and its stronghold
+  (`SiteAnchors` extended with war/battle → stronghold; `FrontRegion`/`WarLeaders`/`PeaceText`
+  helpers added). War declarations anchor to the front and carry leaders; peace carries leaders
+  + the toll (chapter-closing gap closed). Read-models: StoryGrammar `war-to-battle` +
+  `battle-death` rules; Scoring `battle`=50 / tag +10; Echoes **The Field of Bones** (first
+  place-keyed echo). Gates: `verify` re-baselined 894/705/574/715 (battles draw no Rng — the
+  delta IS the battle count, balance preserved); `sites` gate rewritten to PROVE battle anchoring
+  non-vacuously (32 battles / 22 sited across the suite); all eight green (verify/homes/story/
+  canon/divine/save/sites/replay). Viewer (subagent, per the recon map): crossed-swords mark,
+  Remembered Places war filter, Site Card "known for", catch-up connectors; war-pivots now pin
+  the front. Field of Bones confirmed firing on a long run ("the Bracken Fastness saw 3 battles
+  over 25 years"). Determinism note: battles are deliberately NOT a turning-point kind (war/peace/
+  land pivots only), so Replay + the replay gate were untouched.
 - [2026-06-12] Session: Chronicle Replay + Site-Anchored Memory V1 (five commits). (1) Replay
   read-model + gate: `Event.SiteId` shipped through the ONE authored convention table
   (`SiteAnchors.Expected` — founding/abandonment→seat, war→stronghold, ways→sacred site;
@@ -646,9 +689,9 @@ The audit's value is the contract map below — what each blocked category waits
 | death (age/illness/famine/curse/war) | — | no | no | the person has no location; war deaths additionally have no battlefield → `Person.HomeRegionId` + battle-site contract |
 | murder (ambition/revenge/persecution/honor) | — | no | no | killer and victim are unplaced → `Person.HomeRegionId` |
 | succession / leadership | — | no | no | no seat of power is modeled → seat-of-power contract |
-| war declared | — | no | no | war is faction-pair scoped; no front or mustering ground exists |
-| battle / skirmish / raid | not modeled | n/a | n/a | war yields abstract yearly casualties, no battle events; a battle-site contract would *create* events (moves the baseline — deliberate future milestone) |
-| peace | — | no | no | no treaty site; peace also carries no faction ids (separate known gap) |
+| war declared | ✅ the front (Battle Sites V1) | yes (a real border region) | shipped (2026-06-13) | `FrontRegion` resolves a border region deterministically; the war anchors there + its stronghold |
+| battle / skirmish / raid | ✅ the front + its stronghold (Battle Sites V1) | yes | shipped (2026-06-13) | the `battle` event wraps the war's existing casualty rolls (zero new Rng) and anchors to the front's stronghold; the baseline moved by exactly the battle count |
+| peace | — (placeless by design) | n/a | faction ids shipped (2026-06-13) | no treaty site is modeled, so peace stays placeless; it now carries both peoples' leaders + the war's toll (the chapter-closing gap, closed) |
 | famine | — | no | no | prosperity is per-*faction*, not per-region → per-region economy contract |
 | boom / plenty | — | no | no | same as famine |
 | drought | not modeled | n/a | n/a | no drought system exists |
@@ -769,6 +812,45 @@ always lies inside that region. Picks are immutable-site, type-priority, lowest-
 Rng**, so adding the field did not move the verify baseline (held EXACTLY 884/699/567/706;
 6–14 site-anchored events/seed over 120 yrs). The `sites` gate proves SiteId equals the
 convention table for EVERY event (the old absence-assertion, inverted into a presence proof).
+
+## Battle Sites V1 — the battle contract (binding, shipped 2026-06-13)
+
+War is no longer abstract yearly attrition: the fighting of a war is recorded as **battles at
+real places**, and the baseline moved deliberately for the first time since M8.
+
+- **The front.** `World.FrontRegion(fa, fb)` resolves the border region a war is fought over: a
+  region held by one combatant whose land touches the other's, preferring one carrying a
+  stronghold (hill fort → watch post → river ford — the defensible ground), then lowest id. Null
+  when the two hold no adjacent land — the war has no fixed front and its battles are placeless
+  raids, honestly. It is a pure read over current control + the fixed adjacency graph: **zero Rng.**
+- **The battle event.** In `ProcessWars`, a `battle` event is recorded LAZILY — the first time
+  blood is drawn in a war-year (so a standoff year records none; the chronicle never invents a
+  fight that did not happen). It anchors to the front (RegionId) and its stronghold (SiteId, via
+  `SiteAnchors.Expected` extended to cover `war`/`battle`), names both peoples' leaders, and is
+  caused by the war's declaration. The war's casualties — the **same `Rng.RandInt(0,2)` + `Pick`
+  rolls the war already made** — now cause-link to the battle ("dies in the fighting"). A per-war
+  tally (battles fought, fallen) feeds the ordinal naming and the peace toll.
+- **The determinism keystone.** `FrontRegion` and `RecordBattle` draw **no Rng**, so the stream
+  stays byte-identical and population balance is provably preserved. `verify` moved by EXACTLY
+  the battle-event count: **884/699/567/706 → 894/705/574/715** (+10/+6/+7/+9 battles per seed at
+  120 yr). The `sites` gate proves this non-vacuously (32 battles / 22 site-anchored across the
+  suite) — the same discipline that let `Event.SiteId` ship without moving the baseline.
+- **War + peace framing.** The war declaration now anchors to its front (RegionId+SiteId) and
+  carries leaders, so war-pivots pin the map. Peace carries both leaders + the toll ("After 2
+  battles and 3 souls fallen, … make peace, though the grudge lingers") — the faction
+  attribution the recaps needed to close a chapter on a war's end. Peace stays **placeless** (no
+  treaty site is modeled).
+- **Anchor channels still never mix.** A battle is PLACED (SiteId/RegionId on the front); its
+  dead are REMEMBERED at home (the death events keep HomeRegionId, never the battle's ground).
+  Battles never carry HomeRegionId; war/battle SiteId is never set without RegionId.
+- **Not a turning point.** Battles are deliberately NOT a turning-point kind (only war/peace/land
+  pivots are) — a far-reaching battle still surfaces through the existing ≥4-consequence
+  fallback, so `Replay.TurningPointKind` and the replay gate were untouched.
+- **Echo.** `Echoes.DetectFieldOfBones` — the first echo keyed on a place (`Event.SiteId`): a
+  single site that saw ≥3 battles across the wars of the age ("a field of bones").
+- **Still deferred:** per-region economy (famine/plenty as a region's harvest, so they anchor to
+  the land that starved and famine's-end can close a chapter) — the paired half, baseline-moving
+  with real new RNG, its own milestone.
 
 ## Chronicle Replay V2 — the replay contract (binding, shipped 2026-06-12)
 

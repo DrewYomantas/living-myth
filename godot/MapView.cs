@@ -77,7 +77,7 @@ public partial class MapView : Control
     // Place memory (V1): real anchored events leave subtle marks on the land. Only events that
     // truly carry Event.RegionId may mark — Main classifies the stream and feeds marks in here.
     // Capped per region (the oldest yields); alpha ages by sim year, deterministically — no RNG.
-    public enum MarkKind { FoundingStone, WarScar, AbandonCairn, CultureRibbon }
+    public enum MarkKind { FoundingStone, WarScar, AbandonCairn, CultureRibbon, Battle }
     private readonly Dictionary<int, List<(MarkKind kind, int year, int eventId)>> _placeMarks = new();
     private const int MarksPerRegion = 4;
     private static readonly float[] MarkAngles = { 3.6f, 5.5f, 1.1f, 2.4f };   // fixed slots ringing the centre
@@ -659,6 +659,17 @@ public partial class MapView : Control
                 DrawLine(c + new Vector2(0, s * 0.4f), c + new Vector2(s * 0.3f, -s * 0.6f),
                          MarkInk with { A = a * 0.8f }, Mathf.Max(1f, s * 0.1f));
                 break;
+            case MarkKind.Battle:          // crossed swords where armies clashed — two blades,
+            {                              // tips up, pommels at the hilts (distinct from the war scorch)
+                var hiltL = c + new Vector2(-s * 0.42f, s * 0.5f);
+                var hiltR = c + new Vector2(s * 0.42f, s * 0.5f);
+                float bw = Mathf.Max(1.2f, s * 0.13f);
+                DrawLine(hiltL, c + new Vector2(s * 0.42f, -s * 0.5f), Ui.Ember with { A = a }, bw);   // blade up-right
+                DrawLine(hiltR, c + new Vector2(-s * 0.42f, -s * 0.5f), Ui.Ember with { A = a }, bw);  // blade up-left
+                DrawCircle(hiltL, Mathf.Max(1.3f, s * 0.13f), MarkInk with { A = a });                 // pommels mark
+                DrawCircle(hiltR, Mathf.Max(1.3f, s * 0.13f), MarkInk with { A = a });                 // the hilts
+                break;
+            }
             case MarkKind.AbandonCairn:    // stones stacked over holds the wild crept back across
                 DrawCircle(c + new Vector2(-s * 0.22f, s * 0.1f), s * 0.2f, StoneMark with { A = a });
                 DrawCircle(c + new Vector2(s * 0.22f, s * 0.1f), s * 0.2f, StoneMark with { A = a });
