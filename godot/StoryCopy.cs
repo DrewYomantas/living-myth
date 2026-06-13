@@ -70,6 +70,55 @@ public static class StoryCopy
     private static string SubjectName(OriginInfo origin, World world, string fallback)
         => origin.SubjectPersonId is int pid && world.People.TryGetValue(pid, out var p) ? p.Name : fallback;
 
+    // ---- anchor language (binding — docs/VISUAL_STYLE.md "Anchor language") ----
+    // The three channels never blur: "at {site}" ONLY for a true Event.SiteId, "in {region}"
+    // for RegionId, "remembered in {region}" for HomeRegionId (a memory, never a location),
+    // and an honest nothing when the chronicle does not place an event.
+    public static string? AnchorPhrase(World w, Event e)
+    {
+        if (e.SiteId is int sid && e.RegionId is int srid)
+            return $"at {w.Sites.Get(sid).Name}, in {w.RegionName(srid)}";
+        if (e.RegionId is int rid) return $"in {w.RegionName(rid)}";
+        if (e.HomeRegionId is int hid) return $"remembered in {w.RegionName(hid)}";
+        return null;
+    }
+
+    // The replay rail's status words — one honest label per ReplayBeat.Status.
+    public static string StatusLabel(string status) => status switch
+    {
+        "site-anchored" => "a true place",
+        "region-only" => "a land, no single place",
+        "memory-only" => "remembered at a home — not where it happened",
+        _ => "unplaced — the chronicle does not say where",
+    };
+
+    // ---- turning points (the authored kinds from Replay.TurningPointKind) ----
+    public static string TurningPointLabel(string kind) => kind switch
+    {
+        "war-pivot" => "a war begins",
+        "peace-pivot" => "a peace is made",
+        "land-lost" => "land changes hands",
+        "land-abandoned" => "a people's holds fall silent",
+        "violent-succession" => "a murdered seat passes on",
+        "faith-torn" => "a faith is torn",
+        "faith-proclaimed" => "a faith is proclaimed",
+        "ways-hardened" => "a people's ways harden",
+        "divine-influenced" => "your hand is in this",
+        "far-reaching" => "its consequences run far",
+        _ => "a turning point",
+    };
+
+    // ---- site memory: the honest "known for" words (real recorded counts only) ----
+    public static string KnownForPhrase(string kind, int count) => kind switch
+    {
+        "founding" => "a people's first hold was raised here",
+        "war" => count > 1 ? $"fought over {count} times" : "fought over once",
+        "abandonment" => "holds fell silent here",
+        "ways-sworn" => count > 1 ? $"ways were sworn here {count} times" : "ways were sworn here",
+        "ways-shed" => "old ways were shed here",
+        _ => count > 1 ? $"{count} recorded {kind}s" : $"a recorded {kind}",
+    };
+
     // ---- player canon labels (the only five — docs/VISUAL_STYLE.md) ----
     public static string CanonLabel(CanonNoteType t) => t switch
     {

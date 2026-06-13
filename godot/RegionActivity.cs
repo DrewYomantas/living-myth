@@ -18,6 +18,15 @@ public sealed class RegionActivity
     private readonly Dictionary<int, List<int>> _homeRecent = new();
     private readonly Dictionary<int, int> _homeTotal = new();
 
+    // Site-memory channel (Event.SiteId, the anchoring conventions V1): events that truly
+    // belong to one modeled place. A site-anchored event is ALSO in its region's channel —
+    // the site channel narrows, never replaces. Kind tallies feed the honest "known for"
+    // line: counts of real recorded events only, never flavor.
+    private const int KeepPerSite = 6;
+    private readonly Dictionary<int, List<int>> _siteRecent = new();
+    private readonly Dictionary<int, int> _siteTotal = new();
+    private readonly Dictionary<int, Dictionary<string, int>> _siteKinds = new();
+
     public void Observe(Event e)
     {
         if (e.RegionId is int rid)
@@ -34,7 +43,28 @@ public sealed class RegionActivity
             list.Add(e.Id);
             if (list.Count > KeepPerRegion) list.RemoveAt(0);
         }
+        if (e.SiteId is int sid)
+        {
+            _siteTotal[sid] = _siteTotal.GetValueOrDefault(sid) + 1;
+            if (!_siteRecent.TryGetValue(sid, out var list)) { list = new(); _siteRecent[sid] = list; }
+            list.Add(e.Id);
+            if (list.Count > KeepPerSite) list.RemoveAt(0);
+            if (!_siteKinds.TryGetValue(sid, out var kinds)) { kinds = new(); _siteKinds[sid] = kinds; }
+            string kind = KindKey(e);
+            kinds[kind] = kinds.GetValueOrDefault(kind) + 1;
+        }
     }
+
+    // The authored kind buckets behind "known for" — derived from recorded type+tags only.
+    private static string KindKey(Event e) => e.Type switch
+    {
+        "territory" when e.Tags.Contains("founding") => "founding",
+        "territory" when e.Tags.Contains("war") => "war",
+        "territory" when e.Tags.Contains("abandonment") => "abandonment",
+        "custom" when e.Tags.Contains("fade") => "ways-shed",
+        "custom" => "ways-sworn",
+        _ => e.Type,
+    };
 
     public int TotalFor(int regionId) => _total.GetValueOrDefault(regionId);
 
@@ -45,4 +75,14 @@ public sealed class RegionActivity
 
     public IReadOnlyList<int> HomeRecentFor(int regionId)
         => _homeRecent.TryGetValue(regionId, out var list) ? list : System.Array.Empty<int>();
+
+    public int SiteTotalFor(int siteId) => _siteTotal.GetValueOrDefault(siteId);
+
+    public IReadOnlyList<int> SiteRecentFor(int siteId)
+        => _siteRecent.TryGetValue(siteId, out var list) ? list : System.Array.Empty<int>();
+
+    /// <summary>Real recorded-event counts per authored kind bucket — the "known for" data.</summary>
+    public IReadOnlyDictionary<string, int> SiteKindsFor(int siteId)
+        => _siteKinds.TryGetValue(siteId, out var kinds) ? kinds : Empty;
+    private static readonly Dictionary<string, int> Empty = new();
 }

@@ -64,6 +64,20 @@ public partial class Main : Node
     private Button _forestBtn = null!;
     private Button _springBtn = null!;
     private FateLedger _fateLedger = null!;
+    private RememberedPlaces _places = null!;
+    // Chronicle Replay (viewer-only over Replay.ChainFor): the focal event's cause chain
+    // retold on the dimmed atlas. Beats with a true SiteId/RegionId get numbered map marks
+    // along real cause edges; memory-only and unanchored beats live ONLY in the rail and
+    // the beat card — never a fake pin. Entering replay pauses time (Chronicle Mode) and
+    // restores the pace it took.
+    private ReplayChain? _replayChain;
+    private int _replayBeat;                       // index into _replayChain.Beats
+    private bool _replayWasRunning;
+    private Panel _replayPanel = null!;
+    private RichTextLabel _replayBody = null!;
+    private Label _replayCount = null!;
+    private HSlider _replaySlider = null!;
+    private bool _replaySliderGuard;               // suppress feedback while we set the slider
     // Consequence index for the ledger: events whose causes name a divine act, maintained
     // incrementally in StreamNewHeadlines — O(new events), never a history scan.
     private readonly HashSet<int> _divineSources = new();
@@ -456,7 +470,12 @@ public partial class Main : Node
 
         var root = _root;
 
-        _map = new MapView { PersonPicked = OnPersonPicked, SoulPicked = OnSoulGlimpse, FactionPicked = OnFactionPicked, RegionPicked = OnRegionPicked, SitePicked = OnSitePicked };
+        _map = new MapView
+        {
+            PersonPicked = OnPersonPicked, SoulPicked = OnSoulGlimpse, FactionPicked = OnFactionPicked,
+            RegionPicked = OnRegionPicked, SitePicked = OnSitePicked,
+            ReplayBeatPicked = OnReplayBeatPicked, TurningPicked = OnTurningPicked,
+        };
         root.AddChild(_map);
         _map.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         _map.OffsetRight = -FeedWidth;
@@ -469,6 +488,8 @@ public partial class Main : Node
         BuildThreadCard(root);
         BuildCatchup(root);
         BuildFateLedger(root);
+        BuildRememberedPlaces(root);
+        BuildReplayPanel(root);
         BuildGlimpse(root);
         BuildRecap(root);
         BuildGuardCard(root);   // last: the guard card (and its return chip) sits above everything
@@ -845,9 +866,22 @@ public partial class Main : Node
         {
             if (_fateLedger.Visible) { _fateLedger.Visible = false; return; }
             _catchupPanel.Visible = false;   // one reading sheet at a time (panel economy)
+            _places.Visible = false;
+            if (_replayChain is not null) CloseReplay();
             _fateLedger.Open();
         };
         fateRow.AddChild(ledgerBtn);
+        var placesBtn = new Button { Text = "❖ places", TooltipText = "Remembered Places — every place the record has truly touched, anchors named honestly" };
+        Ui.StyleButton(placesBtn);
+        placesBtn.Pressed += () =>
+        {
+            if (_places.Visible) { _places.Visible = false; return; }
+            _catchupPanel.Visible = false;   // one reading sheet at a time (panel economy)
+            _fateLedger.Visible = false;
+            if (_replayChain is not null) CloseReplay();
+            _places.Open();
+        };
+        fateRow.AddChild(placesBtn);
 
         // --- Chronicle group: chattiness threshold ---
         var chronRow = DockGroup(hb, "Chronicle");
@@ -1035,6 +1069,235 @@ public partial class Main : Node
             link => OnInspectorLink(link));
     }
 
+    private void BuildRememberedPlaces(Control root)
+    {
+        _places = new RememberedPlaces();
+        root.AddChild(_places);
+        _places.Setup(() => _world, _regionActivity, link => OnInspectorLink(link));
+    }
+
+    // ----------------------------------------------------- chronicle replay (viewer)
+
+    // The beat card + scrubber: a compact parchment strip over the map's lower left while
+    // the replay path owns the stage. The rail stays the catch-up sheet (numbered, with
+    // the current beat marked) — unplaced beats live there honestly, never on the map.
+    private void BuildReplayPanel(Control root)
+    {
+        _replayPanel = new Panel { Visible = false };
+        root.AddChild(_replayPanel);
+        _replayPanel.AnchorLeft = 0; _replayPanel.AnchorRight = 0;
+        _replayPanel.AnchorTop = 1; _replayPanel.AnchorBottom = 1;
+        _replayPanel.OffsetLeft = 8; _replayPanel.OffsetRight = 396;
+        _replayPanel.OffsetTop = -(BottomH + 218); _replayPanel.OffsetBottom = -(BottomH + 8);
+        var box = Ui.PanelBox();
+        box.BorderColor = Ui.Gold;
+        _replayPanel.AddThemeStyleboxOverride("panel", box);
+
+        var margin = new MarginContainer();
+        margin.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        foreach (var s in new[] { "left", "right", "top", "bottom" })
+            margin.AddThemeConstantOverride($"margin_{s}", 12);
+        _replayPanel.AddChild(margin);
+
+        var vb = new VBoxContainer();
+        vb.AddThemeConstantOverride("separation", 6);
+        margin.AddChild(vb);
+
+        var hdr = new HBoxContainer();
+        hdr.AddThemeConstantOverride("separation", 8);
+        vb.AddChild(hdr);
+        var cap = Ui.SectionLabel("⟲ chronicle replay");
+        cap.AddThemeColorOverride("font_color", Ui.Gold);
+        cap.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        hdr.AddChild(cap);
+        _replayCount = new Label();
+        _replayCount.AddThemeFontSizeOverride("font_size", 12);
+        _replayCount.AddThemeColorOverride("font_color", Ui.FadedSub);
+        hdr.AddChild(_replayCount);
+        var close = new Button { Text = "✕", CustomMinimumSize = new Vector2(24, 24) };
+        Ui.StyleButton(close);
+        close.Pressed += CloseReplay;
+        hdr.AddChild(close);
+
+        var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
+        vb.AddChild(scroll);
+        _replayBody = new RichTextLabel
+        {
+            BbcodeEnabled = true,
+            FitContent = true,
+            ScrollActive = false,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(350, 0),
+        };
+        _replayBody.AddThemeFontSizeOverride("normal_font_size", 13);
+        _replayBody.AddThemeColorOverride("default_color", Ui.Ink);
+        _replayBody.AddThemeFontOverride("bold_font", Ui.SerifBold);
+        _replayBody.MetaClicked += meta => OnInspectorLink(meta.AsString());
+        scroll.AddChild(_replayBody);
+
+        var controls = new HBoxContainer();
+        controls.AddThemeConstantOverride("separation", 6);
+        vb.AddChild(controls);
+        var prev = new Button { Text = "◀", CustomMinimumSize = new Vector2(34, 0), TooltipText = "Step back a beat" };
+        Ui.StyleButton(prev);
+        prev.Pressed += () => StepReplay(-1);
+        controls.AddChild(prev);
+        _replaySlider = new HSlider
+        {
+            MinValue = 1, MaxValue = 2, Step = 1,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+        };
+        _replaySlider.ValueChanged += v =>
+        {
+            if (_replaySliderGuard || _replayChain is null) return;
+            _replayBeat = Mathf.Clamp((int)v - 1, 0, _replayChain.Beats.Count - 1);
+            RenderReplayBeat();
+        };
+        controls.AddChild(_replaySlider);
+        var next = new Button { Text = "▶", CustomMinimumSize = new Vector2(34, 0), TooltipText = "Step forward a beat" };
+        Ui.StyleButton(next);
+        next.Pressed += () => StepReplay(+1);
+        controls.AddChild(next);
+    }
+
+    private void StepReplay(int dir)
+    {
+        if (_replayChain is null) return;
+        _replayBeat = Mathf.Clamp(_replayBeat + dir, 0, _replayChain.Beats.Count - 1);
+        RenderReplayBeat();
+    }
+
+    // A numbered map mark was clicked — scrub straight to that beat (numbers are 1-based
+    // rail positions, so the mapping back is direct).
+    private void OnReplayBeatPicked(int number)
+    {
+        if (_replayChain is null) return;
+        _replayBeat = Mathf.Clamp(number - 1, 0, _replayChain.Beats.Count - 1);
+        RenderReplayBeat();
+    }
+
+    // A turning-point mark was clicked — open the pivot's thread (the header names the
+    // turning point and offers the replay).
+    private void OnTurningPicked(int eventId) => OpenCatchup(eventId);
+
+    private void OpenReplay(int eventId)
+    {
+        _replayChain = Replay.ChainFor(_world, eventId);
+        _replayBeat = 0;                          // start at the chain's origin, retell forward
+        _replayWasRunning = _running;
+        _running = false;                         // Chronicle Mode: the retelling owns time
+        RefreshTimeBar();
+        BuildReplayMarks();
+        _replayPanel.Visible = true;
+        RenderReplayBeat();
+    }
+
+    private void CloseReplay()
+    {
+        _replayPanel.Visible = false;
+        _replayChain = null;
+        _map.ReplayActive = false;
+        _map.ReplayMarks = null;
+        _map.ReplayEdges = null;
+        _running = _replayWasRunning;
+        RefreshTimeBar();
+        if (_catchupPanel.Visible) RenderCatchup();   // clear the ► beat marker
+    }
+
+    // Build the map overlay from the chain: marks ONLY for honestly anchored beats (a true
+    // site cell, else the region's heart), numbered by full-rail position so the rail and
+    // the map agree; edges are the real recorded cause links between marked beats, the
+    // proximate-cause spine bold and every other branch faint.
+    private void BuildReplayMarks()
+    {
+        if (_replayChain is null) return;
+        var beats = _replayChain.Beats;
+        var marks = new List<MapView.ReplayMark>();
+        var markOfEvent = new System.Collections.Generic.Dictionary<int, int>();
+        for (int i = 0; i < beats.Count; i++)
+        {
+            var b = beats[i];
+            Vector2? norm = null;
+            if (b.SiteId is int sid)
+            {
+                var s = _world.Sites.Get(sid);
+                norm = new Vector2(s.Nx, s.Ny);
+            }
+            else if (b.RegionId is int rid)
+            {
+                var r = _world.Regions[rid];
+                norm = new Vector2(r.X, r.Y);
+            }
+            if (norm is not Vector2 n) continue;   // memory-only/unanchored: rail only, no pin
+            markOfEvent[b.EventId] = marks.Count;
+            marks.Add(new MapView.ReplayMark { Norm = n, Number = i + 1 });
+        }
+
+        // The spine: the proximate-cause walk back from the focal event.
+        var spine = new HashSet<int>();
+        var byEvent = new System.Collections.Generic.Dictionary<int, ReplayBeat>();
+        foreach (var b in beats) byEvent[b.EventId] = b;
+        int cur = _replayChain.FocalEventId;
+        while (byEvent.TryGetValue(cur, out var sb))
+        {
+            spine.Add(cur);
+            if (sb.CauseEventId is not int cid || !byEvent.ContainsKey(cid)) break;
+            cur = cid;
+        }
+
+        var edges = new List<(int a, int b, bool spine)>();
+        foreach (var b in beats)
+        {
+            if (b.CauseEventId is not int cause) continue;
+            if (!markOfEvent.TryGetValue(cause, out int ma) || !markOfEvent.TryGetValue(b.EventId, out int mb))
+                continue;   // an edge draws only when BOTH ends are honestly placed
+            edges.Add((ma, mb, spine.Contains(b.EventId) && spine.Contains(cause)));
+        }
+
+        _map.ReplayMarks = marks;
+        _map.ReplayEdges = edges;
+        _map.ReplayActive = true;
+    }
+
+    private void RenderReplayBeat()
+    {
+        if (_replayChain is null) return;
+        var beats = _replayChain.Beats;
+        var b = beats[_replayBeat];
+        var e = _world.Chronicle.Get(b.EventId);
+
+        _replaySliderGuard = true;
+        _replaySlider.MaxValue = beats.Count;
+        _replaySlider.Value = _replayBeat + 1;
+        _replaySliderGuard = false;
+        _replayCount.Text = $"beat {_replayBeat + 1} of {beats.Count} · Yr {beats[0].Year}–{beats[^1].Year}";
+
+        if (_map.ReplayMarks is not null)
+            foreach (var m in _map.ReplayMarks) m.Current = m.Number == _replayBeat + 1;
+
+        var sb = new StringBuilder();
+        var cls = Ui.ClassOf(e.Type);
+        // The proven connector voiced above the beat, exactly like the thread does.
+        if (_replayBeat > 0 && StoryGrammar.ProximateLink(_world, e) is ChainLink link)
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.FadedSub)}][i]{StoryCopy.ConnectorPhrase(link)}[/i][/color]");
+        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color] [color=#{Ui.Hex(cls.Color)}]{cls.Glyph}[/color] [b]{e.Text}[/b]");
+        string place = StoryCopy.AnchorPhrase(_world, e) is string ap
+            ? $"{ap} · {StoryCopy.StatusLabel(b.Status)}"
+            : StoryCopy.StatusLabel(b.Status);
+        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]{place}[/color]");
+        if (b.Status is "memory-only" or "unanchored")
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.FadedSub)}][i]this beat draws no pin — the map never claims a place the record does not[/i][/color]");
+        sb.AppendLine($"      {Link("e:" + e.Id, "open this tale's thread")}");
+        _replayBody.Text = sb.ToString();
+
+        // The lens follows the retelling onto each truly placed beat.
+        if (b.SiteId is int fsid) _map.FocusSite(fsid);
+        else if (b.RegionId is int frid) _map.FocusRegion(frid);
+
+        if (_catchupPanel.Visible) RenderCatchup();   // keep the rail's ► marker in step
+    }
+
     // One funnel for every divine act: ledger the source, surface the event immediately,
     // and honor a guard trigger if the act itself crossed it.
     private void RecordDivine(Event? ev)
@@ -1130,9 +1393,16 @@ public partial class Main : Node
         _catchupFullBtn = new Button { Text = "Full thread" };
         _catchupFullBtn.Pressed += () => { _catchupQuick = false; RenderCatchup(); };
         hb.AddChild(_catchupFullBtn);
+        var replayBtn = new Button { Text = "⟲ Replay", TooltipText = "Retell this chain on the map — anchored beats draw the path; unplaced beats stay in this rail" };
+        replayBtn.Pressed += () => { if (_catchupEventId is int eid) OpenReplay(eid); };
+        hb.AddChild(replayBtn);
         var close = new Button { Text = "✕", CustomMinimumSize = new Vector2(28, 28) };
         Ui.StyleButton(close);
-        close.Pressed += () => _catchupPanel.Visible = false;
+        close.Pressed += () =>
+        {
+            _catchupPanel.Visible = false;
+            if (_replayChain is not null) CloseReplay();   // the rail closing ends the retelling
+        };
         hb.AddChild(close);
 
         var rule = new HSeparator();
@@ -1340,6 +1610,23 @@ public partial class Main : Node
             // (Event.HomeRegionId) — remembered there, never a claim of where it happened.
             if (events[i].HomeRegionId is int hrid && IsCairnWorthy(events[i]))
                 _map.AddHomeMark(hrid, events[i].Year, events[i].Id);
+            // Turning points: the authored pivot classifier marks the map ONLY where the
+            // event truly stands (its site cell, else its land's heart) — placeless pivots
+            // never pin. Consequences aren't known at stream time, so far-reaching pivots
+            // surface later through the thread header, honestly.
+            if (Replay.TurningPointKind(_world, events[i], 0) is not null)
+            {
+                if (events[i].SiteId is int tsid)
+                {
+                    var ts = _world.Sites.Get(tsid);
+                    _map.AddTurningMark(ts.Nx, ts.Ny, events[i].Id, events[i].Year);
+                }
+                else if (events[i].RegionId is int trid)
+                {
+                    var tr = _world.Regions[trid];
+                    _map.AddTurningMark(tr.X, tr.Y, events[i].Id, events[i].Year);
+                }
+            }
         }
 
         for (int i = _lastEventCount; i < events.Count; i++)
@@ -2458,6 +2745,10 @@ public partial class Main : Node
     {
         _glimpsePanel.Visible = false;   // the glimpse z-orders above the catch-up card
         _fateLedger.Visible = false;     // one reading sheet at a time (panel economy)
+        _places.Visible = false;
+        // Retargeting the rail ends a retelling aimed at a different event — the map path
+        // and the rail must never tell two stories at once.
+        if (_replayChain is not null && _replayChain.FocalEventId != eventId) CloseReplay();
         _catchupEventId = eventId;
         _catchupQuick = true;
         _catchupPanel.Visible = true;
@@ -2477,9 +2768,34 @@ public partial class Main : Node
         // precede effects), with every proven connector attached. Card-open one-shot.
         var ann = StoryGrammar.Annotate(_world, id);
         var target = _world.Chronicle.Get(id);
+        // The chain shape (consequence rail included) — reuse the open retelling's when it
+        // is aimed at this same event, else one card-open build.
+        var chain = _replayChain?.FocalEventId == id ? _replayChain : Replay.ChainFor(_world, id);
+        int? currentBeatEvent = _replayChain?.FocalEventId == id && _replayChain.Beats.Count > _replayBeat
+            ? _replayChain.Beats[_replayBeat].EventId : null;
 
         var sb = new StringBuilder();
         sb.AppendLine($"[b]{target.Text}[/b]");
+        // A pivot announces itself: the authored turning-point kind, then what truly
+        // changed — the people named, their peoples, and the honest place.
+        if (Replay.TurningPointKind(_world, target, _consCount.GetValueOrDefault(id)) is string tpKind)
+        {
+            sb.AppendLine($"[color=#8a5d12][b]✦ TURNING POINT — {StoryCopy.TurningPointLabel(tpKind)}[/b][/color]");
+            var touched = new List<string>();
+            foreach (int pid in target.Participants.Take(3))
+                if (_world.People.TryGetValue(pid, out var tp))
+                    touched.Add($"{PersonSigils.Bb(_world, pid)} {tp.Name}");
+            var tfacs = new List<string>();
+            foreach (int pid in target.Participants)
+                if (_world.People.TryGetValue(pid, out var tp) && !tfacs.Contains(tp.FactionId))
+                    tfacs.Add(tp.FactionId);
+            if (touched.Count > 0)
+                sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]touches: {string.Join(" · ", touched)}[/color]");
+            if (tfacs.Count > 0)
+                sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]peoples: {string.Join(" · ", tfacs.Select(f => Link("f:" + f, _world.Factions[f].Name)))}[/color]");
+            if (StoryCopy.AnchorPhrase(_world, target) is string tplace)
+                sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]{tplace}[/color]");
+        }
         sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]{(_catchupQuick ? "the turning points" : "the full thread")} that led here[/color]");
         sb.AppendLine();
 
@@ -2510,9 +2826,13 @@ public partial class Main : Node
             // Hint() is a no-op for labels without a glossary entry, so every chip can ask.
             string chip = $"[color=#{Ui.Hex(cls.Color)}]{cls.Glyph} {StoryCopy.Hint(cls.Label.ToUpperInvariant(), cls.Label.ToLowerInvariant())}[/color]";
             string body = isTarget ? $"[b]{e.Text}[/b]" : e.Text;
-            string where = e.RegionId is int rid && _world.RegionName(rid) is string rn
-                ? $"  [color=#{Ui.Hex(Ui.Faded)}]· in {rn}[/color]" : "";
-            string line = $"{year}  {chip}  {body}{where}";
+            // The honest anchor: "at {site}" only for a true SiteId, "in {region}" for a
+            // land, "remembered in" for home memory — never bare guesses.
+            string where = StoryCopy.AnchorPhrase(_world, e) is string ap
+                ? $"  [color=#{Ui.Hex(Ui.Faded)}]· {ap}[/color]" : "";
+            // While a retelling runs, the rail marks the beat the map is standing on.
+            string marker = currentBeatEvent == e.Id ? "[color=#8a5d12]► [/color]" : "";
+            string line = $"{marker}{year}  {chip}  {body}{where}";
             sb.AppendLine(isTarget ? $"[bgcolor=#{Ui.Hex(Ui.RowBgWarm)}]{line}[/bgcolor]" : line);
             rendered.Add(e.Id);
             lastRendered = e.Id;
@@ -2527,6 +2847,25 @@ public partial class Main : Node
                 sb.AppendLine(cline);
             else if (isTarget && !_canon.ReadOnly && step.Origin?.Kind != OriginKind.HonestUnknown)
                 sb.AppendLine($"      {Link($"canon:note:e:{e.Id}", "✎ add a chronicler's note")}");
+        }
+
+        // What grew from this: the bounded direct-consequence rail — real recorded edges
+        // only, the connector naming each literal focal→consequence link.
+        if (chain.TotalConsequences > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine(SectionCap("What grew from this")
+                + $" [color=#{Ui.Hex(Ui.Faded)}]({chain.TotalConsequences} recorded)[/color]");
+            foreach (var cb in chain.Consequences)
+            {
+                var ce = _world.Chronicle.Get(cb.EventId);
+                var ccls = Ui.ClassOf(ce.Type);
+                string cwhere = StoryCopy.AnchorPhrase(_world, ce) is string cap2
+                    ? $"  [color=#{Ui.Hex(Ui.Faded)}]· {cap2}[/color]" : "";
+                sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {ce.Year}[/color] [color=#{Ui.Hex(ccls.Color)}]{ccls.Glyph}[/color] {Link("e:" + ce.Id, ce.Text)}{cwhere}");
+            }
+            if (chain.TotalConsequences > chain.Consequences.Count)
+                sb.AppendLine($"[color=#{Ui.Hex(Ui.FadedSub)}]…and {chain.TotalConsequences - chain.Consequences.Count} more traced to this[/color]");
         }
         _catchup.Text = sb.ToString();
     }
@@ -2929,8 +3268,12 @@ public partial class Main : Node
         if (localSites.Count == 0)
             sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]the sea claimed every cell of this land — no places stand[/color]");
         foreach (var s in localSites)
+        {
+            int stales = _regionActivity.SiteTotalFor(s.Id);
             sb.AppendLine($"{Link("s:" + s.Id, s.Name)} — {SiteIndex.TypeLabel(s.Type)}"
-                + (s.IsSeat ? $"  [color=#{Ui.Hex(Ui.Faded)}]· the seat[/color]" : ""));
+                + (s.IsSeat ? $"  [color=#{Ui.Hex(Ui.Faded)}]· the seat[/color]" : "")
+                + (stales > 0 ? $"  [color=#8a5d12]· {stales} tale{(stales == 1 ? "" : "s")}[/color]" : ""));
+        }
         sb.AppendLine();
         // The player's hand: what this place is said to be.
         if (CanonBlock($"r:{regionId}", CanonNoteType.PlaceLegend) is string legend)
@@ -2987,13 +3330,17 @@ public partial class Main : Node
         {
             var e = _world.Chronicle.Get(recent[i]);
             var cls = Ui.ClassOf(e.Type);
-            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color] [color=#{Ui.Hex(cls.Color)}]{cls.Glyph}[/color] {Link("e:" + e.Id, e.Text)}");
+            // The site suffix appears ONLY for a true Event.SiteId — the convention table's
+            // anchor, never an inference from the region.
+            string atSite = e.SiteId is int esid
+                ? $"  [color=#8a5d12]· at {Link("s:" + esid, _world.Sites.Get(esid).Name)}[/color]" : "";
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color] [color=#{Ui.Hex(cls.Color)}]{cls.Glyph}[/color] {Link("e:" + e.Id, e.Text)}{atSite}");
         }
         sb.AppendLine();
         sb.AppendLine(SectionCap("Not yet in the record"));
         sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]people are not yet site-anchored — the atlas scatters each people across their lands[/color]");
-        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]the places above are a real site layer — true positions on this land — but tales do not yet anchor to single places, only to lands[/color]");
-        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]much of history carries no place anchor yet — a followed land speaks only when tales are anchored here or lives are remembered here[/color]");
+        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]tales anchor to single places only where the record is sure — founding seats, war strongholds, sworn ways; everything else belongs to the land, said plainly[/color]");
+        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]much of history carries no place anchor at all — a followed land speaks only when tales are anchored here or lives are remembered here[/color]");
 
         _inspector.Text = sb.ToString();
         _cast.SetCollapsed(true);   // panel economy: the inspector takes the column, the cast folds to sigils
@@ -3053,24 +3400,63 @@ public partial class Main : Node
         { sb.Append(legend); sb.AppendLine(); }
         else if (!_canon.ReadOnly)
         { sb.AppendLine(Link($"canon:legend:r:{region.Id}", $"✎ set a legend for {region.Name} and its places")); sb.AppendLine(); }
-        sb.AppendLine(SectionCap("Tales at this place"));
-        var recent = _regionActivity.RecentFor(region.Id);
-        if (recent.Count == 0)
-            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]no recorded tales here yet[/color]");
-        else
+        // Site memory (anchoring conventions V1): the tales that TRULY belong to this one
+        // place — Event.SiteId, assigned only by the authored convention table.
+        int siteTotal = _regionActivity.SiteTotalFor(siteId);
+        sb.AppendLine(SectionCap("Tales at this place")
+            + (siteTotal > 0 ? $" [color=#{Ui.Hex(Ui.Faded)}]({siteTotal} recorded)[/color]" : ""));
+        var kinds = _regionActivity.SiteKindsFor(siteId);
+        if (kinds.Count > 0)
         {
-            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]the chronicle anchors tales to lands, not yet to single places — these belong to {region.Name}[/color]");
-            for (int i = recent.Count - 1; i >= 0; i--)   // newest first
+            // "Known for" from real recorded counts only — never flavor.
+            var known = kinds.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal)
+                .Take(3).Select(kv => StoryCopy.KnownForPhrase(kv.Key, kv.Value));
+            sb.AppendLine($"[color=#8a5d12]known for: {string.Join("; ", known)}[/color]");
+        }
+        var siteTales = _regionActivity.SiteRecentFor(siteId);
+        if (siteTales.Count == 0)
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]no recorded tales here yet[/color]");
+        for (int i = siteTales.Count - 1; i >= 0; i--)   // newest first
+        {
+            var e = _world.Chronicle.Get(siteTales[i]);
+            var cls = Ui.ClassOf(e.Type);
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color] [color=#{Ui.Hex(cls.Color)}]{cls.Glyph}[/color] {Link("e:" + e.Id, e.Text)}");
+        }
+        sb.AppendLine();
+        // The hand upon this land: region-targeted divine acts — said as the land's, since
+        // omens and works aim at lands, not single places.
+        var hand = _world.DivinePressures
+            .Where(p => p.TargetType == "region" && int.TryParse(p.TargetId, out int prid) && prid == region.Id)
+            .ToList();
+        if (hand.Count > 0)
+        {
+            sb.AppendLine(SectionCap("The hand upon this land"));
+            foreach (var pr in hand)
             {
-                var e = _world.Chronicle.Get(recent[i]);
+                var ae = _world.Chronicle.Get(pr.SourceEventId);
+                string glyph = pr.Kind == DivinePressureKind.Omen ? "✶" : pr.Kind == DivinePressureKind.ForestSeeded ? "✿" : "≈";
+                sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {pr.StartYear}[/color] [color=#{Ui.Hex(Ui.Violet)}]{glyph}[/color] {Link("e:" + ae.Id, ae.Text)}");
+            }
+            sb.AppendLine();
+        }
+        // The wider land's record, clearly its own: anchored to the land, not this place.
+        var regionTales = _regionActivity.RecentFor(region.Id)
+            .Where(eid => _world.Chronicle.Get(eid).SiteId != siteId).ToList();
+        if (regionTales.Count > 0)
+        {
+            sb.AppendLine(SectionCap($"Tales of {region.Name}"));
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]the land's wider record — anchored to {region.Name}, not to this single place[/color]");
+            for (int i = regionTales.Count - 1; i >= 0; i--)   // newest first
+            {
+                var e = _world.Chronicle.Get(regionTales[i]);
                 var cls = Ui.ClassOf(e.Type);
                 sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {e.Year}[/color] [color=#{Ui.Hex(cls.Color)}]{cls.Glyph}[/color] {Link("e:" + e.Id, e.Text)}");
             }
+            sb.AppendLine();
         }
-        sb.AppendLine();
         sb.AppendLine(SectionCap("Not yet in the record"));
         sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]no one dwells here by name — people are not yet site-anchored[/color]");
-        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]this place claims no population, buildings, or stores — its presence on the land is all the record holds[/color]");
+        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]this place claims no population, buildings, or stores — its presence and its anchored tales are all the record holds[/color]");
 
         _inspector.Text = sb.ToString();
         _cast.SetCollapsed(true);   // panel economy: the inspector takes the column, the cast folds to sigils

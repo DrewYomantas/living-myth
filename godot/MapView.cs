@@ -19,6 +19,36 @@ public partial class MapView : Control
     public Action<string>? FactionPicked;
     public Action<int>? RegionPicked;       // region id — Main decides faction vs. unclaimed
     public Action<int>? SitePicked;         // a Sites V1 site marker clicked — Main opens the Site Card
+    public Action<int>? ReplayBeatPicked;   // a numbered replay mark clicked — Main scrubs to that beat
+    public Action<int>? TurningPicked;      // a turning-point mark clicked — Main opens its thread
+
+    // Chronicle Replay overlay (viewer-only): Main feeds ONLY honestly anchored beats here —
+    // a beat with no SiteId/RegionId never gets a mark (it lives in the side rail instead).
+    // Edges are real recorded cause links between anchored beats; the spine is the proximate-
+    // cause walk from the focal event, everything else draws faint (real branches only).
+    public sealed class ReplayMark
+    {
+        public Vector2 Norm;     // map-space position: the site's cell or the region's heart
+        public int Number;       // the beat's 1-based number in the FULL rail (gaps = unplaced beats)
+        public bool Current;
+    }
+    public List<ReplayMark>? ReplayMarks;
+    public List<(int a, int b, bool spine)>? ReplayEdges;   // indexes into ReplayMarks
+    public bool ReplayActive;
+    private readonly List<(Vector2 pos, float r, int idx)> _replayScreen = new();
+
+    // Turning-point pulses: the constellation of recent pivots. Fed by Main from the
+    // authored classifier, ONLY for events with a real place anchor; capped, ages by sim
+    // year. Pure rendering — clicking one opens the event's thread.
+    private readonly List<(float nx, float ny, int eventId, int year)> _turningMarks = new();
+    private const int TurningMarksKept = 12;
+    private readonly List<(Vector2 pos, float r, int eventId)> _turningScreen = new();
+
+    public void AddTurningMark(float nx, float ny, int eventId, int year)
+    {
+        _turningMarks.Add((nx, ny, eventId, year));
+        if (_turningMarks.Count > TurningMarksKept) _turningMarks.RemoveAt(0);
+    }
 
     private readonly List<(Vector2 pos, float r, int id)> _dots = new();
     private readonly List<(Vector2 pos, float r, int id)> _siteScreen = new();   // sites drawn this frame, for clicks + tags
@@ -395,6 +425,8 @@ public partial class MapView : Control
                 HorizontalAlignment.Left, -1, 16, Ui.Violet with { A = Mathf.Min(1f, oa + 0.3f) });
         }
 
+        DrawTurningMarks(P);                                                // 7e. turning points
+
         var placed = DrawFactionLabels(P, font);                            // 8. labels
         DrawPlaceTags(P, regionR, placed);
         DrawSiteTags(placed);
@@ -411,6 +443,81 @@ public partial class MapView : Control
             float t = pulse / PulseDuration;                   // 1 -> 0 over the pulse's life
             float ring = regionR * (1f + (1f - t) * 0.8f);     // expands outward as it fades
             DrawArc(P(r.X, r.Y), ring, 0, Mathf.Tau, 48, Ui.GoldGlow with { A = t * 0.9f }, 3f);
+        }
+
+        DrawReplayOverlay(P);                                               // 10. chronicle replay
+    }
+
+    // 7e. Turning points: a small ember-gold diamond with a slow halo on each recent pivot —
+    // only events with a TRUE place anchor ever mark (Main enforces it; this just draws).
+    // Alpha ages by sim year so the constellation is always "recent history", never clutter.
+    private void DrawTurningMarks(Func<float, float, Vector2> P)
+    {
+        _turningScreen.Clear();
+        if (ReplayActive) return;   // the replay path owns the stage while it runs
+        foreach (var (nx, ny, eventId, year) in _turningMarks)
+        {
+            float age = World!.Year - year;
+            float a = Mathf.Lerp(0.95f, 0.25f, Mathf.Clamp(age / 80f, 0f, 1f));
+            var c = P(nx, ny);
+            float s = 7f;
+            var col = Ui.GoldGlow with { A = a };
+            DrawColoredPolygon(new[]
+            {
+                c + new Vector2(0, -s), c + new Vector2(s * 0.7f, 0),
+                c + new Vector2(0, s), c + new Vector2(-s * 0.7f, 0),
+            }, col);
+            DrawColoredPolygon(new[]
+            {
+                c + new Vector2(0, -s * 0.45f), c + new Vector2(s * 0.32f, 0),
+                c + new Vector2(0, s * 0.45f), c + new Vector2(-s * 0.32f, 0),
+            }, Ui.Ember with { A = a });
+            float halo = 0.25f + 0.18f * Mathf.Sin(_breath * 1.8f + eventId);
+            DrawArc(c, s + 4f, 0, Mathf.Tau, 24, Ui.GoldGlow with { A = a * halo }, 1.5f);
+            _turningScreen.Add((c, s + 5f, eventId));
+        }
+    }
+
+    // 10. The Chronicle Replay path: dimmed atlas, real cause edges drawn as a glowing
+    // trail, numbered parchment markers on the honestly anchored beats, the current beat
+    // breathing. Marks/edges come pre-vetted from Main — nothing is placed here.
+    private void DrawReplayOverlay(Func<float, float, Vector2> P)
+    {
+        _replayScreen.Clear();
+        if (!ReplayActive || ReplayMarks is null) return;
+        DrawRect(new Rect2(Vector2.Zero, Size), new Color(0.06f, 0.045f, 0.03f, 0.45f));
+
+        if (ReplayEdges is not null)
+            foreach (var (a, b, spine) in ReplayEdges)
+            {
+                var pa = P(ReplayMarks[a].Norm.X, ReplayMarks[a].Norm.Y);
+                var pb = P(ReplayMarks[b].Norm.X, ReplayMarks[b].Norm.Y);
+                if (spine)
+                {
+                    DrawLine(pa, pb, Ui.GoldGlow with { A = 0.25f }, 7f);   // soft glow under
+                    DrawLine(pa, pb, Ui.GoldGlow with { A = 0.9f }, 2.2f);
+                }
+                else
+                    DrawLine(pa, pb, Ui.GoldGlow with { A = 0.30f }, 1.4f); // a real branch, faint
+            }
+
+        foreach (var m in ReplayMarks)
+        {
+            var c = P(m.Norm.X, m.Norm.Y);
+            float r = m.Current ? 13f : 10f;
+            DrawCircle(c, r, m.Current ? Ui.Parchment : Ui.Parchment with { A = 0.92f });
+            DrawArc(c, r, 0, Mathf.Tau, 32, m.Current ? Ui.GoldGlow : Ui.Gold with { A = 0.85f },
+                    m.Current ? 2.4f : 1.6f);
+            if (m.Current)
+            {
+                float breathe = 0.35f + 0.3f * Mathf.Sin(_breath * 2.4f);
+                DrawArc(c, r + 5f, 0, Mathf.Tau, 32, Ui.GoldGlow with { A = breathe }, 2f);
+            }
+            string num = m.Number.ToString();
+            float w = Ui.SerifBold.GetStringSize(num, HorizontalAlignment.Left, -1, 12).X;
+            DrawString(Ui.SerifBold, c + new Vector2(-w / 2f, 4.5f), num,
+                HorizontalAlignment.Left, -1, 12, Ui.InkDeep);
+            _replayScreen.Add((c, r + 3f, m.Number));
         }
     }
 
@@ -1010,6 +1117,13 @@ public partial class MapView : Control
 
     private void Select(Vector2 pos)
     {
+        // While the replay path owns the stage, its numbered marks are the click targets.
+        if (ReplayActive)
+        {
+            foreach (var (mp, mr, number) in _replayScreen)
+                if (pos.DistanceTo(mp) <= mr + 3) { ReplayBeatPicked?.Invoke(number); return; }
+        }
+
         int bestId = -1;
         float bestD = float.MaxValue;
         foreach (var d in _dots)
@@ -1035,6 +1149,10 @@ public partial class MapView : Control
             if (dist <= sd.r + 3 && dist < siteD) { siteD = dist; siteBest = sd.id; }
         }
         if (siteBest >= 0 && SitePicked is not null) { SitePicked(siteBest); return; }
+
+        // A turning-point pulse beats the land beneath it — the pivot asks to be read.
+        foreach (var (tp, tr, teid) in _turningScreen)
+            if (pos.DistanceTo(tp) <= tr + 3 && TurningPicked is not null) { TurningPicked(teid); return; }
 
         int region = NearestRegion(pos);
         if (region >= 0) RegionPicked?.Invoke(region);
