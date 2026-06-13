@@ -356,6 +356,17 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       (surface culture + gossip in the viewer); echo packs; timeline scrubbing; followed-faith audit. ← NEXT
 
 ## Session log
+- [2026-06-13] Session: Harvest Memory Viewer Payoff V1 (viewer-only, small agent team + live F5
+  feel-test). Wired the Harvest Economy's deferred viewer half across 4 godot/ files: `famine_end`
+  Recovery event class (green ❀); `MapView.MarkKind.FamineScar` (ochre cracked-earth, famine onset
+  only, distinct from war/cairn/battle marks); Region Lens "Harvest memory" section (live
+  `Region.InFamine`/`InBoom` condition, qualitative no-numbers, + recent harvest beats + channel
+  note); Remembered Places harvest filter chip. Pure read-model — verify held exactly
+  823/559/910/632, all 10 gates green, independent channel-mixing verifier PASS. Commit 85729fd;
+  claude.md milestone/Next refresh 4132cce. Live F5 feel-test (Year 316): confirmed Recovery glyph
+  + harvest filter + region-anchored channel honesty. KNOWN ISSUE: famine scars subtle at low zoom
+  and crowd the 4-slot per-region mark ring. Next: famine-scar polish (own scar store or
+  1-most-recent cap + low-zoom legibility), then terrain-typed harvest.
 - [2026-06-13] Session: Harvest Economy V1 (lead dev, single coherent pass). The paired half of
   the M4 economy and the SECOND deliberate baseline move since M8 — famine/plenty became a
   region's harvest. Moved the random-walk from `Faction.Prosperity` to a per-`Region` `Harvest`

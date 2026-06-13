@@ -77,6 +77,10 @@ public partial class MapView : Control
     // Place memory (V1): real anchored events leave subtle marks on the land. Only events that
     // truly carry Event.RegionId may mark — Main classifies the stream and feeds marks in here.
     // Capped per region (the oldest yields); alpha ages by sim year, deterministically — no RNG.
+    // TODO (next session — famine-scar polish, the #1 feel-test finding): famines recur often, so
+    // FamineScar crowds rarer founding/war/battle marks out of the 4-slot ring. Give famine its own
+    // scar store (like _homeMarks below) or cap it to 1-most-recent-per-region, and bump low-zoom
+    // legibility. Then: terrain-typed harvest. (viewer-only — must hold verify 823/559/910/632.)
     public enum MarkKind { FoundingStone, WarScar, AbandonCairn, CultureRibbon, Battle, FamineScar }
     private readonly Dictionary<int, List<(MarkKind kind, int year, int eventId)>> _placeMarks = new();
     private const int MarksPerRegion = 4;
