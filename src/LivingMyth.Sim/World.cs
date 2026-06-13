@@ -209,6 +209,12 @@ public sealed class World
     private static Person Oldest(IEnumerable<Person> bySortedId, int year)
         => bySortedId.Aggregate((best, cur) => cur.Age(year) > best.Age(year) ? cur : best);
 
+    /// <summary>Event.SiteId at record time: the one authored convention table
+    /// (SiteAnchors.Expected, Sites.cs — the `sites` gate recomputes and asserts it).
+    /// Zero Rng, so anchoring can never move the verify counts.</summary>
+    private int? AnchorSite(string etype, List<string> tags, int? regionId)
+        => SiteAnchors.Expected(this, etype, tags, regionId);
+
     // ---------- world setup ----------
 
     public void SeedWorld()
@@ -412,10 +418,12 @@ public sealed class World
             var fac = Factions[f.Id];
             if (fac.ControlledRegions.Count == 0) continue;
             var owned = fac.ControlledRegions.Select(s => Regions[int.Parse(s)]).OrderBy(r => r.Id).ToList();
+            var foundingTags = new List<string> { "territory", "founding" };
             Chronicle.Record(Year, "territory",
                 $"{fac.Name} hold the lands of {string.Join(", ", owned.Select(r => r.Name))}.",
                 participants: fac.LeaderId is int lid ? new() { lid } : null,
-                tags: new() { "territory", "founding" }, regionId: owned[0].Id);
+                tags: foundingTags, regionId: owned[0].Id,
+                siteId: AnchorSite("territory", foundingTags, owned[0].Id));
 
             // Root the founding generation at the same seat the event above anchors. Draws no
             // RNG and records nothing, so it cannot move the verify baseline. Landless peoples
@@ -857,18 +865,23 @@ public sealed class World
                 var leader = f.LeaderId is int lid ? new List<int> { lid } : null;
                 if (!held && v >= Params["culture_identity_threshold"])
                 {
+                    var bornTags = new List<string> { "culture", custom };
+                    int? bornRegion = PrimaryRegion(f);
                     var ev = Chronicle.Record(Year, "custom",
                         $"{f.Name} become {CustomBecome[custom]}.",
-                        participants: leader, tags: new() { "culture", custom },
-                        regionId: PrimaryRegion(f));
+                        participants: leader, tags: bornTags, regionId: bornRegion,
+                        siteId: AnchorSite("custom", bornTags, bornRegion));
                     f.CustomOriginEvent[custom] = ev.Id;
                 }
                 else if (held && v <= Params["culture_identity_drop"])
                 {
+                    var fadeTags = new List<string> { "culture", "fade", custom };
+                    int? fadeRegion = PrimaryRegion(f);
                     Chronicle.Record(Year, "custom",
                         $"{f.Name} {CustomFade[custom]}.",
                         participants: leader, causes: new() { f.CustomOriginEvent[custom] },
-                        tags: new() { "culture", "fade", custom }, regionId: PrimaryRegion(f));
+                        tags: fadeTags, regionId: fadeRegion,
+                        siteId: AnchorSite("custom", fadeTags, fadeRegion));
                     f.CustomOriginEvent.Remove(custom);
                 }
             }
@@ -1080,10 +1093,12 @@ public sealed class World
             var freed = fac.ControlledRegions.Select(s => Regions[int.Parse(s)]).OrderBy(r => r.Id).ToList();
             foreach (var region in freed) region.ControllingFactionId = null;
             fac.ControlledRegions.Clear();
+            var abandonTags = new List<string> { "territory", "abandonment" };
             Chronicle.Record(Year, "territory",
                 $"{fac.Name} are gone; their holds fall silent and the wild creeps back over {string.Join(", ", freed.Select(r => r.Name))}.",
                 causes: fac.LastDeathEventId is int d ? new() { d } : null,
-                tags: new() { "territory", "abandonment" }, regionId: freed[0].Id);
+                tags: abandonTags, regionId: freed[0].Id,
+                siteId: AnchorSite("territory", abandonTags, freed[0].Id));
         }
     }
 
@@ -1524,9 +1539,11 @@ public sealed class World
         {
             loser.ControlledRegions.Remove(region.Id.ToString());
             Claim(region, winner);
+            var seizeTags = new List<string> { "territory", "war" };
             Chronicle.Record(Year, "territory",
                 $"{winner.Name} seize {region.Name} from {loser.Name}.",
-                causes: new() { peaceEventId }, tags: new() { "territory", "war" }, regionId: region.Id);
+                causes: new() { peaceEventId }, tags: seizeTags, regionId: region.Id,
+                siteId: AnchorSite("territory", seizeTags, region.Id));
         }
     }
 

@@ -22,10 +22,14 @@ public sealed class Event
     public int? HomeRegionId { get; }        // where it is REMEMBERED — the lineage home-root of the
                                              // life this event marks (births/deaths/murders), never a
                                              // claim about where the event physically happened
+    public int? SiteId { get; }              // the single modeled place this event truly belongs to —
+                                             // assigned ONLY by the authored convention table
+                                             // (SiteAnchors.Expected, Sites.cs); null = honestly unknown.
+                                             // Never set without RegionId; never on life events.
 
     public Event(int id, int year, string etype, string text,
                  List<int>? participants = null, List<int>? causes = null, List<string>? tags = null,
-                 int? regionId = null, int? homeRegionId = null)
+                 int? regionId = null, int? homeRegionId = null, int? siteId = null)
     {
         Id = id;
         Year = year;
@@ -36,6 +40,7 @@ public sealed class Event
         Tags = tags ?? new();
         RegionId = regionId;
         HomeRegionId = homeRegionId;
+        SiteId = siteId;
     }
 }
 
@@ -48,9 +53,9 @@ public sealed class Chronicle
     /// event's id as the cause of a follow-up event.</summary>
     public Event Record(int year, string etype, string text,
                         List<int>? participants = null, List<int>? causes = null, List<string>? tags = null,
-                        int? regionId = null, int? homeRegionId = null)
+                        int? regionId = null, int? homeRegionId = null, int? siteId = null)
     {
-        var ev = new Event(_nextId, year, etype, text, participants, causes, tags, regionId, homeRegionId);
+        var ev = new Event(_nextId, year, etype, text, participants, causes, tags, regionId, homeRegionId, siteId);
         _nextId++;
         Events.Add(ev);
         return ev;

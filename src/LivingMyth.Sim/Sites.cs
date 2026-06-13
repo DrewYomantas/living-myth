@@ -60,6 +60,17 @@ public sealed class SiteIndex
         => regionId >= 0 && regionId < _byRegion.Count && _byRegion[regionId].Count > 0
             ? _byRegion[regionId][0] : null;
 
+    /// <summary>The region's first site matching a type-priority list (lowest id within each
+    /// type). The anchoring conventions' deterministic pick — null when nothing fits.</summary>
+    public Site? FirstOfTypes(int regionId, params SiteType[] priority)
+    {
+        var local = ForRegion(regionId);
+        foreach (var t in priority)
+            foreach (var s in local)
+                if (s.Type == t) return s;
+        return null;
+    }
+
     /// <summary>The honest holder of a site: whoever holds its region right now. Derived,
     /// never stored — control changes hands in war and the site must never lag it.</summary>
     public static string? HolderOf(World world, Site site)
@@ -298,6 +309,51 @@ public sealed class SiteIndex
         {
             string name = $"{patterns[p0].Replace("{root}", roots[r0])} {n}";
             if (used.Add(name)) return name;
+        }
+    }
+}
+
+/// <summary>
+/// The Event.SiteId anchoring conventions V1 — THE single authored rule for when an event
+/// truly belongs to one modeled place. World calls this at record time; the `sites` gate
+/// recomputes it per event and asserts equality, so the rule can never drift in one place
+/// only (the FitsCell pattern). Zero Rng — sites are immutable and picks are type-priority
+/// then lowest id, so the same world state always anchors the same way, and adding the
+/// field consumed no draws (the verify counts hold).
+///
+/// The conventions (binding copy in PROJECT_STATE.md):
+///  - territory + founding     → the region's SEAT (a people's first hold is its seat)
+///  - territory + abandonment  → the region's SEAT (the hold that falls silent)
+///  - territory + war (seized) → the region's STRONGHOLD: hill fort, then watch post,
+///                               then river ford — the defensible place the fighting was
+///                               truly over; none present = region-only, honestly
+///  - custom born / fade       → the region's SACRED site: shrine, then sacred grove, then
+///                               old barrow, then cairn field — where a people's ways are
+///                               sworn and shed; none present = region-only
+///  - everything else          → null. Births/deaths/murders never carry RegionId at all
+///                               (memory channel only); rumor/divine/trade/war stay
+///                               region-or-less because no rule honestly places them.
+/// </summary>
+public static class SiteAnchors
+{
+    public static int? Expected(World w, string etype, IReadOnlyList<string> tags, int? regionId)
+    {
+        if (regionId is not int rid) return null;
+        switch (etype)
+        {
+            case "territory":
+                if (tags.Contains("founding") || tags.Contains("abandonment"))
+                    return w.Sites.SeatOf(rid)?.Id;
+                if (tags.Contains("war"))
+                    return w.Sites.FirstOfTypes(rid,
+                        SiteType.HillFort, SiteType.WatchPost, SiteType.RiverFord)?.Id;
+                return null;
+            case "custom":
+                if (tags.Contains("clash") || tags.Contains("diffusion")) return null;
+                return w.Sites.FirstOfTypes(rid,
+                    SiteType.Shrine, SiteType.SacredGrove, SiteType.OldBarrow, SiteType.CairnField)?.Id;
+            default:
+                return null;
         }
     }
 }

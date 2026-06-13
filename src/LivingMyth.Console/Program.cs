@@ -24,8 +24,9 @@ switch (cmd)
     case "divine": DivineCmd(Years(200)); break;
     case "save": SaveCmd(Years(60)); break;
     case "sites": SitesCmd(Years(120)); break;
+    case "replay": ReplayCmd(Years(120)); break;
     default:
-        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine | save | sites");
+        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine | save | sites | replay");
         break;
 }
 return;
@@ -817,23 +818,17 @@ void DivineCmd(int years)
 
 // -------------------------------------------------------------------------- sites
 
-// Proof gate for Sites V1 (the local place layer, a read-model — see Sites.cs): generation
-// is deterministic across double runs, every site stands on a real cell of its own region,
-// type honesty holds cell-by-cell (a ford by the river, a dock on the shore), names are
-// unique, no event carries a SiteId (the deferred contract is asserted ABSENT), the
-// RegionId/HomeRegionId channels still hold, and the replay-beat helper never invents a place.
+// Proof gate for Sites V1 + the Event.SiteId anchoring contract (shipped 2026-06-12, the
+// deliberate milestone the old absence-assertion guarded): generation is deterministic
+// across double runs, every site stands on a real cell of its own region, type honesty
+// holds cell-by-cell, names are unique, EVERY event's SiteId equals the single authored
+// convention table (SiteAnchors.Expected — recomputed here, so the rule cannot drift),
+// life events stay memory-only, and the replay-beat helper never invents a place.
 void SitesCmd(int years)
 {
-    Console.WriteLine($"Sites gate ({years} yrs): deterministic terrain-honest sites, no fake anchors,");
-    Console.WriteLine("Event.SiteId provably deferred, replay beats honest.");
+    Console.WriteLine($"Sites gate ({years} yrs): deterministic terrain-honest sites, anchoring");
+    Console.WriteLine("conventions hold event-by-event (SiteAnchors.Expected), replay beats honest.");
     int failures = 0;
-
-    // The deferral is structural: the Event type has no SiteId at all, so nothing in the
-    // sim CAN assign a fake site anchor. When the contract ships for real, this check is
-    // deliberately the one that breaks first.
-    bool deferred = typeof(Event).GetProperty("SiteId") is null && typeof(Event).GetField("SiteId") is null;
-    Console.WriteLine($"  Event.SiteId deferred (absent): {(deferred ? "OK" : "FAIL")}");
-    if (!deferred) failures++;
 
     foreach (int seed in new[] { 1, 18, 42, 7 })
     {
@@ -891,7 +886,26 @@ void SitesCmd(int years)
 
         // Anchor channels still hold (the homes gate proves this fully; re-assert cheaply).
         foreach (var e in w.Chronicle.Events.Where(e => e.Type is "birth" or "death" or "murder"))
-            if (e.RegionId is not null) { bad.Add($"life event #{e.Id} claims a literal place"); break; }
+            if (e.RegionId is not null || e.SiteId is not null)
+            { bad.Add($"life event #{e.Id} claims a literal place"); break; }
+
+        // The anchoring contract, event by event: SiteId must equal the ONE authored
+        // convention table — recomputed here so the rule can never drift in World alone.
+        int anchored = 0;
+        foreach (var e in w.Chronicle.Events)
+        {
+            int? expect = SiteAnchors.Expected(w, e.Type, e.Tags, e.RegionId);
+            if (e.SiteId != expect)
+            { bad.Add($"event #{e.Id} ({e.Type}) anchors to site {e.SiteId?.ToString() ?? "-"}, convention says {expect?.ToString() ?? "-"}"); break; }
+            if (e.SiteId is int esid)
+            {
+                anchored++;
+                if (esid < 0 || esid >= sites.All.Count)
+                { bad.Add($"event #{e.Id} anchors to site {esid} which does not exist"); break; }
+                if (e.RegionId is not int erid2 || sites.Get(esid).RegionId != erid2)
+                { bad.Add($"event #{e.Id}'s site anchor lies outside its own region"); break; }
+            }
+        }
 
         // Replay beats: honest and deterministic. Walk the most-caused event's chain.
         var target = w.Chronicle.Events.LastOrDefault(e => e.Causes.Count > 0);
@@ -909,20 +923,20 @@ void SitesCmd(int years)
             foreach (var b in beats)
             {
                 var e = w.Chronicle.Get(b.EventId);
-                if (b.SiteId is not null) { bad.Add($"replay beat #{b.EventId} invented a site anchor"); break; }
+                if (b.SiteId != e.SiteId) { bad.Add($"replay beat #{b.EventId} re-aimed its site anchor"); break; }
                 if (b.RegionId != e.RegionId) { bad.Add($"replay beat #{b.EventId} re-aimed its region anchor"); break; }
                 if (b.CauseEventId is int cid && !e.Causes.Contains(cid))
                 { bad.Add($"replay beat #{b.EventId} claims a cause not in its Causes"); break; }
             }
             string Canon(List<ReplayBeat> bs) => string.Join("\n", bs.Select(b =>
-                $"{b.EventId}|{b.Year}|{b.RegionId?.ToString() ?? "-"}|{b.Connector}|{b.CauseEventId?.ToString() ?? "-"}|{b.Category}"));
+                $"{b.EventId}|{b.Year}|{b.RegionId?.ToString() ?? "-"}|{b.SiteId?.ToString() ?? "-"}|{b.Connector}|{b.CauseEventId?.ToString() ?? "-"}|{b.Category}"));
             if (Canon(beats) != Canon(beats2)) bad.Add("replay beats differ between identical runs");
         }
 
         var typeCounts = new SortedDictionary<string, int>(StringComparer.Ordinal);
         foreach (var s in sites.All)
             typeCounts[SiteIndex.TypeLabel(s.Type)] = typeCounts.GetValueOrDefault(SiteIndex.TypeLabel(s.Type)) + 1;
-        Console.WriteLine($"  seed {seed,3}: {(bad.Count == 0 ? "OK" : "FAIL")}  {sites.All.Count} sites over {w.Regions.Count} regions ({min}-{max}/region)");
+        Console.WriteLine($"  seed {seed,3}: {(bad.Count == 0 ? "OK" : "FAIL")}  {sites.All.Count} sites over {w.Regions.Count} regions ({min}-{max}/region) · {anchored} site-anchored events");
         Console.WriteLine($"           {string.Join(", ", typeCounts.Select(kv => $"{kv.Key} {kv.Value}"))}");
         foreach (var b in bad.Take(5)) Console.WriteLine($"           {b}");
         if (bad.Count > 0) failures++;
@@ -1147,5 +1161,186 @@ void VerifyCmd()
         if (!ok) failures++;
     }
     Console.WriteLine(failures == 0 ? "\nDETERMINISM HOLDS." : $"\n{failures} SEED(S) NON-DETERMINISTIC.");
+    Environment.Exit(failures == 0 ? 0 : 1);
+}
+
+// -------------------------------------------------------------------------- replay
+
+// Proof gate for Chronicle Replay V2 (Replay.cs): the replay read-model is deterministic
+// across double runs, every beat references a real recorded event with its anchors copied
+// VERBATIM (region/site/home never mixed, never inferred), every cause edge is literally
+// in the effect's Causes, the consequence rail is bounded and real, statuses name exactly
+// what the anchors allow (memory-only labeled, unanchored placeless), the turning-point
+// classifier is deterministic and bounded to its authored table, the connectors still come
+// from StoryGrammar, and replay survives the world-save journal.
+void ReplayCmd(int years)
+{
+    Console.WriteLine($"Replay gate ({years} yrs): deterministic chains, verbatim anchors, honest");
+    Console.WriteLine("statuses, bounded real consequences, authored turning points, save-safe.");
+    int failures = 0;
+
+    string ChainCanon(ReplayChain ch) =>
+        $"focal {ch.FocalEventId} total {ch.TotalConsequences}\n"
+        + string.Join("\n", ch.Beats.Concat(ch.Consequences).Select(b =>
+            $"{b.EventId}|{b.Year}|{b.RegionId?.ToString() ?? "-"}|{b.SiteId?.ToString() ?? "-"}"
+            + $"|{b.HomeRegionId?.ToString() ?? "-"}|{b.Status}|{b.Connector}|{b.CopyKey}"
+            + $"|{b.CauseEventId?.ToString() ?? "-"}|{b.Category}|{string.Join(",", b.FactionIds)}"));
+
+    var tpKinds = new HashSet<string>
+    { "war-pivot", "peace-pivot", "land-lost", "land-abandoned", "violent-succession",
+      "faith-torn", "faith-proclaimed", "ways-hardened", "divine-influenced", "far-reaching" };
+
+    foreach (int seed in new[] { 1, 18, 42, 7 })
+    {
+        var bad = new List<string>();
+        var (c1, n1) = Load();
+        var w = new World(seed, c1, n1); w.Run(years);
+        var (c2, n2) = Load();
+        var w2 = new World(seed, c2, n2); w2.Run(years);
+
+        // Full-pass direct-consequence counts — the gate's independent tally. Distinct per
+        // citing event: a war naming the same grievance twice is ONE consequence of it.
+        var cons = new Dictionary<int, int>();
+        foreach (var e in w.Chronicle.Events)
+            foreach (int c in e.Causes.Distinct())
+                cons[c] = cons.GetValueOrDefault(c) + 1;
+
+        // Three targets: the latest caused event, the most-consequential event, and the
+        // latest site-anchored event — chains of different shapes.
+        var targets = new List<int>();
+        var lastCaused = w.Chronicle.Events.LastOrDefault(e => e.Causes.Count > 0);
+        if (lastCaused is not null) targets.Add(lastCaused.Id);
+        if (cons.Count > 0)
+            targets.Add(cons.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key).First().Key);
+        var lastAnchored = w.Chronicle.Events.LastOrDefault(e => e.SiteId is not null);
+        if (lastAnchored is not null) targets.Add(lastAnchored.Id);
+
+        int beatsChecked = 0;
+        foreach (int targetId in targets.Distinct())
+        {
+            var chain = Replay.ChainFor(w, targetId);
+            var chain2 = Replay.ChainFor(w2, targetId);
+            if (ChainCanon(chain) != ChainCanon(chain2))
+            { bad.Add($"chain for #{targetId} differs between identical runs"); continue; }
+
+            // Connectors still come from the grammar: re-derive the cause chain and compare.
+            var ann = StoryGrammar.Annotate(w, targetId);
+            if (ann.Steps.Count != chain.Beats.Count)
+                bad.Add($"chain for #{targetId} dropped or invented beats vs the grammar");
+
+            foreach (var b in chain.Beats.Concat(chain.Consequences))
+            {
+                beatsChecked++;
+                if (b.EventId < 0 || b.EventId >= w.Chronicle.Events.Count)
+                { bad.Add($"beat names event #{b.EventId} which does not exist"); break; }
+                var e = w.Chronicle.Get(b.EventId);
+                // Anchors verbatim — the three channels never mixed, never inferred.
+                if (b.RegionId != e.RegionId || b.SiteId != e.SiteId || b.HomeRegionId != e.HomeRegionId)
+                { bad.Add($"beat #{b.EventId} re-aimed an anchor channel"); break; }
+                if (b.SiteId is int bsid && (b.RegionId is not int brid
+                    || bsid < 0 || bsid >= w.Sites.All.Count || w.Sites.Get(bsid).RegionId != brid))
+                { bad.Add($"beat #{b.EventId} site anchor is not a real site of its region"); break; }
+                // Status names exactly what the anchors allow.
+                string want = b.SiteId is not null ? "site-anchored"
+                    : b.RegionId is not null ? "region-only"
+                    : b.HomeRegionId is not null ? "memory-only"
+                    : "unanchored";
+                if (b.Status != want)
+                { bad.Add($"beat #{b.EventId} status '{b.Status}' contradicts its anchors ('{want}')"); break; }
+                // Placeless statuses carry NO coordinates a viewer could pin.
+                if (b.Status is "unanchored" or "memory-only" && (b.RegionId is not null || b.SiteId is not null))
+                { bad.Add($"beat #{b.EventId} placeless status but carries place anchors"); break; }
+                if (b.CauseEventId is int cid && !e.Causes.Contains(cid))
+                { bad.Add($"beat #{b.EventId} claims cause #{cid} not in its Causes"); break; }
+                if (b.Year != e.Year || b.Category != e.Type)
+                { bad.Add($"beat #{b.EventId} re-aimed year or category"); break; }
+            }
+
+            // The consequence rail: bounded, real, honestly counted.
+            if (chain.Consequences.Count > 8)
+                bad.Add($"chain for #{targetId} exceeded the consequence cap");
+            if (chain.TotalConsequences != cons.GetValueOrDefault(targetId))
+                bad.Add($"chain for #{targetId} miscounts consequences "
+                    + $"({chain.TotalConsequences} vs {cons.GetValueOrDefault(targetId)})");
+            foreach (var cb in chain.Consequences)
+                if (!w.Chronicle.Get(cb.EventId).Causes.Contains(targetId))
+                { bad.Add($"consequence #{cb.EventId} does not cite #{targetId}"); break; }
+        }
+
+        // Turning points: deterministic, bounded to the authored table, premises honest.
+        int tpCount = 0;
+        foreach (var e in w.Chronicle.Events)
+        {
+            string? kind = Replay.TurningPointKind(w, e, cons.GetValueOrDefault(e.Id));
+            string? kind2 = Replay.TurningPointKind(w2, w2.Chronicle.Get(e.Id), cons.GetValueOrDefault(e.Id));
+            if (kind != kind2) { bad.Add($"turning-point classifier diverged at #{e.Id}"); break; }
+            if (kind is null) continue;
+            tpCount++;
+            if (!tpKinds.Contains(kind)) { bad.Add($"turning point #{e.Id} kind '{kind}' is not authored"); break; }
+            bool premise = kind switch
+            {
+                "war-pivot" => e.Type == "war",
+                "peace-pivot" => e.Type == "peace",
+                "land-lost" => e.Type == "territory" && e.Tags.Contains("war"),
+                "land-abandoned" => e.Type == "territory" && e.Tags.Contains("abandonment"),
+                "violent-succession" => e.Type == "succession" && e.Causes.Count > 0
+                    && w.Chronicle.Get(e.Causes[0]).Type == "murder",
+                "faith-torn" => e.Type == "schism",
+                "faith-proclaimed" => e.Type == "prophet",
+                "ways-hardened" => e.Type == "custom",
+                "divine-influenced" => e.Causes.Any(c => w.Chronicle.Get(c).Type == "divine"),
+                _ => cons.GetValueOrDefault(e.Id) >= 4,
+            };
+            if (!premise) { bad.Add($"turning point #{e.Id} '{kind}' premise does not hold"); break; }
+        }
+
+        Console.WriteLine($"  seed {seed,3}: {(bad.Count == 0 ? "OK" : "FAIL")}  {targets.Distinct().Count()} chains, "
+            + $"{beatsChecked} beats checked, {tpCount} turning points / {w.Chronicle.Events.Count} events");
+        foreach (var b in bad.Take(5)) Console.WriteLine($"           {b}");
+        if (bad.Count > 0) failures++;
+    }
+
+    // Replay survives save/load: a journaled act replayed into a fresh world yields the
+    // same chain for a divine-influenced event — the player-shaped story replays too.
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"lm_replay_gate_{Guid.NewGuid():N}.json");
+        try
+        {
+            World JournaledRun(bool record)
+            {
+                var (cfg, names) = Load();
+                var w = new World(7, cfg, names);
+                w.SeedWorld();
+                var (store, _) = PlayerWorldStore.LoadOrNew(path, 7);
+                if (record)
+                {
+                    var victim = w.FactionMembers(w.Config.Factions[0].Id)
+                        .Where(p => p.Age(w.Year) >= 18).OrderBy(p => p.Id).First();
+                    var ev = w.PlantCurse(victim);
+                    store.RecordAct(w, w.DivinePressures.Last(p => p.SourceEventId == ev.Id));
+                    store.ResumeYear = w.Year;
+                    store.Save();
+                }
+                else
+                {
+                    store.ApplyDue(w);
+                }
+                for (int y = 0; y < 60; y++) { w.Tick(); if (!record) store.ApplyDue(w); }
+                return w;
+            }
+            var live = JournaledRun(record: true);
+            var resumed = JournaledRun(record: false);
+            var divineTouched = live.Chronicle.Events
+                .FirstOrDefault(e => e.Causes.Any(c => live.Chronicle.Get(c).Type == "divine"));
+            bool ok = divineTouched is not null
+                && ChainCanon(Replay.ChainFor(live, divineTouched.Id))
+                   == ChainCanon(Replay.ChainFor(resumed, divineTouched.Id));
+            Console.WriteLine($"  save/load: {(ok ? "OK" : "FAIL")}  (divine-influenced chain identical after journal replay)");
+            if (!ok) failures++;
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    Console.WriteLine(failures == 0 ? "\nREPLAY CONTRACT HOLDS." : $"\n{failures} CHECK(S) BROKE THE CONTRACT.");
     Environment.Exit(failures == 0 ? 0 : 1);
 }

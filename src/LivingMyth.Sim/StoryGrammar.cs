@@ -155,6 +155,17 @@ public static class StoryGrammar
     public static ChainLink? ProximateLink(World world, Event effect)
         => effect.Causes.Count == 0 ? null : LinkFor(world, effect);
 
+    /// <summary>Classify one LITERAL recorded edge: cause → effect, but only when the cause
+    /// is truly in the effect's Causes list — null otherwise. The replay consequence rail's
+    /// honest connector (an effect's proximate link may point at a different cause; this
+    /// names the specific edge being walked). Same rule table, zero new claims.</summary>
+    public static ChainLink? LinkBetween(World world, Event cause, Event effect)
+    {
+        if (!effect.Causes.Contains(cause.Id)) return null;
+        var (kind, ruleId) = Classify(world, cause, effect);
+        return new ChainLink(kind, ruleId, cause.Id, effect.Year - cause.Year);
+    }
+
     /// <summary>Pick the proximate cause (latest year, tie → highest id — the most recent
     /// recorded reason) and classify the edge through the rule table.</summary>
     private static ChainLink LinkFor(World world, Event effect)
