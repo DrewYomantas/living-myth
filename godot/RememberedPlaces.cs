@@ -28,7 +28,7 @@ public sealed partial class RememberedPlaces : Panel
 
     private static readonly (string key, string label)[] Filters =
     {
-        ("all", "all"), ("war", "war & land"), ("ways", "ways"),
+        ("all", "all"), ("war", "war & land"), ("harvest", "harvest"), ("ways", "ways"),
         ("divine", "divine"), ("terrain", "terrain"), ("memory", "memory"),
     };
 
@@ -125,6 +125,9 @@ public sealed partial class RememberedPlaces : Panel
     {
         "territory" => "war",
         "battle" => "war",
+        "famine" => "harvest",
+        "famine_end" => "harvest",
+        "boom" => "harvest",
         "custom" => "ways",
         "divine" when e.Tags.Contains("terrain") => "terrain",
         "divine" => "divine",

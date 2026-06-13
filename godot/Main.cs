@@ -1717,6 +1717,9 @@ public partial class Main : Node
         "territory" when e.Tags.Contains("abandonment") => MapView.MarkKind.AbandonCairn,
         "custom" => MapView.MarkKind.CultureRibbon,
         "battle" => MapView.MarkKind.Battle,
+        // A famine onset scars its land (the event carries RegionId, never SiteId). famine_end
+        // and boom don't scar — the parched ground is the memory; recovery and plenty don't mark.
+        "famine" => MapView.MarkKind.FamineScar,
         _ => null,
     };
 
@@ -3300,6 +3303,28 @@ public partial class Main : Node
             sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {m.year}[/color] {MarkLabel(m.kind)} — {Link("e:" + m.eventId, me.Text)}");
         }
         sb.AppendLine();
+        // Harvest memory (Harvest Economy V1 payoff): the land's own hunger and plenty. The
+        // current condition reads Region.InFamine/InBoom directly — sim ground truth, forced
+        // false for wilderness, so it never lies. Famine/plenty fall on the LAND (RegionId);
+        // those who starved are remembered at their homeland, not here — the channels never blur.
+        sb.AppendLine(SectionCap("Harvest memory"));
+        sb.AppendLine(region.InFamine
+            ? $"[color=#{Ui.Hex(Ui.Ochre)}]the land goes hungry now — its harvest has failed[/color]"
+            : region.InBoom
+                ? $"[color=#{Ui.Hex(Ui.Moss)}]the land is in plenty now — its harvest runs full[/color]"
+                : $"[color=#{Ui.Hex(Ui.Faded)}]the land's harvest holds steady[/color]");
+        var harvest = _regionActivity.RecentFor(regionId)
+            .Select(id => _world.Chronicle.Get(id))
+            .Where(e => e.Type is "famine" or "famine_end" or "boom")
+            .ToList();
+        for (int i = harvest.Count - 1; i >= 0; i--)   // newest first
+        {
+            var he = harvest[i];
+            var hcls = Ui.ClassOf(he.Type);
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {he.Year}[/color] [color=#{Ui.Hex(hcls.Color)}]{hcls.Glyph}[/color] {Link("e:" + he.Id, he.Text)}");
+        }
+        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]famine and plenty fall on the land itself — those who starved are remembered at their homeland, not here[/color]");
+        sb.AppendLine();
         int homeTotal = _regionActivity.HomeTotalFor(regionId);
         sb.AppendLine(SectionCap("Lives rooted here")
             + (homeTotal > 0 ? $" [color=#{Ui.Hex(Ui.Faded)}]({homeTotal} remembered)[/color]" : ""));
@@ -3330,6 +3355,7 @@ public partial class Main : Node
         for (int i = recent.Count - 1; i >= 0; i--)   // newest first
         {
             var e = _world.Chronicle.Get(recent[i]);
+            if (e.Type is "famine" or "famine_end" or "boom") continue;   // shown under Harvest memory
             var cls = Ui.ClassOf(e.Type);
             // The site suffix appears ONLY for a true Event.SiteId — the convention table's
             // anchor, never an inference from the region.
@@ -3470,6 +3496,7 @@ public partial class Main : Node
         MapView.MarkKind.FoundingStone => "[color=#90908a]⌑ standing stone[/color]",
         MapView.MarkKind.WarScar => $"[color=#{Ui.Hex(Ui.Ember)}]✕ war scar[/color]",
         MapView.MarkKind.AbandonCairn => "[color=#90908a]∴ cairn[/color]",
+        MapView.MarkKind.FamineScar => $"[color=#{Ui.Hex(Ui.Ochre)}]≋ parched land[/color]",
         _ => $"[color=#{Ui.Hex(Ui.Violet)}]❧ custom ribbon[/color]",
     };
 

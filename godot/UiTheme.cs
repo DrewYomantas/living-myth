@@ -178,6 +178,7 @@ public static class Ui
         ["trade"] = new("Trade", new Color("4e7d43"), "⚖"),
         ["boom"] = new("Plenty", new Color("4e7d43"), "✾"),
         ["famine"] = new("Famine", new Color("b06a2c"), "✺"),
+        ["famine_end"] = new("Recovery", new Color("4e7d43"), "❀"),
         ["divine"] = new("Divine", new Color("a8402c"), "✶"),
         ["prophet"] = new("Prophecy", new Color("7c5a9b"), "☾"),
         ["schism"] = new("Schism", new Color("6d5694"), "❖"),

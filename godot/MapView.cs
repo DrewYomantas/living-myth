@@ -77,7 +77,7 @@ public partial class MapView : Control
     // Place memory (V1): real anchored events leave subtle marks on the land. Only events that
     // truly carry Event.RegionId may mark — Main classifies the stream and feeds marks in here.
     // Capped per region (the oldest yields); alpha ages by sim year, deterministically — no RNG.
-    public enum MarkKind { FoundingStone, WarScar, AbandonCairn, CultureRibbon, Battle }
+    public enum MarkKind { FoundingStone, WarScar, AbandonCairn, CultureRibbon, Battle, FamineScar }
     private readonly Dictionary<int, List<(MarkKind kind, int year, int eventId)>> _placeMarks = new();
     private const int MarksPerRegion = 4;
     private static readonly float[] MarkAngles = { 3.6f, 5.5f, 1.1f, 2.4f };   // fixed slots ringing the centre
@@ -675,6 +675,16 @@ public partial class MapView : Control
                 DrawCircle(c + new Vector2(s * 0.22f, s * 0.1f), s * 0.2f, StoneMark with { A = a });
                 DrawCircle(c + new Vector2(0, -s * 0.18f), s * 0.18f, StoneMark.Lightened(0.1f) with { A = a });
                 break;
+            case MarkKind.FamineScar:      // parched, cracked ground where the harvest failed —
+            {                              // dry fissures in ochre, no stone and no red (not war, not ruin)
+                var dry = Ui.Ochre.Darkened(0.1f) with { A = a };
+                float fw = Mathf.Max(1f, s * 0.11f);
+                DrawLine(c + new Vector2(-s * 0.45f, s * 0.16f), c + new Vector2(s * 0.45f, s * 0.16f), dry, fw);
+                DrawLine(c + new Vector2(-s * 0.24f, s * 0.16f), c + new Vector2(-s * 0.33f, s * 0.52f), dry, fw * 0.8f);
+                DrawLine(c + new Vector2(0f, s * 0.16f), c + new Vector2(s * 0.06f, s * 0.56f), dry, fw * 0.8f);
+                DrawLine(c + new Vector2(s * 0.25f, s * 0.16f), c + new Vector2(s * 0.31f, s * 0.49f), dry, fw * 0.8f);
+                break;
+            }
             case MarkKind.CultureRibbon:   // a custom took root (or faded, clashed, spread) here
                 DrawPolyline(new[]
                 {
