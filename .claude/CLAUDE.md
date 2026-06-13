@@ -14,19 +14,22 @@ separate from logic. Never let simulation logic leak into Godot nodes.
 - `src/LivingMyth.Sim/` — the sim (Rng, Models, Chronicle, World, Scoring, Echoes, Feed; WorldSurface
   — the editable terrain cell grid; the DivinePressure ledger in Models/World) plus pure
   read-models over it (StoryGrammar — proven causal connectors; Sites — the deterministic local
-  place layer; Replay — replay-ready beat helper; PlayerCanon — the player-telling store, never
-  read by World; PlayerWorld — the world-save input journal, never read by World). net8.0.
+  place layer + `SiteAnchors` the Event.SiteId convention table; Replay — replay chains + turning-
+  point classifier; PlayerCanon — the player-telling store, never read by World; PlayerWorld —
+  the world-save input journal, never read by World). net8.0.
 - `src/LivingMyth.Console/` — proof runner (run | divergence | surface | verify | homes | story |
-  canon | divine | save | sites).
+  canon | divine | save | sites | replay).
 - `godot/` — the viewer (.NET build), references the Sim: `Main.cs` (tick loop, pacing + dramatic
-  auto-slow, live feed, inspectors, curse tool, causal catch-up, Follow/Yours channel, focus guard +
-  memorial cards, chapter recaps, canon wiring, world-save journaling + resume fast-forward, the
-  Site Card), `MapView.cs` (map render, clicks, pulses, place/home marks, Sites V1 markers/tags),
-  `UiTheme.cs` (Ui.* styling, single-sourced accents), `RegionActivity.cs` (per-region event
-  index, two channels), `PlaceSeeds.cs` (legacy hash helpers; its map hints retired by Sites V1),
-  `StoryCopy.cs` (ALL connector/canon English + glossary), `CanonPanel.cs` (the canon writing desk),
-  `PersonSigils.cs` (deterministic per-soul marks), `CastPanel.cs` (the dramatis-personae roster),
-  `FateLedger.cs` (the god-hand's act-and-consequence sheet).
+  auto-slow, live feed, inspectors, curse tool, causal catch-up + replay retelling, Follow/Yours
+  channel, focus guard + memorial cards, chapter recaps, canon wiring, world-save journaling +
+  resume fast-forward, the Site Card), `MapView.cs` (map render, clicks, pulses, place/home marks,
+  Sites V1 markers/tags, replay overlay + turning-point marks), `RememberedPlaces.cs` (the atlas's
+  memory panel — every truly-touched place, honest anchor language), `UiTheme.cs` (Ui.* styling,
+  single-sourced accents), `RegionActivity.cs` (per-region event index — region/home/site channels),
+  `PlaceSeeds.cs` (legacy hash helpers; its map hints retired by Sites V1), `StoryCopy.cs` (ALL
+  connector/canon/anchor/replay/turning-point English + glossary), `CanonPanel.cs` (the canon writing
+  desk), `PersonSigils.cs` (deterministic per-soul marks), `CastPanel.cs` (the dramatis-personae
+  roster), `FateLedger.cs` (the god-hand's act-and-consequence sheet).
 
 ## Milestones
 - **M0–M5.1** — spatial island, regions, territory, extinction land-release.
@@ -72,9 +75,22 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   DEFERRED; the `sites` gate asserts the field is ABSENT). `Replay.cs`: replay-ready beats.
   Viewer: site markers replace PlaceSeeds hints, site tags/cards/lens places, seat banners +
   roads. New gates `save` + `sites`. Baseline held exactly 884/699/567/706.
-- **Next** — Drew's F5 feel-test of persistence + sites (and the still-unwatched Cast arc);
-  timeline scrubbing; baseline-moving sim contracts (Event.SiteId anchoring conventions, battle
-  sites, per-region economy, peace faction ids); fresh-world affordance (today: delete the save).
+- **Chronicle Replay + Site-Anchored Memory V1** (2026-06-12, sim + viewer + gate) — history made
+  visible on the atlas, and the first events that truly belong to a single place. `Event.SiteId`
+  shipped via ONE authored convention table (`SiteAnchors.Expected`): founding/abandonment→seat,
+  war→stronghold, ways→sacred site; everything else null; life events never anchor. Picks draw
+  ZERO Rng (immutable sites, type-priority, lowest id) ⇒ baseline UNMOVED. `Replay.cs`: `ChainFor`
+  (cause beats + bounded consequence rail, verbatim anchors, honest Status site/region/memory/
+  unanchored) + `TurningPointKind` (bounded authored pivot classifier). Viewer: How We Got Here
+  turning-point header + "What grew from this" rail + ⟲ Replay retelling on a dimmed atlas (numbered
+  marks on anchored beats only, real cause edges, NO fake pins), turning-point map pulses,
+  `RememberedPlaces.cs` panel, Site Card site memory ("known for" from counts). New gate `replay`;
+  `sites` gate rewritten to PROVE the anchoring contract event-by-event. Baseline held exactly
+  884/699/567/706.
+- **Next** — Drew's F5 feel-test of Chronicle Replay + site memory (then the still-unwatched
+  persistence + Cast arcs); battle sites + per-region economy (baseline-moving — extend place
+  memory to battles/famine, close chapters on war's-peace/famine's-end); person↔site anchoring;
+  timeline scrubbing; fresh-world affordance (today: delete the save).
 
 ## Commands
 ```bash
@@ -85,7 +101,8 @@ dotnet run --project src/LivingMyth.Console -- story           # causal-grammar 
 dotnet run --project src/LivingMyth.Console -- canon           # player-canon contract gate (must pass)
 dotnet run --project src/LivingMyth.Console -- divine          # god-hand + surface gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- save            # world-save journal gate (must pass; --years N)
-dotnet run --project src/LivingMyth.Console -- sites           # sites contract gate (must pass; --years N)
+dotnet run --project src/LivingMyth.Console -- sites           # sites + Event.SiteId anchoring gate (must pass; --years N)
+dotnet run --project src/LivingMyth.Console -- replay          # chronicle-replay + turning-point gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- run --seed 42
 dotnet run --project src/LivingMyth.Console -- divergence --seed 18
 dotnet run --project src/LivingMyth.Console -- surface --seed 1
@@ -170,8 +187,23 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
   the `SiteIndex` in the same breath as `WorldSurface`, so no terraform edit can exist before
   the index does — the `sites` gate proves it by editing FIRST in one of its double runs. Site
   type honesty is cell-checked (`SiteIndex.FitsCell` is the shared rule both generation and
-  the gate use). `Event.SiteId` does not exist — the gate asserts the ABSENCE; adding it is a
-  deliberate baseline-moving milestone with documented anchoring conventions, never a patch.
+  the gate use).
+- **Event.SiteId comes from ONE table, never ad hoc.** `SiteAnchors.Expected` (Sites.cs) is the
+  SINGLE authority for which events anchor to a place (founding/abandonment→seat, war→stronghold
+  hill-fort→watch-post→ford, ways-born/fade→sacred shrine→grove→barrow→cairn; everything else
+  null; life events never anchor). World calls it at record time via `AnchorSite`; the `sites`
+  gate recomputes it per event and asserts equality, so the rule cannot drift in World alone.
+  It uses immutable sites + type-priority + lowest-id — ZERO Rng — which is the only reason
+  adding the field held the baseline at 884/699/567/706. New anchor conventions extend the table
+  AND the gate together. SiteId is never set without RegionId, and is always inside that region.
+  The four anchor channels never mix: SiteId (the place it belongs to) / RegionId (where it
+  happened) / HomeRegionId (where remembered — never a location) / null (unplaced).
+- **Replay is a read-model that NEVER invents a place.** `Replay.ChainFor` copies each beat's
+  anchors verbatim and tags an honest Status; the viewer's replay overlay and turning-point marks
+  draw a map pin ONLY for a beat/pivot with a true SiteId or RegionId — memory-only and unanchored
+  beats live in the side rail, never on the map. `TurningPointKind` is a bounded authored
+  classifier (no "every event is a pivot"). The `replay` gate proves determinism, verbatim
+  anchors, honest statuses, bounded real consequences, the classifier, and save-safety.
 - **The world save is an input journal, never sim truth.** `PlayerWorldStore` persists the
   player's HAND (acts with years + identity snapshots), not world state: replaying it against
   the same seed reproduces the world because acts are the only player input the sim feels.
@@ -205,7 +237,7 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 _Last updated: 2026-06-12_
 
 ### Context Management
-- Your context snowballs at **turn 19** on average (39% of sessions). Use `/compact` proactively after turn 17-19 on long sessions to prevent unbounded growth.
+- Your context snowballs at **turn 18** on average (40% of sessions). Use `/compact` proactively after turn 16-18 on long sessions to prevent unbounded growth.
 - Some sessions use significantly more tokens than others. Consider shorter, more focused sessions with clear goals.
 - You could benefit from subagents for parallel tasks. Consider splitting multi-file operations into parallel agent tasks.
 - You read files you don't end up using. Use `Grep` first to locate relevant files before reading them — reduces unnecessary context by ~0%.
