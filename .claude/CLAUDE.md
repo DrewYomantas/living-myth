@@ -115,11 +115,23 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   faction-mean prosperity reshape births/trade/war): 894/705/574/715 → **823/559/910/632**
   (Δ −71/−146/+336/−83, BOTH directions). Balance held with NO tuning (5000-yr living
   168/157/306/150, no extinction, cap stays 300). All NINE gates green.
-- **Next** — Drew's F5 feel-test of Harvest Economy (famine/plenty/famine_end name the land; famine
-  deaths still home-remembered; The Barren Years over a long run) + Theater of War / Chronicle
-  Replay / persistence / Cast arcs; the deferred Harvest VIEWER half (card famine_end, surface The
-  Barren Years, famine land-scar + terrain-typed harvest); person↔site anchoring; timeline
-  scrubbing; fresh-world affordance (today: delete the save).
+- **Harvest Memory Viewer Payoff V1** (2026-06-13, viewer-only — the Harvest Economy's deferred
+  viewer half): the land's hunger made visible. `famine_end` Recovery event class (green `❀`, was
+  falling back to "Tale ◆"); `MapView.MarkKind.FamineScar` — ochre cracked-earth scar on famine
+  ONSET only (distinct from war-red `✕`, grey cairns, battle swords); Region Lens **"Harvest
+  memory"** section (live `Region.InFamine`/`InBoom` condition line — qualitative, no numbers — +
+  recent famine/recovery/plenty beats + the channel-split note; harvest beats excluded from "Tales
+  anchored here"); Remembered Places **harvest** filter chip (`FilterOf` routes famine/famine_end/
+  boom through the region-anchored loop, never site/home). Pure read-model: **verify held exactly
+  823/559/910/632**, all 10 gates green, independent channel-mixing verifier PASS. Commit `85729fd`.
+  F5 feel-tested live (Year 316): Recovery glyph + harvest filter + channel honesty confirmed;
+  KNOWN ISSUE — famine scars are subtle at low zoom and, recurring often, crowd the 4-slot
+  per-region mark ring (a dedicated famine-scar store/cap is the fix).
+- **Next** — **famine-scar polish** (own scar store or 1-most-recent cap so rare founding/war/battle
+  marks survive; low-zoom legibility — the #1 feel-test finding) → **terrain-typed harvest**
+  (highland/coast/plains volatility, the deferred sim follow-up, pairs with the scar mood); still-
+  unwatched Theater of War / Chronicle Replay / persistence / Cast feel-tests; person↔site
+  anchoring; timeline scrubbing; fresh-world affordance (today: delete the save).
 
 ## Commands
 ```bash
@@ -298,7 +310,7 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 _Last updated: 2026-06-13_
 
 ### Context Management
-- Your context snowballs at **turn 18** on average (38% of sessions). Use `/compact` proactively after turn 16-18 on long sessions to prevent unbounded growth.
+- Your context snowballs at **turn 19** on average (38% of sessions). Use `/compact` proactively after turn 17-19 on long sessions to prevent unbounded growth.
 - Some sessions use significantly more tokens than others. Consider shorter, more focused sessions with clear goals.
 - You could benefit from subagents for parallel tasks. Consider splitting multi-file operations into parallel agent tasks.
 - You read files you don't end up using. Use `Grep` first to locate relevant files before reading them — reduces unnecessary context by ~0%.
