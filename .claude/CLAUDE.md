@@ -87,10 +87,25 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   `RememberedPlaces.cs` panel, Site Card site memory ("known for" from counts). New gate `replay`;
   `sites` gate rewritten to PROVE the anchoring contract event-by-event. Baseline held exactly
   884/699/567/706.
-- **Next** — Drew's F5 feel-test of Chronicle Replay + site memory (then the still-unwatched
-  persistence + Cast arcs); battle sites + per-region economy (baseline-moving — extend place
-  memory to battles/famine, close chapters on war's-peace/famine's-end); person↔site anchoring;
-  timeline scrubbing; fresh-world affordance (today: delete the save).
+- **Theater of War — Battle Sites V1** (2026-06-13, sim + read-models + viewer + gate) — the
+  FIRST deliberate baseline move since M8. War casualties became `battle` events fought at real
+  places: `World.RecordBattle` wraps the war's existing casualty rolls (lazily, first blood per
+  war-year) anchored to the war's `FrontRegion` (a deterministic border region) + its stronghold
+  (`SiteAnchors` extended: war/battle→stronghold). War declaration anchors to the front + carries
+  leaders; peace carries leaders + the toll ("After N battles and M fallen … make peace"),
+  closing the chapter-closing gap. Read-models: StoryGrammar `war-to-battle`/`battle-death`;
+  Scoring `battle`=50; Echoes **The Field of Bones** (first place-keyed echo, ≥3 battles at one
+  site). Viewer: crossed-swords scar, Remembered Places war filter, Site Card "fought here",
+  catch-up connectors; war-pivots now pin the front. **Determinism keystone:** FrontRegion +
+  RecordBattle draw ZERO Rng, so the stream stays byte-identical and the baseline moved by EXACTLY
+  the battle count: 884/699/567/706 → **894/705/574/715** (+10/+6/+7/+9). Battles are NOT a
+  turning-point kind (Replay untouched). `sites` gate proves battle anchoring non-vacuously (32
+  battles / 22 sited). All eight gates green.
+- **Next** — Drew's F5 feel-test of Theater of War (battles at the front, crossed-swords scars,
+  the peace toll, Field of Bones) + the still-unwatched Chronicle Replay / persistence / Cast
+  arcs; **per-region economy** (the paired half — famine/plenty as a region's harvest, anchored to
+  the land that starved, famine's-end closes a chapter; baseline-moving with real new RNG);
+  person↔site anchoring; timeline scrubbing; fresh-world affordance (today: delete the save).
 
 ## Commands
 ```bash
@@ -153,12 +168,25 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
   `curse_death_multiplier` (2.5) and `famine_death_multiplier` (1.4) + `famine_threshold` (0.45)
   tune how deadly curses and collapse are. The economy is a net population suppressor (famine adds
   deaths, booms only help births), so raising multipliers drifts low seeds toward extinction.
-- **The verify baseline moves whenever sim RNG consumption changes.** Current
-  `verify` counts (120 yr, cap 300): 884/699/567/706 (seeds 1/18/42/7, M8 gossip-layer baseline —
-  added `Gossip()` to the tick: a bounded per-year chronicle cursor that rolls rumor events off
-  notable deeds, shifting reputation and nudging cross-faction tension). Prior M7 culture baseline
-  was 814/594/525/652. The determinism gate is self-consistency (same seed → byte-identical run), so
-  it stays green regardless of feature work; these numbers are just the recorded expectation.
+- **The verify baseline moves whenever sim RNG consumption changes — OR a new event type is
+  recorded.** Current `verify` counts (120 yr, cap 300): **894/705/574/715** (seeds 1/18/42/7,
+  Battle Sites V1 baseline — added `battle` events that WRAP the war's existing casualty rolls
+  with ZERO new Rng, so the stream stayed byte-identical and the count rose by EXACTLY the battle
+  count: +10/+6/+7/+9 over the M8 baseline 884/699/567/706). Prior baselines: M8 gossip
+  884/699/567/706, M7 culture 814/594/525/652. The determinism gate is self-consistency (same seed
+  → byte-identical run), so it stays green regardless of feature work; these numbers are just the
+  recorded expectation. NOTE: adding a recorded event with NO new Rng (the Battle Sites trick)
+  moves the count but not the stream — a clean, balance-safe way to move the baseline.
+- **Battle Sites are zero-Rng by construction.** `World.RecordBattle` records a `battle` event
+  but draws NO Rng; the war's casualties are the same `Rng.RandInt(0,2)`/`Pick` rolls as before,
+  just cause-linked to the battle. `FrontRegion` (the border region a war is fought over) is a
+  pure read over control + the fixed adjacency graph — also zero Rng, and computed BEFORE the
+  YearsLeft `RandInt(1,2)` draw so that draw is unmoved. A battle is PLACED (RegionId=front,
+  SiteId=front's stronghold via `SiteAnchors` war/battle case); its dead stay REMEMBERED at home
+  (the death events keep HomeRegionId, never the battle's ground) — the four anchor channels still
+  never mix. Battles are deliberately NOT a turning-point kind (only war/peace/land pivots are; a
+  far-reaching battle surfaces via the ≥4-consequence fallback), so any new pivot type must extend
+  BOTH `Replay.TurningPointKind` AND the `replay` gate's `tpKinds`+premise switch together.
 - **M8 gossip tuning note.** `Gossip()` watches `[_lastGossipEventCount, count)` each year (no all-
   history scan), gates on importance (≥`gossip_min_importance` 42, which is why low-key events like
   plain scandals never reach the mill), and never gossips a `rumor` (no recursion). `The Blackened
@@ -234,17 +262,17 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 <!-- TOKENOMICS:START -->
 ## Token Optimization Insights
 
-_Last updated: 2026-06-12_
+_Last updated: 2026-06-13_
 
 ### Context Management
-- Your context snowballs at **turn 18** on average (40% of sessions). Use `/compact` proactively after turn 16-18 on long sessions to prevent unbounded growth.
+- Your context snowballs at **turn 19** on average (39% of sessions). Use `/compact` proactively after turn 17-19 on long sessions to prevent unbounded growth.
 - Some sessions use significantly more tokens than others. Consider shorter, more focused sessions with clear goals.
 - You could benefit from subagents for parallel tasks. Consider splitting multi-file operations into parallel agent tasks.
 - You read files you don't end up using. Use `Grep` first to locate relevant files before reading them — reduces unnecessary context by ~0%.
 - You receive verbose command output. Prefer `Grep`/`Read` tools over bash commands when searching files to reduce output tokens.
 
 ### Model Usage
-- You use Opus/Claude for **9%** of simple tasks. Prefer **Sonnet** for editing, small fixes, and exploration tasks to reduce token usage by ~5x on those sessions.
+- You use Opus/Claude for **7%** of simple tasks. Prefer **Sonnet** for editing, small fixes, and exploration tasks to reduce token usage by ~5x on those sessions.
 - MCP server(s) **unity-mcp** are loaded but never used. Consider removing them to reduce per-session overhead.
 
 ### Prompt Quality
