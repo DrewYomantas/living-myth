@@ -255,6 +255,9 @@ public static class StoryGrammar
         if (effect.Type == "famine" && cause.Type == "divine" && cause.Tags.Contains("protect"))
             return (ConnectorKind.But, "famine-despite-protection");
 
+        if (effect.Type == "famine_end" && cause.Type == "famine")
+            return (ConnectorKind.Therefore, "famine-breaks");   // the land that starved recovers
+
         if (effect.Type == "death" && cause.Type == "famine")
             return (ConnectorKind.Therefore, "famine-death");
         if (effect.Type == "death" && cause.Type == "battle")
@@ -303,7 +306,8 @@ public static class StoryGrammar
             case "murder":        // motive in text ("in a grasp for power", "for the heresy of…")
                 return new OriginInfo(OriginKind.RecordedMotive);
 
-            case "famine":        // prosperity crossed the famine threshold
+            case "famine":        // harvest crossed the famine threshold
+            case "famine_end":    // harvest climbed back (always also cause-linked to its onset)
             case "boom":
             case "trade":
             case "custom":        // a value axis crossed the identity threshold

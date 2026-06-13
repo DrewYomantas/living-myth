@@ -25,8 +25,9 @@ switch (cmd)
     case "save": SaveCmd(Years(60)); break;
     case "sites": SitesCmd(Years(120)); break;
     case "replay": ReplayCmd(Years(120)); break;
+    case "harvest": HarvestCmd(Years(120)); break;
     default:
-        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine | save | sites | replay");
+        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine | save | sites | replay | harvest");
         break;
 }
 return;
@@ -1164,6 +1165,132 @@ void SaveCmd(int years)
 }
 
 // ------------------------------------------------------------------------- verify
+
+// -------------------------------------------------------------------------- harvest
+
+// Proof gate for Harvest Economy V1: the per-region harvest is the economy's ground truth and
+// faction Prosperity derives from it. Proves, event-by-event and faction-by-faction:
+//   (1) derivation — Prosperity == the mean of controlled-region Harvests; InFamine/FamineEvent/
+//       InBoom are the worst/any rollup of the region flags;
+//   (2) landless neutrality — a people holding no land reads Prosperity 1.0, never in famine;
+//   (3) anchoring — every famine/boom/famine_end carries a valid RegionId and NEVER a SiteId
+//       (the convention table agrees: SiteAnchors.Expected is null for all three);
+//   (4) famine_end — each one answers an earlier famine in the SAME region (cause + region match);
+//   (5) channel honesty — economy events never carry a home anchor; famine deaths keep RegionId
+//       null (the grief stays home-memory anchored), re-asserted cheaply;
+//   (6) determinism — a second identical run yields a byte-identical harvest state.
+void HarvestCmd(int years)
+{
+    Console.WriteLine($"Harvest gate ({years} yrs): per-region harvest is ground truth; faction");
+    Console.WriteLine("Prosperity derives from it; famine/plenty/famine_end anchor to land, not site.");
+    int failures = 0;
+    int suiteAnchored = 0, suiteFamineEnds = 0, suiteLandless = 0;
+
+    foreach (int seed in new[] { 1, 18, 42, 7 })
+    {
+        var (c1, n1) = Load();
+        var w = new World(seed, c1, n1); w.Run(years);
+        var bad = new List<string>();
+
+        // (1)+(2) Derivation + landless neutrality, faction by faction.
+        foreach (var f in w.Config.Factions.Select(cf => w.Factions[cf.Id]))
+        {
+            var owned = f.ControlledRegions.Select(int.Parse).OrderBy(x => x).ToList();
+            if (owned.Count == 0)
+            {
+                suiteLandless++;
+                if (f.Prosperity != 1.0 || f.InFamine || f.InBoom || f.FamineEvent is not null)
+                    bad.Add($"landless {f.Id} not neutral (P={f.Prosperity}, famine={f.InFamine}, boom={f.InBoom})");
+                continue;
+            }
+            double sum = 0.0; bool anyBoom = false; Region? worst = null;
+            foreach (var rid in owned)
+            {
+                var r = w.Regions[rid];
+                sum += r.Harvest;
+                if (r.InBoom) anyBoom = true;
+                if (r.InFamine && (worst is null || r.Harvest < worst.Harvest)) worst = r;
+            }
+            if (Math.Abs(f.Prosperity - sum / owned.Count) > 1e-9)
+                bad.Add($"{f.Id} Prosperity {f.Prosperity} != mean harvest {sum / owned.Count}");
+            if (f.InFamine != (worst is not null))
+                bad.Add($"{f.Id} InFamine {f.InFamine} disagrees with its lands");
+            if (!ReferenceEquals(f.FamineEvent, worst?.FamineEvent))
+                bad.Add($"{f.Id} FamineEvent is not its worst land's onset");
+            if (f.InBoom != anyBoom)
+                bad.Add($"{f.Id} InBoom {f.InBoom} disagrees with its lands");
+        }
+
+        // (3)+(4)+(5) Event anchoring, famine_end pairing, channel honesty.
+        var faminesByRegion = new Dictionary<int, List<Event>>();
+        int anchored = 0, famineEnds = 0;
+        foreach (var e in w.Chronicle.Events)
+        {
+            if (e.Type is not ("famine" or "boom" or "famine_end")) continue;
+            anchored++;
+            if (e.RegionId is not int rid || rid < 0 || rid >= w.Regions.Count)
+            { bad.Add($"{e.Type} #{e.Id} has no valid RegionId"); break; }
+            if (e.SiteId is not null)
+            { bad.Add($"{e.Type} #{e.Id} leaked a SiteId ({e.SiteId})"); break; }
+            if (e.HomeRegionId is not null)
+            { bad.Add($"{e.Type} #{e.Id} carries a home anchor (economy is placed, not remembered)"); break; }
+            // The ONE convention table must agree these never anchor to a site.
+            if (SiteAnchors.Expected(w, e.Type, e.Tags, e.RegionId) is int leak)
+            { bad.Add($"convention anchors {e.Type} #{e.Id} to site {leak} — expected none"); break; }
+            if (e.Type == "famine")
+            {
+                if (!faminesByRegion.TryGetValue(rid, out var fl)) { fl = new(); faminesByRegion[rid] = fl; }
+                fl.Add(e);
+            }
+            else if (e.Type == "famine_end")
+            {
+                famineEnds++;
+                var onset = e.Causes.Select(cid => w.Chronicle.Get(cid))
+                    .FirstOrDefault(c => c.Type == "famine" && c.RegionId == rid && c.Year <= e.Year);
+                if (onset is null)
+                { bad.Add($"famine_end #{e.Id} answers no earlier famine in region {rid}"); break; }
+            }
+        }
+        // Per region, recoveries never outnumber the hungers they answer.
+        foreach (var (rid, fl) in faminesByRegion)
+        {
+            int ends = w.Chronicle.Events.Count(e => e.Type == "famine_end" && e.RegionId == rid);
+            if (ends > fl.Count)
+                bad.Add($"region {rid} has {ends} famine_end > {fl.Count} famine");
+        }
+        // Famine deaths keep the home-memory channel: caused by a famine, but RegionId stays null.
+        foreach (var e in w.Chronicle.Events.Where(e => e.Type is "death" or "murder" or "birth"))
+            if (e.RegionId is not null || e.SiteId is not null)
+            { bad.Add($"life event #{e.Id} claims a literal place"); break; }
+
+        suiteAnchored += anchored; suiteFamineEnds += famineEnds;
+
+        // (6) Determinism: a second identical run yields byte-identical harvest state.
+        var (c2, n2) = Load();
+        var w2 = new World(seed, c2, n2); w2.Run(years);
+        if (HarvestCanon(w) != HarvestCanon(w2))
+            bad.Add("harvest state differs between identical runs");
+
+        Console.WriteLine($"  seed {seed,3}: {(bad.Count == 0 ? "OK" : "FAIL")}  {anchored} land-anchored economy events · {famineEnds} famine_end · {w.Regions.Count} regions");
+        foreach (var b in bad.Take(5)) Console.WriteLine($"           {b}");
+        if (bad.Count > 0) failures++;
+    }
+
+    Console.WriteLine($"  suite: {suiteAnchored} land-anchored economy events, {suiteFamineEnds} recoveries, {suiteLandless} landless-faction checks");
+    Console.WriteLine(failures == 0 ? "\nHARVEST ECONOMY HOLDS." : $"\n{failures} SEED(S) FAILED.");
+    Environment.Exit(failures == 0 ? 0 : 1);
+}
+
+string HarvestCanon(World w)
+{
+    var sb = new System.Text.StringBuilder();
+    foreach (var r in w.Regions)
+        sb.Append(r.Id).Append('|').Append(r.Harvest.ToString("R", System.Globalization.CultureInfo.InvariantCulture))
+          .Append('|').Append(r.InFamine ? 1 : 0).Append('|').Append(r.InBoom ? 1 : 0).Append('\n');
+    foreach (var f in w.Config.Factions.Select(cf => w.Factions[cf.Id]))
+        sb.Append(f.Id).Append('=').Append(f.Prosperity.ToString("R", System.Globalization.CultureInfo.InvariantCulture)).Append('\n');
+    return sb.ToString();
+}
 
 void VerifyCmd()
 {

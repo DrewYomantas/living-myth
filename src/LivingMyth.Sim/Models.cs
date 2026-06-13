@@ -95,12 +95,15 @@ public sealed class Faction
     public int? LastDeathEventId { get; set; }      // most recent death/murder of a member — cause for abandonment
     public int FoundedYear { get; set; }
 
-    // economy (M4): per-faction prosperity drives famine/boom/trade and modulates births/deaths
-    public double Prosperity { get; set; } = 1.0;   // 0.0 starving … 1.0 neutral … 2.0 thriving
-    public bool InFamine { get; set; }              // below famine_threshold — death pressure + event dedup
-    public bool InBoom { get; set; }                // above boom_threshold — event dedup
-    public int LastBoomYear { get; set; }           // last "plenty continues" beat, so sustained booms re-emit
-    public Event? FamineEvent { get; set; }         // current famine's onset event, for death cause-chains
+    // economy (M4 → Harvest Economy V1): Prosperity/InFamine/InBoom/FamineEvent are now DERIVED
+    // each tick from this people's controlled regions (Economy(): Prosperity = mean harvest;
+    // InFamine = its worst controlled region starves; FamineEvent = that region's onset event;
+    // InBoom = any controlled region feasts). Landless peoples hold neutral 1.0 and never famine.
+    // Births/deaths/culture still read these fields unchanged — only their source moved to the land.
+    public double Prosperity { get; set; } = 1.0;   // 0.0 starving … 1.0 neutral … 2.0 thriving (mean of controlled regions)
+    public bool InFamine { get; set; }              // worst controlled region in famine — death pressure
+    public bool InBoom { get; set; }                // any controlled region in boom
+    public Event? FamineEvent { get; set; }         // worst region's famine onset event, for death cause-chains
 
     // culture (M7): per-faction value axes (valor/piety/cunning/harmony) drift over time and
     // harden into named customs at threshold; customs drive clash (tension) and diffusion (peace).
@@ -184,6 +187,16 @@ public sealed class Region
     public List<int> AdjacentRegionIds { get; } = new();
     public float X { get; }
     public float Y { get; }
+
+    // Harvest Economy V1: the per-region harvest random-walk is the economy's ground truth
+    // (faction Prosperity derives from the mean of its controlled regions). Every region
+    // carries Harvest, but only a held region (ControllingFactionId != null) emits
+    // famine/plenty/famine_end events — anchored to RegionId, never SiteId.
+    public double Harvest { get; set; } = 1.0;       // 0.0 starving … 1.0 neutral … 2.0 thriving
+    public bool InFamine { get; set; }               // below famine_threshold — event dedup
+    public Event? FamineEvent { get; set; }          // current famine's onset event, for death cause-chains
+    public bool InBoom { get; set; }                 // above boom_threshold — event dedup
+    public int LastBoomYear { get; set; }            // last "plenty continues" beat (sustained booms re-emit)
 
     public Region(int id, string name, string terrainType, float x, float y)
     {

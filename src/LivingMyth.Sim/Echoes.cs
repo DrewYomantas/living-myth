@@ -352,6 +352,40 @@ public static class Echoes
         return echoes;
     }
 
+    /// <summary>One land that starved again and again — its people remember it as the barren
+    /// years. The first famine echo keyed on a PLACE (Event.RegionId), mirroring Field of Bones.</summary>
+    public static List<Echo> DetectBarrenYears(World world)
+    {
+        var byRegion = new Dictionary<int, List<Event>>();
+        foreach (var e in world.Chronicle.Events)
+            if (e.Type == "famine" && e.RegionId is int rid)
+            {
+                if (!byRegion.TryGetValue(rid, out var list)) { list = new(); byRegion[rid] = list; }
+                list.Add(e);
+            }
+        var echoes = new List<Echo>();
+        foreach (var rid in byRegion.Keys.OrderBy(k => k))
+        {
+            // Cluster a land's famines into ages (>25-year gaps break the run), so the echo names
+            // one barren age that hammered a single place — not every famine it ever saw.
+            var ages = new List<List<Event>>();
+            List<Event>? age = null;
+            foreach (var fe in byRegion[rid].OrderBy(e => e.Year))
+            {
+                if (age is null || fe.Year - age[^1].Year > 25) { age = new(); ages.Add(age); }
+                age.Add(fe);
+            }
+            foreach (var g in ages.Where(g => g.Count >= 3))
+            {
+                var span = (g[0].Year, g[^1].Year);
+                string name = world.RegionName(rid) ?? "a lost land";
+                string label = $"{name} starved {g.Count} times {SpanPhrase(span.Item1, span.Item2)} — the barren years.";
+                echoes.Add(new Echo("The Barren Years", label, g.Select(e => e.Id).ToList(), span));
+            }
+        }
+        return echoes;
+    }
+
     public static List<Echo> DetectAll(World world)
     {
         var echoes = new List<Echo>();
@@ -369,6 +403,7 @@ public static class Echoes
         echoes.AddRange(DetectBlackenedName(world));
         echoes.AddRange(DetectRumorWar(world));
         echoes.AddRange(DetectFieldOfBones(world));
+        echoes.AddRange(DetectBarrenYears(world));
 
         var seen = new HashSet<(string, string)>();
         var unique = new List<Echo>();

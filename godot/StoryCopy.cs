@@ -31,6 +31,7 @@ public static class StoryCopy
             "battle-death" => "the fighting took them — therefore,",
             "curse-death" => "the curse found another life — therefore,",
             "famine-under-doom" => "the doom upon them bore down — therefore,",
+            "famine-breaks" => "the hunger finally loosed its grip — therefore,",
             _ => link.GapYears >= 3 ? $"{link.GapYears} years passed — therefore," : "therefore —",
         },
     };

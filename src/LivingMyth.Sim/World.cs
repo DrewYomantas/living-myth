@@ -733,73 +733,98 @@ public sealed class World
 
     private void Economy()
     {
-        // Per-faction prosperity random-walks around a neutral 1.0 (mean-reverting). Threshold
-        // crossings emit one famine/boom event per episode (the InFamine/InBoom flags are the
-        // hysteresis). All draws happen in FactionsSorted() order to stay deterministic.
-        foreach (var fid in FactionsSorted())
+        // Harvest Economy V1: the harvest random-walk is per REGION (the economy's ground
+        // truth) — faction Prosperity derives from the mean of its controlled regions below.
+        // Every region's harvest walks (list order == id order, deterministic), but only a held
+        // region emits famine/plenty/famine_end events, anchored to RegionId (never SiteId — a
+        // famine spans a land, it isn't at one site).
+        foreach (var r in Regions)
         {
-            var f = Factions[fid];
             int step = Rng.RandInt(-1, 1);
-            f.Prosperity += step * Params["economy_prosperity_step"];
-            f.Prosperity += (1.0 - f.Prosperity) * Params["economy_prosperity_revert"];
-            // God-hand pressure: a flat bias on the walk while the window holds — same
-            // draws, gently shifted values. Inert (0-width windows) without player acts.
-            if (f.ProtectUntilYear > Year)
-                f.Prosperity += Params.GetValueOrDefault("protect_prosperity_bias", 0.02);
-            if (f.DoomUntilYear > Year)
-                f.Prosperity -= Params.GetValueOrDefault("doom_prosperity_drag", 0.02);
-            f.Prosperity = Math.Clamp(f.Prosperity, 0.0, 2.0);
+            r.Harvest += step * Params["economy_prosperity_step"];
+            r.Harvest += (1.0 - r.Harvest) * Params["economy_prosperity_revert"];
 
-            if (!f.InFamine && f.Prosperity < Params["famine_threshold"])
+            var holder = r.ControllingFactionId is string hid ? Factions[hid] : null;
+            // God-hand pressure biases the holder's lands — a flat bias on the SAME draw while
+            // the window holds, never an extra draw. Inert (0-width windows) without player acts.
+            if (holder is not null)
             {
-                f.InFamine = true;
-                // A famine arriving under an active doom or protection cause-links to the
-                // divine act, honestly: the doom truly pressed it down ("therefore"); the
-                // protection truly stood against it and was overcome ("but").
+                if (holder.ProtectUntilYear > Year)
+                    r.Harvest += Params.GetValueOrDefault("protect_prosperity_bias", 0.02);
+                if (holder.DoomUntilYear > Year)
+                    r.Harvest -= Params.GetValueOrDefault("doom_prosperity_drag", 0.02);
+            }
+            r.Harvest = Math.Clamp(r.Harvest, 0.0, 2.0);
+
+            // Only a held land has people to starve or feast; wilderness harvest walks silently.
+            if (holder is null) { r.InFamine = false; r.InBoom = false; r.FamineEvent = null; continue; }
+
+            if (!r.InFamine && r.Harvest < Params["famine_threshold"])
+            {
+                r.InFamine = true;
+                // A famine arriving under an active doom or protection cause-links to the divine
+                // act, honestly: the doom truly pressed it down ("therefore"); the protection
+                // truly stood against it and was overcome ("but").
                 var divineCauses = new List<int>();
-                if (f.DoomUntilYear > Year && f.DoomEventId is int de) divineCauses.Add(de);
-                if (f.ProtectUntilYear > Year && f.ProtectEventId is int pe) divineCauses.Add(pe);
-                f.FamineEvent = Chronicle.Record(Year, "famine",
-                    $"Famine grips {f.Name}.",
-                    participants: f.LeaderId is int fl ? new() { fl } : null,
+                if (holder.DoomUntilYear > Year && holder.DoomEventId is int de) divineCauses.Add(de);
+                if (holder.ProtectUntilYear > Year && holder.ProtectEventId is int pe) divineCauses.Add(pe);
+                r.FamineEvent = Chronicle.Record(Year, "famine",
+                    $"Famine grips {r.Name}.",
+                    participants: holder.LeaderId is int fl ? new() { fl } : null,
                     causes: divineCauses.Count > 0 ? divineCauses : null,
-                    tags: new() { "economy", "scarcity" });
+                    tags: new() { "economy", "scarcity" },
+                    regionId: r.Id);
                 // A starving people leans on its neighbours: each famine onset pushes aggression
                 // outward once, toward every other people that still has living members.
                 foreach (var otherId in FactionsSorted())
-                    if (otherId != fid && Factions[otherId].Members.Count > 0)
-                        AddTension(fid, otherId, 1.5, f.FamineEvent);
+                    if (otherId != holder.Id && Factions[otherId].Members.Count > 0)
+                        AddTension(holder.Id, otherId, 1.5, r.FamineEvent);
             }
-            else if (f.InFamine && f.Prosperity >= Params["famine_threshold"])
+            else if (r.InFamine && r.Harvest >= Params["famine_threshold"])
             {
-                f.InFamine = false;
-                f.FamineEvent = null;
+                r.InFamine = false;
+                // Famine's-end is a real, region-anchored beat (the chapter-closing event the
+                // recaps have been missing), cause-linked back to the onset it answers.
+                Chronicle.Record(Year, "famine_end",
+                    $"The land recovers; the famine in {r.Name} breaks.",
+                    participants: holder.LeaderId is int el ? new() { el } : null,
+                    causes: r.FamineEvent is Event fe ? new() { fe.Id } : null,
+                    tags: new() { "economy", "recovery" },
+                    regionId: r.Id);
+                r.FamineEvent = null;
             }
 
-            // A boom is one sustained high-prosperity spell, so (unlike famine, which flickers near
+            // A boom is one sustained high-harvest spell, so (unlike famine, which flickers near
             // its floor) it re-emits a "plenty continues" beat every boom_beat_years — that lets a
             // long golden age accumulate enough events for DetectGoldenAge to recognise it.
-            if (f.Prosperity > Params["boom_threshold"])
+            if (r.Harvest > Params["boom_threshold"])
             {
-                if (!f.InBoom || Year - f.LastBoomYear >= (int)Params["boom_beat_years"])
+                if (!r.InBoom || Year - r.LastBoomYear >= (int)Params["boom_beat_years"])
                 {
-                    bool onset = !f.InBoom;
-                    f.InBoom = true;
-                    f.LastBoomYear = Year;
+                    bool onset = !r.InBoom;
+                    r.InBoom = true;
+                    r.LastBoomYear = Year;
                     Chronicle.Record(Year, "boom",
-                        onset ? $"A season of plenty blesses {f.Name}." : $"Plenty still blesses {f.Name}.",
-                        participants: f.LeaderId is int bl ? new() { bl } : null,
-                        tags: new() { "economy", "boom" });
+                        onset ? $"A season of plenty blesses {r.Name}." : $"Plenty still blesses {r.Name}.",
+                        participants: holder.LeaderId is int bl ? new() { bl } : null,
+                        tags: new() { "economy", "boom" },
+                        regionId: r.Id);
                 }
             }
-            else if (f.InBoom && f.Prosperity <= Params["boom_threshold"])
+            else if (r.InBoom && r.Harvest <= Params["boom_threshold"])
             {
-                f.InBoom = false;
+                r.InBoom = false;
             }
         }
 
-        // Trade: prospering neighbours exchange goods, which lifts both and eases tension between
-        // them (couples to the war system). Sorted-pair loop mirrors ReligiousFriction.
+        // Derive each people's Prosperity (the compatibility surface births/culture/deaths read)
+        // plus its famine/boom rollups from the lands it holds. No draws — pure aggregation. Runs
+        // before trade so the trade guard reads this tick's fresh mean (as the M4 walk did).
+        foreach (var fid in FactionsSorted())
+            DeriveProsperity(Factions[fid]);
+
+        // Trade: prospering neighbours exchange goods, which lifts both lands and eases tension
+        // between them (couples to the war system). Sorted-pair loop mirrors ReligiousFriction.
         var fids = FactionsSorted().ToList();
         for (int i = 0; i < fids.Count; i++)
             for (int j = i + 1; j < fids.Count; j++)
@@ -817,11 +842,55 @@ public sealed class World
                     participants: participants.Count > 0 ? participants : null,
                     tags: new() { "economy", "trade" });
 
-                fa.Prosperity = Math.Min(2.0, fa.Prosperity + Params["economy_prosperity_step"]);
-                fb.Prosperity = Math.Min(2.0, fb.Prosperity + Params["economy_prosperity_step"]);
+                // The wealth lifts the trading peoples' lands; re-derive the two of them at once
+                // (no RNG) so end-of-tick Prosperity stays the exact controlled-region mean.
+                BumpHarvest(fa, Params["economy_prosperity_step"]);
+                BumpHarvest(fb, Params["economy_prosperity_step"]);
+                DeriveProsperity(fa);
+                DeriveProsperity(fb);
                 var key = PairKey(fa.Id, fb.Id);
                 Tension[key] = Math.Max(0.0, Tension.GetValueOrDefault(key) - Params["trade_tension_reduction"]);
             }
+    }
+
+    /// <summary>Roll a people's controlled-region harvests up into the compatibility surface
+    /// (Prosperity = mean) and the famine/boom flags (worst region starves / any region feasts).
+    /// Landless peoples hold neutral 1.0 and never famine. No RNG — region ids walked in sorted
+    /// order so the worst-famine tie-break is deterministic (lowest id).</summary>
+    private void DeriveProsperity(Faction f)
+    {
+        if (f.ControlledRegions.Count == 0)
+        {
+            f.Prosperity = 1.0;
+            f.InFamine = false;
+            f.InBoom = false;
+            f.FamineEvent = null;
+            return;
+        }
+        double sum = 0.0;
+        bool anyBoom = false;
+        Region? worstFamine = null;
+        foreach (var rid in f.ControlledRegions.Select(int.Parse).OrderBy(x => x))
+        {
+            var r = Regions[rid];
+            sum += r.Harvest;
+            if (r.InBoom) anyBoom = true;
+            if (r.InFamine && (worstFamine is null || r.Harvest < worstFamine.Harvest))
+                worstFamine = r;
+        }
+        f.Prosperity = sum / f.ControlledRegions.Count;
+        f.InFamine = worstFamine is not null;
+        f.FamineEvent = worstFamine?.FamineEvent;
+        f.InBoom = anyBoom;
+    }
+
+    private void BumpHarvest(Faction f, double amount)
+    {
+        foreach (var s in f.ControlledRegions)
+        {
+            var r = Regions[int.Parse(s)];
+            r.Harvest = Math.Min(2.0, r.Harvest + amount);
+        }
     }
 
     // ---------- culture (values → customs → clash / diffusion) ----------

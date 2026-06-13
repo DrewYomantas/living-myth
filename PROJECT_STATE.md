@@ -321,14 +321,63 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       `sites` gate rewritten to PROVE the battle convention non-vacuously (32 battles / 22
       site-anchored across the suite). All EIGHT gates green; Godot build clean. Full Battle Sites
       contract below ("Battle Sites V1 — the battle contract").
-- [ ] Later — **per-region economy** (the paired half: famine/plenty become a region's harvest so
-      they anchor to the land that starved, letting famine's-end close chapters — add RNG, moves
-      the baseline); person↔site anchoring (a home site, not just a home region); a fresh-world/
-      new-seed affordance (today: delete `user://world_seed{N}.json`); relationship constellation;
-      local site-scale view; memorial tableau upgrade; visual/UX pass (surface culture + gossip in
-      the viewer); echo packs; timeline scrubbing; followed-faith audit. ← NEXT
+- [x] Harvest Economy V1 (2026-06-13, sim + read-models + new gate + viewer copy; the SECOND
+      deliberate baseline move): famine and plenty stopped being abstract faction numbers and became
+      a **region's harvest**, so they anchor to the land. The harvest random-walk moved from
+      `Faction.Prosperity` to a new per-`Region` `Harvest` (the economy's ground truth); every
+      region walks each tick (god-hand protect/doom biases the holder's lands, additive on the same
+      draw), but **only a held region emits** `famine`/`boom`/`famine_end`, anchored to **RegionId,
+      never SiteId** (a famine spans a land, it isn't at one site — `SiteAnchors` deliberately NOT
+      extended; the harvest + sites gates both prove the non-leak). `Faction.Prosperity` is now a
+      **derived compatibility surface** (the controlled-region harvest **mean**), and
+      `InFamine`/`InBoom`/`FamineEvent` are derived rollups (worst region starves / any region
+      feasts / worst region's onset event) — so births, culture, trade, and famine death pressure
+      read the same fields unchanged, only their source moved to the land. `famine_end` is a real,
+      region-anchored, chapter-closing beat (cause-linked to the onset it answers — the gap the
+      recaps had been missing). Famine deaths cause-link to the region's famine event but stay
+      **home-memory anchored** (`HomeRegionId` set, `RegionId == null`) — the four anchor channels
+      never mix. Read-models: `StoryGrammar` `famine-breaks`; `Scoring` `famine_end`=35; **The
+      Barren Years** echo (one land that starved ≥3 times in a single age — the first famine echo
+      keyed on `Event.RegionId`, clustered like The Long Famine). New gate `harvest` proves
+      derivation (Prosperity == mean; rollups), landless-faction neutrality, land-anchoring,
+      no-SiteId-leakage, `famine_end` pairing, life-event channel honesty, and harvest-state
+      determinism (264 land-anchored economy events / 45 recoveries / 3 landless checks across the
+      120-yr suite, non-vacuous). **The deliberate baseline move:** unlike Battle Sites (zero-Rng),
+      this adds real per-region draws + reshapes faction-mean prosperity, so the stream moved in
+      BOTH directions per seed — **894/705/574/715 → 823/559/910/632** (Δ −71/−146/+336/−83, seeds
+      1/18/42/7). Balance preserved with **no tuning**: 5000-yr living `168/157/306/150`, all stable,
+      no extinction (seed 42, the canary, holds 306; `carrying_capacity` stays 300). All NINE gates
+      green; Godot build clean. Full contract below ("Harvest Economy V1 — the harvest contract").
+- [ ] Later — person↔site anchoring (a home site, not just a home region); terrain-typed harvest
+      (highland vs coast volatility) + the famine land-mood scar on the map (sim signal ships now;
+      `ClassifyMark` leaves famine unmarked by design) + viewer carding of `famine_end` / The Barren
+      Years; a fresh-world/new-seed affordance (today: delete `user://world_seed{N}.json`);
+      relationship constellation; local site-scale view; memorial tableau upgrade; visual/UX pass
+      (surface culture + gossip in the viewer); echo packs; timeline scrubbing; followed-faith audit. ← NEXT
 
 ## Session log
+- [2026-06-13] Session: Harvest Economy V1 (lead dev, single coherent pass). The paired half of
+  the M4 economy and the SECOND deliberate baseline move since M8 — famine/plenty became a
+  region's harvest. Moved the random-walk from `Faction.Prosperity` to a per-`Region` `Harvest`
+  (the ground truth); `Prosperity` is now the derived controlled-region mean, with `InFamine`/
+  `InBoom`/`FamineEvent` as worst/any rollups (so births/culture/trade/death read the same fields,
+  source-shifted to the land). Only held regions emit `famine`/`boom`/`famine_end`, anchored to
+  RegionId, never SiteId (`SiteAnchors` deliberately not extended; harvest + sites gates prove the
+  non-leak). `famine_end` is a real region-anchored chapter-closing beat cause-linked to its onset
+  — closing the recap gap. Famine deaths cause-link to the famine event but stay home-anchored
+  (`HomeRegionId`/`RegionId==null`). Read-models: `StoryGrammar` `famine-breaks`, `Scoring`
+  `famine_end`=35, **The Barren Years** echo (first famine echo keyed on RegionId, age-clustered).
+  New gate `harvest` (derivation / landless neutrality / land-anchoring / no-SiteId-leak /
+  famine_end pairing / channel honesty / determinism) green and non-vacuous. Caught and fixed an
+  extinction during tuning: a derive-after-trade ordering tipped seed 42 to 0 living by shifting
+  the trade-guard RNG stream; the fix (derive-before-trade + per-trade re-derive of the two
+  traders, zero Rng) restored healthy balance AND made the mean invariant exact. Final baseline
+  **894/705/574/715 → 823/559/910/632** (Δ −71/−146/+336/−83); 5000-yr balance `168/157/306/150`,
+  no extinction, no param tuning. All NINE gates green; sim + Godot build clean, zero warnings.
+  Viewer touched only for connector copy (`famine-breaks`) — full viewer carding of `famine_end` /
+  The Barren Years / a famine land-scar is the deferred follow-up. Docs: spec in
+  docs/superpowers/specs/, PROJECT_STATE milestone + harvest contract, CLAUDE.md pending (separate
+  commit per the churn rule). NOT yet F5 feel-tested in the Godot viewer.
 - [2026-06-13] Session: Theater of War — Battle Sites V1 (lead dev + recon/viewer/review
   subagent team). The first deliberate baseline move since M8, executed as a zero-new-Rng
   additive slice: `World.RecordBattle` wraps the existing war casualty rolls into a lazily
@@ -848,9 +897,53 @@ real places**, and the baseline moved deliberately for the first time since M8.
   fallback, so `Replay.TurningPointKind` and the replay gate were untouched.
 - **Echo.** `Echoes.DetectFieldOfBones` — the first echo keyed on a place (`Event.SiteId`): a
   single site that saw ≥3 battles across the wars of the age ("a field of bones").
-- **Still deferred:** per-region economy (famine/plenty as a region's harvest, so they anchor to
-  the land that starved and famine's-end can close a chapter) — the paired half, baseline-moving
-  with real new RNG, its own milestone.
+- **Now shipped (was deferred here):** per-region economy — see "Harvest Economy V1" below.
+
+## Harvest Economy V1 — the harvest contract (binding, shipped 2026-06-13)
+
+Famine and plenty belong to **the land**, not an abstract faction number. The economy's ground
+truth moved from `Faction.Prosperity` to a per-`Region` `Harvest`, and the baseline moved
+deliberately for the second time since M8 (Battle Sites was zero-Rng; this adds real draws).
+
+- **Harvest is the ground truth.** Each `Region` carries `Harvest` (0..2, neutral 1.0) and walks
+  every tick in list order (id == index, deterministic): `Harvest += RandInt(-1,1)*step + revert`.
+  God-hand protect/doom biases the **holder's** lands — additive on the SAME draw while the window
+  holds, never an extra draw (inert without player acts). **This is the new RNG.**
+- **Prosperity is derived.** `DeriveProsperity(f)`: a people's `Prosperity` = the **mean** of its
+  controlled regions' `Harvest`; `InFamine` = its **worst** controlled region starves;
+  `FamineEvent` = that region's onset event; `InBoom` = **any** controlled region feasts. A
+  **landless** people holds neutral 1.0 and never famines. Derivation runs after the region walk;
+  trade lifts the trading peoples' lands and re-derives the two of them at once (no Rng), so
+  end-of-tick `Prosperity` equals the current controlled-region mean **exactly**. Births, culture,
+  trade, and famine death pressure read `f.Prosperity`/`f.InFamine`/`f.InBoom` **unchanged** — only
+  the source moved to the land.
+- **Land-anchored events.** Only a **held** region emits, anchored to **RegionId**: `famine` onset
+  ("Famine grips {region}", keeps doom/protect divine cause-links), `famine_end` ("The land
+  recovers; the famine in {region} breaks" — a real chapter-closing beat, cause-linked to the
+  onset it answers), and `boom`/"plenty continues". Wilderness harvest walks **silently**.
+- **SiteId never leaks.** A famine spans a region, it isn't *at* one site, so `famine`/`boom`/
+  `famine_end` carry **no SiteId** — `SiteAnchors.Expected` is deliberately NOT extended, and both
+  the `harvest` and `sites` gates prove the convention agrees (Expected == null for all three).
+- **Anchor channels still never mix.** Economy events are PLACED (RegionId, no HomeRegionId). A
+  famine death cause-links to the region's famine event but the death stays REMEMBERED at home
+  (`HomeRegionId` set, `RegionId == null`). Four channels: SiteId / RegionId / HomeRegionId / null.
+- **Read-models.** `StoryGrammar` `famine-breaks` (`famine_end` ← `famine`, therefore);
+  `Scoring` `famine_end`=35 / `recovery` tag=10; **The Barren Years** echo — one land that starved
+  ≥3 times in a single age (≤25-year gaps), the first famine echo keyed on `Event.RegionId`,
+  clustered like The Long Famine.
+- **Gate `harvest`** proves, per faction + event: derivation (Prosperity == mean; rollups exact),
+  landless neutrality, land-anchoring with valid RegionId, no-SiteId-leakage (incl. the convention
+  table), `famine_end` answers an earlier famine in the SAME region, life-event channel honesty,
+  and double-run determinism of harvest state. Non-vacuous: 264 land-anchored economy events / 45
+  recoveries / 3 landless checks across the 120-yr suite.
+- **The baseline move (documented before/after).** `verify` **894/705/574/715 → 823/559/910/632**
+  (Δ −71/−146/+336/−83, seeds 1/18/42/7) — the stream moves in BOTH directions per seed because
+  per-region draws + faction-mean prosperity reshape births/trade/war RNG. Determinism holds
+  (byte-identical double run). Balance preserved with **no tuning** — 5000-yr living
+  `168/157/306/150`, all stable, no extinction (`carrying_capacity` stays 300). All NINE gates green.
+- **Changed assumptions.** `Faction.LastBoomYear` removed (region owns boom-beat timing).
+  `Faction.InFamine`/`InBoom`/`FamineEvent` are now **derived caches** recomputed each tick, not
+  independent state. Trade now lifts harvest (the ground truth) rather than prosperity directly.
 
 ## Chronicle Replay V2 — the replay contract (binding, shipped 2026-06-12)
 
@@ -899,7 +992,18 @@ close to the shipped causal grammar) — pending placement in `Visual references
 with the same honest/aspirational/forbidden discipline as Batch 1.
 
 ## Next session starts with
-**Drew's F5 feel-test of Chronicle Replay + Site-Anchored Memory V1** (new this session):
+**Drew's F5 feel-test of Harvest Economy V1** (newest this session, sim-side — the viewer is
+NOT yet wired): run a few centuries and read the chronicle — does "Famine grips {region}" /
+"The land recovers; the famine in {region} breaks" / "A season of plenty blesses {region}" read
+like the land itself starving and recovering? Do famine deaths still read as belonging to the
+person and their home (NOT the starved region — the channel split must hold)? Over a long run,
+does a single land that keeps starving feel like "the barren years"? The deferred viewer follow-up
+is where this becomes visible: card `famine_end` as a chapter close, surface The Barren Years echo,
+and (with terrain-typed harvest) a famine land-mood scar on the map — none of which are built yet
+(`ClassifyMark` leaves famine unmarked by design). Baseline moved deliberately to
+**823/559/910/632** (from 894/705/574/715); balance held (no extinction, no tuning).
+
+**Drew's F5 feel-test of Chronicle Replay + Site-Anchored Memory V1** (prior session):
 open How We Got Here on a war or a custom-born event — does the turning-point header land
 (who/peoples/place)? Press ⟲ Replay — does the dimmed-atlas retelling read as "watching the
 map-table retell the past": numbered marks tracing the cause edges, the beat card + scrubber
