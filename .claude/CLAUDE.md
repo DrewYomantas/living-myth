@@ -18,7 +18,7 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   point classifier; PlayerCanon — the player-telling store, never read by World; PlayerWorld —
   the world-save input journal, never read by World). net8.0.
 - `src/LivingMyth.Console/` — proof runner (run | divergence | surface | verify | homes | story |
-  canon | divine | save | sites | replay).
+  canon | divine | save | sites | replay | harvest).
 - `godot/` — the viewer (.NET build), references the Sim: `Main.cs` (tick loop, pacing + dramatic
   auto-slow, live feed, inspectors, curse tool, causal catch-up + replay retelling, Follow/Yours
   channel, focus guard + memorial cards, chapter recaps, canon wiring, world-save journaling +
@@ -101,11 +101,25 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   the battle count: 884/699/567/706 → **894/705/574/715** (+10/+6/+7/+9). Battles are NOT a
   turning-point kind (Replay untouched). `sites` gate proves battle anchoring non-vacuously (32
   battles / 22 sited). All eight gates green.
-- **Next** — Drew's F5 feel-test of Theater of War (battles at the front, crossed-swords scars,
-  the peace toll, Field of Bones) + the still-unwatched Chronicle Replay / persistence / Cast
-  arcs; **per-region economy** (the paired half — famine/plenty as a region's harvest, anchored to
-  the land that starved, famine's-end closes a chapter; baseline-moving with real new RNG);
-  person↔site anchoring; timeline scrubbing; fresh-world affordance (today: delete the save).
+- **Harvest Economy V1** (2026-06-13, sim + read-models + gate + viewer copy — the SECOND
+  deliberate baseline move): famine/plenty became a **region's harvest**. The random-walk moved
+  from `Faction.Prosperity` to a per-`Region` `Harvest` (ground truth); `Prosperity` is now the
+  derived controlled-region MEAN, with `InFamine`/`InBoom`/`FamineEvent` as worst/any rollups (so
+  births/culture/trade/death read the same fields, source-shifted to the land). Only HELD regions
+  emit `famine`/`boom`/`famine_end`, anchored to **RegionId, never SiteId** (`SiteAnchors` NOT
+  extended; harvest + sites gates prove the non-leak). `famine_end` is a real region-anchored
+  chapter-closing beat cause-linked to its onset. Famine deaths cause-link to the famine event but
+  stay home-anchored (`HomeRegionId`/`RegionId==null`). Read-models: StoryGrammar `famine-breaks`;
+  Scoring `famine_end`=35; Echoes **The Barren Years** (first famine echo keyed on RegionId,
+  age-clustered ≥3). New gate `harvest`. **Baseline moved deliberately** (real new per-region RNG +
+  faction-mean prosperity reshape births/trade/war): 894/705/574/715 → **823/559/910/632**
+  (Δ −71/−146/+336/−83, BOTH directions). Balance held with NO tuning (5000-yr living
+  168/157/306/150, no extinction, cap stays 300). All NINE gates green.
+- **Next** — Drew's F5 feel-test of Harvest Economy (famine/plenty/famine_end name the land; famine
+  deaths still home-remembered; The Barren Years over a long run) + Theater of War / Chronicle
+  Replay / persistence / Cast arcs; the deferred Harvest VIEWER half (card famine_end, surface The
+  Barren Years, famine land-scar + terrain-typed harvest); person↔site anchoring; timeline
+  scrubbing; fresh-world affordance (today: delete the save).
 
 ## Commands
 ```bash
@@ -118,6 +132,7 @@ dotnet run --project src/LivingMyth.Console -- divine          # god-hand + surf
 dotnet run --project src/LivingMyth.Console -- save            # world-save journal gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- sites           # sites + Event.SiteId anchoring gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- replay          # chronicle-replay + turning-point gate (must pass; --years N)
+dotnet run --project src/LivingMyth.Console -- harvest         # per-region harvest economy gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- run --seed 42
 dotnet run --project src/LivingMyth.Console -- divergence --seed 18
 dotnet run --project src/LivingMyth.Console -- surface --seed 1
@@ -163,20 +178,25 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
   "remembered in / of / rooted in {X}" — never "died/born/murdered in {X}", never bare "in {X}".
   Keep the stores/sections separate end to end (RegionActivity, MapView marks, Region Lens).
 - **Population balance is the `carrying_capacity` param** (config.json, currently 300):
-  logistic births → plateau. Too low (~120) drifts to extinction. With the M4 economy on,
-  verified stable ~165–490 living over 5000 yrs at 300 across seeds 18/42/1/7.
+  logistic births → plateau. Too low (~120) drifts to extinction. With the Harvest Economy on,
+  verified stable ~150–310 living over 5000 yrs at 300 across seeds 1/18/42/7 (168/157/306/150).
   `curse_death_multiplier` (2.5) and `famine_death_multiplier` (1.4) + `famine_threshold` (0.45)
   tune how deadly curses and collapse are. The economy is a net population suppressor (famine adds
   deaths, booms only help births), so raising multipliers drifts low seeds toward extinction.
+  Harvest tuning note: deriving a people's death-pressure from its WORST controlled region (not a
+  single faction walk) raises famine frequency; an early derive-after-trade ordering tipped seed 42
+  to extinction by shifting the trade-guard RNG stream — derive BEFORE trade (guard reads fresh
+  mean) + re-derive the two traders after each trade (zero Rng) is the balance-safe order.
 - **The verify baseline moves whenever sim RNG consumption changes — OR a new event type is
-  recorded.** Current `verify` counts (120 yr, cap 300): **894/705/574/715** (seeds 1/18/42/7,
-  Battle Sites V1 baseline — added `battle` events that WRAP the war's existing casualty rolls
-  with ZERO new Rng, so the stream stayed byte-identical and the count rose by EXACTLY the battle
-  count: +10/+6/+7/+9 over the M8 baseline 884/699/567/706). Prior baselines: M8 gossip
-  884/699/567/706, M7 culture 814/594/525/652. The determinism gate is self-consistency (same seed
-  → byte-identical run), so it stays green regardless of feature work; these numbers are just the
-  recorded expectation. NOTE: adding a recorded event with NO new Rng (the Battle Sites trick)
-  moves the count but not the stream — a clean, balance-safe way to move the baseline.
+  recorded.** Current `verify` counts (120 yr, cap 300): **823/559/910/632** (seeds 1/18/42/7,
+  Harvest Economy V1 baseline — the harvest walk moved per-region, adding REAL new Rng per region
+  and reshaping faction-mean prosperity, so the stream moved in BOTH directions per seed:
+  894/705/574/715 → 823/559/910/632, Δ −71/−146/+336/−83). Prior baselines: Battle Sites
+  894/705/574/715, M8 gossip 884/699/567/706, M7 culture 814/594/525/652. The determinism gate is
+  self-consistency (same seed → byte-identical run), so it stays green regardless of feature work;
+  these numbers are just the recorded expectation. NOTE: adding a recorded event with NO new Rng
+  (the Battle Sites trick) moves the count but not the stream — but Harvest Economy is the opposite:
+  a genuine new-Rng contract, so re-run the 5000-yr balance probe (no extinction) when touching it.
 - **Battle Sites are zero-Rng by construction.** `World.RecordBattle` records a `battle` event
   but draws NO Rng; the war's casualties are the same `Rng.RandInt(0,2)`/`Pick` rolls as before,
   just cause-linked to the battle. `FrontRegion` (the border region a war is fought over) is a
@@ -187,6 +207,19 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
   never mix. Battles are deliberately NOT a turning-point kind (only war/peace/land pivots are; a
   far-reaching battle surfaces via the ≥4-consequence fallback), so any new pivot type must extend
   BOTH `Replay.TurningPointKind` AND the `replay` gate's `tpKinds`+premise switch together.
+- **Harvest is the economy's ground truth; Prosperity is DERIVED.** `Economy()` walks each
+  `Region.Harvest` (list order == id order), then `DeriveProsperity(f)` sets `f.Prosperity` = the
+  controlled-region harvest MEAN and `f.InFamine`/`InBoom`/`FamineEvent` as the worst/any rollup.
+  These four `Faction` fields are now CACHES recomputed every tick, not independent state — never
+  write them directly (births/culture/death read them; the `harvest` gate asserts they equal the
+  rollup exactly). Only a HELD region (`ControllingFactionId != null`) emits `famine`/`boom`/
+  `famine_end`; wilderness harvest walks silently. Economy events anchor to **RegionId, never
+  SiteId** (`SiteAnchors` is NOT extended for them — a famine spans a land, not a site; the harvest
+  AND sites gates both prove Expected==null). A famine death cause-links to the region's famine
+  event but the death stays home-anchored (`HomeRegionId`/`RegionId==null`) — four channels, never
+  mixed. Trade lifts HARVEST (the ground truth) and re-derives the two traders (zero Rng); derive
+  runs BEFORE trade so the guard reads this tick's fresh mean (the ordering that keeps balance — see
+  the baseline gotcha). `famine_end` always carries the onset id as a cause, so it's never rootless.
 - **M8 gossip tuning note.** `Gossip()` watches `[_lastGossipEventCount, count)` each year (no all-
   history scan), gates on importance (≥`gossip_min_importance` 42, which is why low-key events like
   plain scandals never reach the mill), and never gossips a `rumor` (no recursion). `The Blackened
@@ -265,7 +298,7 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 _Last updated: 2026-06-13_
 
 ### Context Management
-- Your context snowballs at **turn 19** on average (39% of sessions). Use `/compact` proactively after turn 17-19 on long sessions to prevent unbounded growth.
+- Your context snowballs at **turn 18** on average (38% of sessions). Use `/compact` proactively after turn 16-18 on long sessions to prevent unbounded growth.
 - Some sessions use significantly more tokens than others. Consider shorter, more focused sessions with clear goals.
 - You could benefit from subagents for parallel tasks. Consider splitting multi-file operations into parallel agent tasks.
 - You read files you don't end up using. Use `Grep` first to locate relevant files before reading them — reduces unnecessary context by ~0%.
