@@ -99,14 +99,27 @@ def clear_meshes():
 
 # ---- foliage helpers ---------------------------------------------------------------------------
 def canopy(x, y, base_z, r, h, tones, rng):
-    """A rounded broadleaf crown: a few overlapping smooth spheres in mixed greens."""
-    for i in range(rng.randint(3, 4)):
-        dx, dy = rng.uniform(-r*0.4, r*0.4), rng.uniform(-r*0.4, r*0.4)
-        rr = r * rng.uniform(0.6, 1.0)
+    """A rounded broadleaf crown: many overlapping smooth lobes in mixed greens, a darker
+    underskirt for depth and a sun-kissed crown highlight — a fuller, more textured silhouette."""
+    # darker base lobes (shadowed underside)
+    for _ in range(3):
+        ang = rng.uniform(0, 6.28); rad = rng.uniform(0, r*0.55)
+        rr = r * rng.uniform(0.55, 0.85)
+        add("primitive_ico_sphere_add", rgba("leaf_dark", jitter=0.08, rng=rng),
+            loc=(x+math.cos(ang)*rad, y+math.sin(ang)*rad, base_z + h*0.4),
+            scale=(rr, rr, rr*0.85), subdivisions=2, radius=1, smooth=True)
+    # main crown lobes
+    for _ in range(rng.randint(5, 7)):
+        ang = rng.uniform(0, 6.28); rad = rng.uniform(0, r*0.5)
+        rr = r * rng.uniform(0.5, 0.95)
         tone = tones[rng.randrange(len(tones))]
-        add("primitive_ico_sphere_add", rgba(tone, jitter=0.08, rng=rng),
-            loc=(x+dx, y+dy, base_z + h*0.5 + rng.uniform(0, h*0.25)),
-            scale=(rr, rr, rr*0.92), subdivisions=2, radius=1, smooth=True)
+        add("primitive_ico_sphere_add", rgba(tone, jitter=0.1, rng=rng),
+            loc=(x+math.cos(ang)*rad, y+math.sin(ang)*rad, base_z + h*0.5 + rng.uniform(0, h*0.32)),
+            scale=(rr, rr, rr*0.95), subdivisions=2, radius=1, smooth=True)
+    # sun-kissed crown highlight (NW, matching the key light)
+    add("primitive_ico_sphere_add", rgba("leaf_warm", jitter=0.05, rng=rng),
+        loc=(x - r*0.16, y + r*0.16, base_z + h*0.82),
+        scale=(r*0.5, r*0.5, r*0.46), subdivisions=2, radius=1, smooth=True)
 
 def broadleaf(x, y, scale, rng):
     th = 0.34 * scale
@@ -199,18 +212,24 @@ def build_house_b():
 
 def build_keep():
     rng = random.Random(707)
-    # stone base + tower + battlements
-    add("primitive_cube_add", rgba("stone", jitter=0.05, rng=rng), loc=(0, 0, 0.18),
-        scale=(0.62, 0.62, 0.18), bevel=0.02)
-    add("primitive_cube_add", rgba("stone", jitter=0.05, rng=rng), loc=(0, 0, 0.7),
-        scale=(0.42, 0.42, 0.55), bevel=0.02)
+    # stone base + tower + battlements, two-tone weathered stone
+    add("primitive_cube_add", rgba("stone", jitter=0.07, rng=rng), loc=(0, 0, 0.18),
+        scale=(0.62, 0.62, 0.18), bevel=0.025)
+    add("primitive_cube_add", rgba("stone_old", jitter=0.07, rng=rng), loc=(0, 0, 0.7),
+        scale=(0.42, 0.42, 0.55), bevel=0.025)
     for i in range(4):
         for j in range(4):
             if (i in (0, 3)) or (j in (0, 3)):
                 bx = -0.36 + i * 0.24
                 by = -0.36 + j * 0.24
-                add("primitive_cube_add", rgba("stone_old"), loc=(bx, by, 1.32),
-                    scale=(0.08, 0.08, 0.1))
+                add("primitive_cube_add", rgba("stone" if (i + j) % 2 else "stone_old", jitter=0.06, rng=rng),
+                    loc=(bx, by, 1.32), scale=(0.08, 0.08, 0.1))
+    # arrow-slit windows — dark insets that read the tower as a built thing
+    for (wx, wy, sx, sy) in [(0, 0.43, 0.05, 0.02), (0.43, 0, 0.02, 0.05), (-0.43, 0, 0.02, 0.05)]:
+        add("primitive_cube_add", rgba("ink"), loc=(wx, wy, 0.8), scale=(sx, sy, 0.12))
+    # slate roof cap seated inside the battlements
+    add("primitive_cone_add", rgba("slate", jitter=0.05, rng=rng), loc=(0, 0, 1.52),
+        scale=(0.4, 0.4, 1), vertices=4, radius1=1, radius2=0, depth=0.42, rot=(0, 0, 0.785))
     add("primitive_cube_add", rgba("door"), loc=(0, 0.63, 0.42),
         scale=(0.13, 0.02, 0.22))
 
