@@ -494,6 +494,14 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       (today seed is fixed at 7). ← NEXT
 
 ## Session log
+- [2026-06-14] Session: North Star Art Pipeline V1 + Biome Silhouette V1 (two milestones). Proved
+  the reproducible Blender → headless Krita → Godot art pipeline (kritarunner plumbing solved: own
+  resource dir + enable flag + args-tolerant entry + alpha-inherit ink fix), then improved the
+  Blender source FORMS (broadleaf profiles, fir/pine, angular rocks, new crag, imposing keep, dock
+  boat, trilithon). Score 5→6.5→7.0. verify held 823/559/910/632, all 9 gates green throughout.
+  Next: close the 7.0→7.5+ gap's #1 blocker — broadleaf macro-massing. Replace the sphere-cluster
+  canopy in `render_diorama.py:canopy()/broadleaf()` with real trunk+branch structure + a
+  non-spherical canopy mass so a dense wood stops reading as clustered balls at region zoom.
 - [2026-06-13] Session: Beta-Readiness Pass V1 (lead as integrator + a read-only scout team +
   a parallel doc-truth agent). Goal was beta-testability, not new systems. Alignment first proved
   the project already green: both builds clean, all 10 gates pass, verify at 823/559/910/632, and
