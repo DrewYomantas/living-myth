@@ -153,8 +153,25 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   the 5→7+ gap is dedicated art labor, not code. See docs/visual_pass/DIORAMA_PROTOTYPE.md (binding
   doctrine: the "Enter the Diorama" button is a TRANSITIONAL bridge — the final UX is seamless atlas
   zoom into a land, not a clicked mode; not built yet). Viewer-only: verify held 823/559/910/632.
+- **North Star Art Pipeline V1 — Terrain + Prop Language** (2026-06-14, Blender + headless Krita +
+  viewer + docs, NO sim) — the first reproducible art-pipeline slice, three stages: (1) Blender
+  `render_diorama.py` — 2-noise painterly material on props + a top-down opaque ground-tile pass
+  (`ground_coast/forest/highland/water`, water w/ foam) + `pulse_marker` + fuller `banner`;
+  (2) **headless Krita** `tools/art/krita_paintover.py` via `kritarunner` (no GUI) — gaussian
+  blur→unsharp + an edge-ink overlay (edge detection→invert→multiply, **alpha-inherited** so ink
+  clips to the silhouette; `invert` flips alpha, so inheritance is load-bearing). kritarunner has
+  its OWN resource dir (`%APPDATA%/kritarunner/pykrita`), needs the plugin **enabled** in
+  `kritarunnerrc`, and calls the entry WITH an args list — all in `tools/art/krita_plugin/INSTALL.md`;
+  (3) Godot `DioramaView.cs` (unchanged read-model) — textured iso ground for coast/forest/highland/
+  water, shore foam, seat→places roads, ember pulse markers on recent site-anchored tales, all gated
+  by `LM_DIORAMA_RAW` for before/after capture. Honest score 5→6.5 (flat teal water → textured+foam;
+  props gain illustrated ink). **Recommendation: adopt as the production art route** — next gains are
+  content (richer Krita chains, more silhouettes), not plumbing. Evidence: docs/visual_pass/
+  ART_PIPELINE_V1.md + artpipeline_v1/. Viewer/asset-only: verify held 823/559/910/632, 9 gates green.
 - **Next** — **terrain-typed harvest** (highland/coast/plains volatility, the deferred sim follow-up
-  — moves the baseline); **diorama art fidelity** (hand-finished/licensed assets — the 5→7+ gap) or
+  — moves the baseline); **deepen the art pipeline** (per-biome Krita chains — oilpaint/texture-bomb
+  the grounds; more tree silhouette variety) or **diorama art fidelity** (hand-finished/licensed
+  assets — the 6.5→8 gap) or
   seamless atlas→diorama zoom (retire the bridge button per its doctrine); more code-only visual
   treatment (territory boundary lines, elevation contours, marker outlines — sandbox/screenshot-verify
   each); still-unwatched Theater of War / Chronicle Replay / persistence / Cast / Harvest F5
