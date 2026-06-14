@@ -5,6 +5,24 @@ viewer can get to the locked North Star — *stylized semi-realistic fantasy dio
 atlas* — and to honestly measure the gap. This is a **prototype**, not production: it proves a
 direction and an asset pipeline, it does not ship North Star visuals.
 
+## Doctrine — this is a transitional bridge, not the final UX (binding)
+The **"⛰ Enter the Diorama"** button (and F3) is a **transitional bridge / debug affordance**, not
+the North Star interaction. The final North Star UX is **seamless atlas zoom / lens travel into a
+land** — you push into a region the way you push into a map, not by clicking a separate "mode" that
+swaps to a different screen. The button exists so the diorama is reachable and testable *today*; it
+must not calcify into the permanent entry. **Seamless zoom is deliberately NOT implemented yet** —
+this note exists only to preserve the design direction so a later milestone replaces the button with
+continuous zoom rather than enshrining the modal click. Do not build the zoom now; do not let the
+button become "the way in" in design docs or copy.
+
+## Time while the diorama is open — FROZEN (decided 2026-06-14)
+Opening the diorama **pauses the simulation** (`Main.OpenDiorama` sets `_running = false`, mirroring
+Chronicle Mode's replay freeze); closing it **restores the prior play state** (`_dioramaWasRunning`),
+so you return to the atlas at the **same year you left**. The diorama's chrome (Year plate, souls/
+tales count, the Saga-here feed, harvest condition) is a **snapshot of the opened year** and would go
+stale if the world ticked underneath it — freezing keeps it honest. This is pacing-only: `Tick()` is
+never called while open, so it cannot move the `verify` baseline (and it doesn't).
+
 ## How to run it
 - **Production bridge (the real path):** inspect a region (or a site) in the atlas, then click
   **"⛰ Enter the Diorama"** in the Region Lens. It opens as a **read-only overlay** over the live
@@ -30,6 +48,25 @@ The sandboxed F3 prototype became an honest bridge for *any* region of the *live
   copy; no-sites regions show "an unwritten country"; sparse regions still frame on their centroid.
 - **Art-fidelity pass (small):** fuller, sun-kissed, multi-lobe broadleaf canopies (better
   silhouette/texture) and a better-reading keep (slate roof, arrow-slit windows, two-tone stone).
+
+## Bridge Hardening V1 (2026-06-14)
+Hardening pass over the bridge (no new art, no sim changes):
+- **True seat** — the inspector card's "… seat" line now reads the region's actual `IsSeat` site
+  (not `sites[0]`); "no seat yet" when a region has no places.
+- **Label collision avoidance** — site callouts in dense clusters are nudged downward off one
+  another (then sideways if the column fills) so a knot of sites stays legible instead of stacking.
+- **Label clamping** — pills are clamped clear of the title/Year band (top) and the legend/bottom
+  bar, so they never collide with the title or clip off the top edge.
+- **Time freezes while open** — see the time note above; close returns you to the same year.
+
+### Bridge-hardening evidence
+- `diorama_forest.png` / `diorama_coast.png` / `diorama_highland.png` — the bridge over held forest
+  (the Old Forest), coast (the Salt Shore), and highland (the Stone Crown) regions of the live seed-7
+  world. The Stone Crown is a 7-site cluster — the collision avoidance keeps every callout legible.
+- `diorama_wild.png` — the wild/unclaimed fallback (Greenfield): "Unclaimed wilderland", no banner.
+- `label_before.png` / `label_after.png` — **the same dense highland region with collision avoidance
+  OFF then ON** (`LM_DIORAMA_NOAVOID` capture toggle). Before: callouts overlap and occlude one
+  another; after: the same 7 pills are spread into a readable staggered layout.
 
 ## Evidence files
 - `01_atlas.png` — the live atlas (production viewer).

@@ -99,6 +99,7 @@ public partial class Main : Node
     private Button _regionBtn = null!;
     private Button _dioramaBtn = null!;                     // Region Lens → open the diorama bridge
     private DioramaView? _diorama;                          // the diorama overlay, when open (read-only)
+    private bool _dioramaWasRunning;                        // time-state to restore when the diorama closes
     private const int YoursBoost = 70;                      // weight added to a marked-bloodline event
     private const int FeedWindow = 60;                      // rolling world-feed window
     private const int YoursWindow = 14;                     // rolling your-story window (its own section)
@@ -307,10 +308,15 @@ public partial class Main : Node
 
     // Open the diorama as a read-only overlay over the live world (never a scene swap — the
     // atlas, follows, and save stay exactly as they are underneath). Viewer-only by construction.
+    // TIME FREEZES while it is open (like Chronicle Mode): the diorama's chrome is a snapshot of
+    // the opened year, so we pause Tick() and restore the prior play state on close — close returns
+    // you to the same year you left. (Pacing-only; never changes Tick() count or order — verify-safe.)
     private void OpenDiorama(int regionId)
     {
         if (_diorama != null) return;
         if (regionId < 0 || regionId >= _world.Regions.Count) regionId = MostBuiltRegion();
+        _dioramaWasRunning = _running;
+        _running = false;                         // freeze time; the diorama owns the moment
         _diorama = new DioramaView { SourceWorld = _world, SourceRegionId = regionId, OnClose = CloseDiorama };
         _diorama.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         AddChild(_diorama);                       // last child → draws over the atlas + its panels
@@ -320,6 +326,7 @@ public partial class Main : Node
     {
         _diorama?.QueueFree();
         _diorama = null;
+        _running = _dioramaWasRunning;            // back to the atlas at the same year you left
     }
 
     // The most-built held region (fallback when nothing is selected); any most-built region if landless.

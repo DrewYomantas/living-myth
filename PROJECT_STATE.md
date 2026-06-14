@@ -427,6 +427,24 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       (`docs/visual_pass/` 01 atlas → 02 region lens → 03 diorama bridge [same region] → 04 wild
       fallback). Viewer/read-model + offline-asset only — **verify held exactly 823/559/910/632**,
       all 9 console gates green, both builds clean (0 warnings). Sim determinism untouched.
+- [x] Diorama Bridge Hardening V1 (2026-06-14, viewer + docs — hardening, no new art, no sim
+      changes): made the bridge robust and honest about time. **True seat** — the inspector card's
+      "… seat" line reads the region's actual `IsSeat` site (not `sites[0]`; "no seat yet" when a
+      region has none). **Label collision avoidance** — site callouts in dense clusters are nudged
+      downward off one another (then sideways if the column fills) so a knot of sites stays legible
+      instead of stacking. **Label clamping** — pills are clamped clear of the title/Year band (top)
+      and the legend/bottom bar, so they never collide with the title or clip off the top edge.
+      **Time FREEZES while open** — `Main.OpenDiorama` pauses `Tick()` (mirroring Chronicle Mode's
+      replay freeze) and restores the prior play state on close, so the diorama's chrome stays an
+      honest snapshot of the opened year and you return to the atlas at the same year you left
+      (pacing-only — never changes Tick() count/order). **Doctrine note** (binding, in
+      DIORAMA_PROTOTYPE.md): the "⛰ Enter the Diorama" button is a *transitional bridge / debug
+      affordance*; the final North Star UX is seamless atlas zoom/lens travel into a land, NOT a
+      separate clicked mode — seamless zoom deliberately not built yet, the note exists so the bridge
+      doesn't calcify. Evidence: `docs/visual_pass/` diorama_forest/coast/highland/wild + a
+      label_before/after pair on the dense 7-site Stone Crown (collision avoidance OFF→ON via the
+      `LM_DIORAMA_NOAVOID` capture toggle). Viewer-only — **verify held exactly 823/559/910/632**,
+      all 9 console gates green, both builds clean (0 warnings).
 - [ ] Later — **diorama art fidelity** (turn the Blender blockout props into hand-finished
       illustrated assets: textured albedo, painterly canopies, roof/timber/stone detail — the 5→7+
       gap; or adopt licensed grounded-medieval assets per the asset-scout policy); person↔site

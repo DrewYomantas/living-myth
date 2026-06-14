@@ -59,7 +59,7 @@ public partial class DioramaView : Control
             _world = new World(Seed, config, names);
             _world.SeedWorld();
             while (_world.Year < Years) _world.Tick();
-            _regionId = PickRegion();
+            _regionId = PickCaptureRegion();
         }
 
         MouseFilter = MouseFilterEnum.Stop;   // overlay swallows clicks meant for the atlas beneath
@@ -139,6 +139,25 @@ public partial class DioramaView : Control
         return Math.Max(0, best);
     }
 
+    // Standalone capture only: honor LM_DIORAMA_TERRAIN (forest/coast/highland/plains, or "wild"
+    // for an unclaimed region) so the screenshot harness can target a specific terrain; otherwise
+    // the normal most-built pick. Never used on the production bridge path (Main passes a region).
+    private int PickCaptureRegion()
+    {
+        string want = OS.GetEnvironment("LM_DIORAMA_TERRAIN");
+        if (want == "") return PickRegion();
+        bool wild = want == "wild";
+        int best = -1, bestSites = -1;
+        foreach (var r in _world.Regions)
+        {
+            bool held = r.ControllingFactionId != null;
+            if (wild ? held : (!held || r.TerrainType != want)) continue;
+            int s = _world.Sites.ForRegion(r.Id).Count;
+            if (s > bestSites) { best = r.Id; bestSites = s; }
+        }
+        return best >= 0 ? best : PickRegion();
+    }
+
     public static Color FactionTint(string? fid) => fid switch
     {
         "highland" => new Color("6b7a99"),
@@ -216,8 +235,9 @@ public partial class DioramaView : Control
         card.AddThemeStyleboxOverride("panel", PanelStyle());
         var cv = new VBoxContainer();
         cv.AddThemeConstantOverride("separation", 7);
+        var seat = sites.FirstOrDefault(s => s.IsSeat);
         cv.AddChild(Lab(r.Name, _serif, 24, Ink));
-        cv.AddChild(Lab(SiteIndex.TypeLabel(sites.Count > 0 ? sites[0].Type : SiteType.Farmstead) + " seat · " + Cap(r.TerrainType), _sc, 13, InkSoft));
+        cv.AddChild(Lab((seat != null ? SiteIndex.TypeLabel(seat.Type) + " seat" : "no seat yet") + " · " + Cap(r.TerrainType), _sc, 13, InkSoft));
         cv.AddChild(MakeRule());
 
         var holderRow = new HBoxContainer();
@@ -360,7 +380,8 @@ public partial class DioramaView : Control
         await ToSignal(GetTree().CreateTimer(0.9), SceneTreeTimer.SignalName.Timeout);
         var img = GetViewport().GetTexture().GetImage();
         System.IO.Directory.CreateDirectory(dir);
-        img.SavePng(System.IO.Path.Combine(dir, "diorama_prototype.png"));
+        string name = OS.GetEnvironment("LM_DIORAMA_NAME");
+        img.SavePng(System.IO.Path.Combine(dir, (name != "" ? name : "diorama_prototype") + ".png"));
         GetTree().Quit();
     }
 
@@ -570,19 +591,39 @@ public partial class DioramaCanvas : Control
         foreach (var sp in sprites.OrderBy(s => s.sortY))
             DrawTextureRect(sp.tex, sp.rect, false, sp.mod);
 
-        // 5) parchment label callouts on top
+        // 5) parchment label callouts on top, with collision avoidance for dense clusters.
+        //    Pills are clamped clear of the title/year band (top) and the bottom bar, then nudged
+        //    downward off one another so a tight knot of sites stays legible instead of stacking.
         var pill = new StyleBoxFlat { BgColor = new Color("f2e5c2", 0.95f), BorderColor = new Color("c9973f") };
         pill.SetBorderWidthAll(1); pill.SetCornerRadiusAll(5); pill.SetContentMarginAll(5);
-        foreach (var (name, type, feet, dot) in labels)
+        const float topBand = 96f;          // year plate + title live above this
+        const float bottomBand = 72f;       // legend + bottom bar live below this
+        bool avoid = OS.GetEnvironment("LM_DIORAMA_NOAVOID") == "";   // capture-only "before" toggle
+        var placed = new List<Rect2>();
+        var pills = labels.Select(l =>
         {
-            var nameSize = View.Serif.GetStringSize(name, HorizontalAlignment.Left, -1, 15);
+            var nameSize = View.Serif.GetStringSize(l.name, HorizontalAlignment.Left, -1, 15);
             float pw = nameSize.X + 30, ph = 34;
-            var anchor = new Vector2(feet.X - pw / 2f, feet.Y - _tw * 2.6f);
-            anchor.X = Math.Clamp(anchor.X, 6, Size.X - pw - 6);
-            anchor.Y = Math.Max(6, anchor.Y);
+            var anchor = new Vector2(l.feet.X - pw / 2f, l.feet.Y - _tw * 2.6f);
+            anchor.X = Math.Clamp(anchor.X, 6, Math.Max(6, Size.X - pw - 6));
+            anchor.Y = Math.Clamp(anchor.Y, topBand, Math.Max(topBand, Size.Y - bottomBand - ph));
+            return (l.name, l.type, l.feet, l.dot, pw, ph, anchor);
+        }).OrderBy(p => p.anchor.Y).ThenBy(p => p.anchor.X).ToList();
+
+        foreach (var (name, type, feet, dot, pw, ph, anchor0) in pills)
+        {
+            var anchor = anchor0;
+            var rect = new Rect2(anchor, new Vector2(pw, ph));
+            for (int guard = 0; avoid && guard < 40 && placed.Any(r => r.Intersects(rect.Grow(4f))); guard++)
+            {
+                anchor.Y += ph + 5f;
+                if (anchor.Y > Size.Y - bottomBand - ph) { anchor.Y = anchor0.Y; anchor.X += pw * 0.5f; }
+                rect = new Rect2(anchor, new Vector2(pw, ph));
+            }
+            placed.Add(rect);
             DrawLine(new Vector2(feet.X, feet.Y - _tw * 0.5f),
                      new Vector2(anchor.X + pw / 2f, anchor.Y + ph), new Color("3a2c19", 0.5f), 1.5f);
-            DrawStyleBox(pill, new Rect2(anchor, new Vector2(pw, ph)));
+            DrawStyleBox(pill, rect);
             DrawCircle(anchor + new Vector2(12, ph / 2f), 5, dot);
             DrawString(View.Serif, anchor + new Vector2(22, 15), name, HorizontalAlignment.Left, -1, 15, new Color("3a2c19"));
             DrawString(View.Sc, anchor + new Vector2(22, 29), type, HorizontalAlignment.Left, -1, 10, new Color("6f5b3e"));
