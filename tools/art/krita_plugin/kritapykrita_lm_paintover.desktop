@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=Krita/PythonPlugin
+X-KDE-Library=lm_paintover
+X-Python-2-Compatible=false
+X-Krita-Manual=
+Name=LM Paintover
+Comment=Living Myth headless diorama paintover

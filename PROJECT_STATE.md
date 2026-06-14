@@ -445,6 +445,29 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       label_before/after pair on the dense 7-site Stone Crown (collision avoidance OFF→ON via the
       `LM_DIORAMA_NOAVOID` capture toggle). Viewer-only — **verify held exactly 823/559/910/632**,
       all 9 console gates green, both builds clean (0 warnings).
+- [x] North Star Art Pipeline V1 — Terrain + Prop Language (2026-06-14, Blender + headless Krita +
+      viewer + docs; NO sim changes): the first **real, reproducible art-pipeline slice** — proving
+      a repeatable three-stage recipe that pushes live deterministic regions toward the North Star.
+      **Stage 1 Blender** (`tools/art/render_diorama.py`): richer 2-noise material brushwork (coarse
+      weathering + fine grain) on every prop; a new top-down OPAQUE ground-tile pass
+      (`ground_coast/forest/highland/water`, water with voronoi foam); new `pulse_marker` + a fuller
+      `banner`. **Stage 2 headless Krita** (`tools/art/krita_paintover.py`, run via `kritarunner` —
+      no GUI): per asset, gaussian-blur→unsharp painted smear + an **edge-ink overlay**
+      (edge detection→invert→multiply, **alpha-inherited** so ink clips to the silhouette). The
+      kritarunner plumbing (its OWN resource dir, `enable_` flag, args-tolerant entry) is captured in
+      `tools/art/krita_plugin/INSTALL.md`; the plugin shim ships in `tools/art/krita_plugin/`.
+      **Stage 3 Godot** (`DioramaView.cs`, unchanged read-model contract): textured iso ground
+      diamonds (UV+texture) for coast/forest/highland/water, pale **shore foam** on water↔land
+      edges, warm **roads** seat→places, ember **pulse markers** on the 3 most-recent site-anchored
+      tales (tinted to event class). All gated behind `LM_DIORAMA_RAW=1` so the same region captures
+      **before vs after** from one build. Honest North Star score **5→6.5** (biggest win: flat teal
+      water diamond → textured water + foam; props gain illustrated ink outlines); the value is the
+      *proven repeatable pipeline*, not the bump. Evidence + recipe + score + recommendation:
+      `docs/visual_pass/ART_PIPELINE_V1.md` + `docs/visual_pass/artpipeline_v1/`
+      (before/after coast·forest·highland, mid_coast 3-stage, contact_sheet). **Recommendation: adopt
+      as the production art route** — next gains are content (richer Krita chains, more silhouettes),
+      not plumbing. Viewer/asset-only — **verify held 823/559/910/632**, all 9 gates green, both
+      builds clean.
 - [ ] Later — **diorama art fidelity** (turn the Blender blockout props into hand-finished
       illustrated assets: textured albedo, painterly canopies, roof/timber/stone detail — the 5→7+
       gap; or adopt licensed grounded-medieval assets per the asset-scout policy); person↔site

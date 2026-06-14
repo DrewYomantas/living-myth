@@ -447,9 +447,28 @@ public partial class DioramaCanvas : Control
         return new(_ox + (a - b) * _tw * 0.5f, _oy + (a + b) * _th * 0.5f);
     }
 
+    private static readonly Vector2[] GroundUV = { new(0, 0), new(1, 0), new(1, 1), new(0, 1) };
+
+    private static bool IsWater(SurfaceTerrain t) =>
+        t is SurfaceTerrain.Ocean or SurfaceTerrain.Shallows or SurfaceTerrain.River or SurfaceTerrain.Lake;
+
+    // Which painterly ground swatch backs a terrain cell. Only the proof-kit terrains (coast/
+    // forest/highland + water) get a tile; everything else falls back to the flat colour draw.
+    private static string? GroundKey(SurfaceTerrain t) => t switch
+    {
+        SurfaceTerrain.Forest => "ground_forest",
+        SurfaceTerrain.Coast => "ground_coast",
+        SurfaceTerrain.Highland => "ground_highland",
+        SurfaceTerrain.Ocean or SurfaceTerrain.Shallows or SurfaceTerrain.River or SurfaceTerrain.Lake => "ground_water",
+        _ => null,
+    };
+
     public override void _Draw()
     {
         var w = View.World;
+        // LM_DIORAMA_RAW=1 forces the pre-art-pipeline render (flat ground, no foam/roads/pulses)
+        // so the same region can be captured before vs after from one deterministic build.
+        bool raw = OS.GetEnvironment("LM_DIORAMA_RAW") != "";
         var size = Size;
         float span = _bw + _bh;
         _tw = Math.Min(size.X * 1.28f * 2f / span, size.Y * 1.0f * 2f / (span * 0.55f));
@@ -491,7 +510,30 @@ public partial class DioramaCanvas : Control
                 var c2 = Iso(cx + 1, cy + 1); var c3 = Iso(cx, cy + 1);
                 var ctr = (c0 + c1 + c2 + c3) * 0.25f;
                 Vector2 Ex(Vector2 p) => ctr + (p - ctr) * 1.04f;
-                DrawColoredPolygon(new[] { Ex(c0), Ex(c1), Ex(c2), Ex(c3) }, col);
+                var poly = new[] { Ex(c0), Ex(c1), Ex(c2), Ex(c3) };
+                // textured ground: the painterly Blender/Krita swatch carries the colour; the
+                // relief/jitter rides as a brightness modulate so the NW raking light still reads.
+                string? gkey = raw ? null : GroundKey(t);
+                var gtex = gkey != null ? View.Tex(gkey) : null;
+                if (gtex != null)
+                {
+                    float v = Math.Clamp(0.94f + shade + j, 0.5f, 1f);
+                    var mod = inRegion ? new Color(v, v, Math.Clamp(v - 0.02f, 0f, 1f))
+                                       : new Color(v * 0.66f, v * 0.68f, v * 0.72f);
+                    DrawColoredPolygon(poly, mod, GroundUV, gtex);
+                }
+                else DrawColoredPolygon(poly, col);
+                // shore foam: a pale fringe on every water-cell edge that meets land (bounds-safe —
+                // TerrainAt does not clamp, so an unguarded edge neighbour would read OOB)
+                if (!raw && IsWater(t))
+                    foreach (var (dx, dy, p, q) in new (int, int, Vector2, Vector2)[]
+                             { (-1, 0, c0, c3), (1, 0, c1, c2), (0, -1, c0, c1), (0, 1, c3, c2) })
+                    {
+                        int nx = cx + dx, ny = cy + dy;
+                        if (nx >= 0 && nx < WorldSurface.Size && ny >= 0 && ny < WorldSurface.Size
+                            && !IsWater(w.Surface.TerrainAt(nx, ny)))
+                            DrawLine(Ex(p), Ex(q), new Color("dfe7d6", 0.62f), 2f);
+                    }
             }
 
         var sprites = new List<(Texture2D tex, Rect2 rect, Color mod, float sortY)>();
@@ -586,6 +628,33 @@ public partial class DioramaCanvas : Control
             if (s.IsSeat && holderId != null) Place("banner", cx + 0.9f, cy - 0.9f, 2.4f, holderTint);
             labels.Add((s.Name, SiteIndex.TypeLabel(s.Type), Iso(cx + 0.5f, cy + 0.5f), holderTint));
         }
+
+        // 3b) roads — warm dirt paths from the seat out to every other known place
+        Vector2 Feet(float nx, float ny) => Iso(nx * WorldSurface.Size, ny * WorldSurface.Size);
+        if (!raw && holderId != null && sites.Count > 1)
+        {
+            var seat = sites.FirstOrDefault(s => s.IsSeat) ?? sites[0];
+            var sf = Feet(seat.Nx, seat.Ny);
+            foreach (var s in sites)
+            {
+                if (s.Id == seat.Id) continue;
+                var f = Feet(s.Nx, s.Ny);
+                DrawLine(sf, f, new Color("382a17", 0.5f), _tw * 0.30f);
+                DrawLine(sf, f, new Color("8a6f43", 0.72f), _tw * 0.16f);
+            }
+        }
+
+        // 3c) pulse markers — the most recent site-anchored tales get an ember glyph, tinted to
+        //     the event class (war-red / harvest-ochre / founding-gold); read-only, no new facts
+        if (!raw)
+            foreach (var e in w.Chronicle.Events
+                         .Where(e => e.SiteId is int sid && sites.Any(x => x.Id == sid))
+                         .OrderByDescending(e => e.Year).Take(3))
+            {
+                var s = sites.First(x => x.Id == e.SiteId!.Value);
+                Place("pulse_marker", s.Nx * WorldSurface.Size - 0.5f, s.Ny * WorldSurface.Size - 0.5f,
+                      1.5f, DioramaView.EventColor(e.Type));
+            }
 
         // 4) painter's algorithm — far (low Y) first
         foreach (var sp in sprites.OrderBy(s => s.sortY))

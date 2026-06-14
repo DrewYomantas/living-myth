@@ -13,3 +13,8 @@ chronicle.txt
 
 # Godot SDK-bump backups
 *.old
+
+# Krita paintover log (regenerated each run)
+tools/art/krita_paintover.log
+# Python caches
+__pycache__/

@@ -32,6 +32,11 @@ def _srgb_to_linear(c):
     return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
 
 def rgba(hex_or_key, a=1.0, jitter=0.0, rng=None):
+    # accept an already-built (r,g,b[,a]) literal — treat as sRGB, convert rgb to linear
+    if isinstance(hex_or_key, (tuple, list)):
+        r, g, b = hex_or_key[0], hex_or_key[1], hex_or_key[2]
+        aa = hex_or_key[3] if len(hex_or_key) > 3 else a
+        return (_srgb_to_linear(r), _srgb_to_linear(g), _srgb_to_linear(b), aa)
     h = PAL.get(hex_or_key, hex_or_key).lstrip("#")
     r, g, b = (int(h[i:i+2], 16) / 255.0 for i in (0, 2, 4))
     if jitter and rng is not None:
@@ -50,21 +55,34 @@ def mat(color, rough=0.82, mottle=0.16):
         if spec in bsdf.inputs:
             bsdf.inputs[spec].default_value = 0.06
             break
-    # procedural mottle: break the flat single-colour look with a noise blend toward a darker
-    # tone (weathering / material variation). Fail-safe — flat colour if the node API differs.
+    # procedural mottle: break the flat single-colour look with TWO layered noises — a coarse
+    # weathering blend toward a darker shadow tone, then a finer grain blend toward a lighter
+    # warm tone. Two scales read as hand-painted texture rather than a single flat wash.
+    # Fail-safe — flat colour if the node API differs.
     if mottle > 0:
         try:
-            dark = (color[0]*0.72, color[1]*0.72, color[2]*0.74, 1.0)
-            noise = nt.nodes.new("ShaderNodeTexNoise")
-            noise.inputs["Scale"].default_value = 11.0
-            noise.inputs["Detail"].default_value = 5.0
-            mix = nt.nodes.new("ShaderNodeMix")
-            mix.data_type = "RGBA"
-            mix.inputs[0].default_value = mottle          # Factor
-            mix.inputs[6].default_value = color           # A
-            mix.inputs[7].default_value = dark            # B
-            nt.links.new(noise.outputs["Fac"], mix.inputs[0])
-            nt.links.new(mix.outputs[2], bsdf.inputs["Base Color"])
+            dark = (color[0]*0.70, color[1]*0.70, color[2]*0.73, 1.0)
+            lite = (min(1.0, color[0]*1.22+0.03), min(1.0, color[1]*1.20+0.03), min(1.0, color[2]*1.14+0.02), 1.0)
+            coarse = nt.nodes.new("ShaderNodeTexNoise")
+            coarse.inputs["Scale"].default_value = 9.0
+            coarse.inputs["Detail"].default_value = 6.0
+            mix1 = nt.nodes.new("ShaderNodeMix")
+            mix1.data_type = "RGBA"
+            mix1.inputs[0].default_value = mottle          # Factor
+            mix1.inputs[6].default_value = color           # A
+            mix1.inputs[7].default_value = dark            # B
+            nt.links.new(coarse.outputs["Fac"], mix1.inputs[0])
+
+            fine = nt.nodes.new("ShaderNodeTexNoise")
+            fine.inputs["Scale"].default_value = 34.0
+            fine.inputs["Detail"].default_value = 8.0
+            mix2 = nt.nodes.new("ShaderNodeMix")
+            mix2.data_type = "RGBA"
+            mix2.inputs[0].default_value = mottle * 0.65    # Factor
+            mix2.inputs[7].default_value = lite             # B (highlight)
+            nt.links.new(mix1.outputs[2], mix2.inputs[6])   # A = coarse result
+            nt.links.new(fine.outputs["Fac"], mix2.inputs[0])
+            nt.links.new(mix2.outputs[2], bsdf.inputs["Base Color"])
         except Exception as ex:
             print(f"[diorama] mottle skipped: {ex}")
     m.diffuse_color = color
@@ -300,15 +318,43 @@ def build_field():
 
 def build_banner():
     rng = random.Random(140)
-    add("primitive_cylinder_add", rgba("timber_dark"), loc=(0, 0, 0.55),
-        scale=(0.035, 0.035, 1), vertices=8, radius=1, depth=1.1)
-    add("primitive_ico_sphere_add", rgba("thatch"), loc=(0, 0, 1.12),
-        scale=(0.07, 0.07, 0.07), subdivisions=2, radius=1, smooth=True)
-    # cloth rendered NEUTRAL — Godot modulates it to the faction colour
-    cloth = add("primitive_cube_add", rgba("cloth"), loc=(0.22, 0, 0.78),
-                scale=(0.22, 0.012, 0.3), rot=(0, 0, 0), bevel=0.0)
+    # taller pole + brass finial; a fuller, clearer flag with a triangular pennant above it so
+    # the silhouette reads as a banner at small on-map size. Cloth stays NEUTRAL — Godot
+    # modulates the whole sprite to the faction colour, so don't bake a hue in.
+    add("primitive_cylinder_add", rgba("timber_dark"), loc=(0, 0, 0.62),
+        scale=(0.032, 0.032, 1), vertices=8, radius=1, depth=1.24)
+    add("primitive_ico_sphere_add", rgba("thatch"), loc=(0, 0, 1.26),
+        scale=(0.075, 0.075, 0.09), subdivisions=2, radius=1, smooth=True)
+    # main flag — a gently waving rectangle (slight skew so it isn't a stiff board)
+    add("primitive_cube_add", rgba("cloth"), loc=(0.24, 0, 0.82),
+        scale=(0.26, 0.011, 0.34), rot=(0, 0.06, 0), bevel=0.0)
+    # a darker cloth fold for depth, and a triangular pennant at the top
+    add("primitive_cube_add", rgba((0.78, 0.74, 0.66, 1.0)), loc=(0.40, 0.004, 0.70),
+        scale=(0.10, 0.010, 0.20), rot=(0, 0.10, 0), bevel=0.0)
+    add("primitive_cone_add", rgba("cloth"), loc=(0.16, 0, 1.16),
+        scale=(0.16, 0.10, 1), vertices=3, radius1=1, radius2=0, depth=0.02, rot=(1.571, 0, 0))
+
+def build_pulse_marker():
+    # an event/pulse glyph that sits above a site where a recent tale is anchored: a low ring
+    # of pale stones around a raised ember, with a thin four-point spark. Rendered NEUTRAL-warm;
+    # Godot tints it to the event class (war-red / harvest-ochre / founding-gold).
+    rng = random.Random(150)
+    n = 10
+    for i in range(n):
+        a = i / n * math.tau
+        x, y = math.cos(a)*0.42, math.sin(a)*0.42
+        add("primitive_ico_sphere_add", rgba("stone", jitter=0.08, rng=rng),
+            loc=(x, y, 0.05), scale=(0.07, 0.07, 0.05), subdivisions=1, radius=1, smooth=True)
+    add("primitive_cone_add", rgba("ember"), loc=(0, 0, 0.16),
+        scale=(0.16, 0.16, 1), vertices=12, radius1=1, radius2=0, depth=0.30, smooth=True)
+    add("primitive_ico_sphere_add", rgba((1.0, 0.86, 0.5, 1.0)), loc=(0, 0, 0.30),
+        scale=(0.09, 0.09, 0.09), subdivisions=2, radius=1, smooth=True)
+    for a in (0.0, 1.571):
+        add("primitive_cube_add", rgba((1.0, 0.9, 0.6, 1.0)), loc=(0, 0, 0.42),
+            scale=(0.28, 0.012, 0.012), rot=(0, 0, a))
 
 BUILDERS = {
+    "pulse_marker": build_pulse_marker,
     "tree_broadleaf_cluster": build_tree_broadleaf_cluster,
     "tree_conifer_cluster": build_tree_conifer_cluster,
     "hill": build_hill,
@@ -328,6 +374,78 @@ BUILDERS = {
 for _v in (1, 2, 3):
     BUILDERS[f"tree_broadleaf_{_v}"] = (lambda s: lambda: _cluster(s, "b"))(110 + _v * 7)
     BUILDERS[f"tree_conifer_{_v}"] = (lambda s: lambda: _cluster(s, "c"))(220 + _v * 7)
+
+# ---- ground tiles -------------------------------------------------------------------------------
+# Flat top-down PAINTERLY terrain swatches. DioramaView maps these onto its iso ground diamonds
+# (one swatch per cell), so the flat-colour-polygon look becomes textured earth/sand/rock/water.
+# Lit evenly + opaque so they tile without a baked directional shadow; the in-engine NW raking
+# relief shade is layered on top at draw time. Authored procedural texture, not AI, not a photo.
+def _ground_mat(tones, scale=5.0, foam=None):
+    m = bpy.data.materials.new("ground")
+    m.use_nodes = True
+    nt = m.node_tree
+    bsdf = nt.nodes.get("Principled BSDF")
+    bsdf.inputs["Roughness"].default_value = 0.95
+    for spec in ("Specular IOR Level", "Specular"):
+        if spec in bsdf.inputs:
+            bsdf.inputs[spec].default_value = 0.04 if foam is None else 0.18
+            break
+    try:
+        # build up the colour by chaining MixRGB nodes, each driven by a noise at a different
+        # scale, blending toward the next palette tone — layered like coarse-to-fine brushwork.
+        prev = tones[0]
+        prev_is_color = True
+        node_out = None
+        for i, tone in enumerate(tones[1:], start=1):
+            noise = nt.nodes.new("ShaderNodeTexNoise")
+            noise.inputs["Scale"].default_value = scale * (1.0 + 0.9 * i)
+            noise.inputs["Detail"].default_value = 7.0
+            noise.inputs["Roughness"].default_value = 0.7
+            mix = nt.nodes.new("ShaderNodeMix")
+            mix.data_type = "RGBA"
+            mix.inputs[0].default_value = 0.5
+            if prev_is_color:
+                mix.inputs[6].default_value = prev
+            else:
+                nt.links.new(prev, mix.inputs[6])
+            mix.inputs[7].default_value = tone
+            nt.links.new(noise.outputs["Fac"], mix.inputs[0])
+            prev = mix.outputs[2]
+            prev_is_color = False
+            node_out = mix
+        # optional foam/sparkle: bright speckle from a high-frequency voronoi, lifted into the mix
+        if foam is not None and node_out is not None:
+            vor = nt.nodes.new("ShaderNodeTexVoronoi")
+            vor.inputs["Scale"].default_value = scale * 8.0
+            ramp = nt.nodes.new("ShaderNodeValToRGB")
+            ramp.color_ramp.elements[0].position = 0.82
+            ramp.color_ramp.elements[1].position = 0.95
+            nt.links.new(vor.outputs["Distance"], ramp.inputs["Fac"])
+            fmix = nt.nodes.new("ShaderNodeMix")
+            fmix.data_type = "RGBA"
+            nt.links.new(node_out.outputs[2], fmix.inputs[6])
+            fmix.inputs[7].default_value = foam
+            nt.links.new(ramp.outputs["Color"], fmix.inputs[0])
+            prev = fmix.outputs[2]
+        if not prev_is_color:
+            nt.links.new(prev, bsdf.inputs["Base Color"])
+    except Exception as ex:
+        print(f"[diorama] ground mat fallback: {ex}")
+        bsdf.inputs["Base Color"].default_value = tones[0]
+    return m
+
+def _ground(tones, scale=5.0, foam=None):
+    bpy.ops.mesh.primitive_plane_add(size=2.0, location=(0, 0, 0))
+    p = bpy.context.active_object
+    p.data.materials.append(_ground_mat([rgba(t) for t in tones], scale, rgba(foam) if foam else None))
+
+GROUNDS = {
+    "ground_forest":   lambda: _ground(["soil", "moss", "leaf_dark", "grass"], scale=6.0),
+    "ground_coast":    lambda: _ground(["field_gold", "grass_dry", "rock_warm", "soil"], scale=5.0),
+    "ground_highland": lambda: _ground(["rock", "rock_dark", "rock_warm", "moss"], scale=5.5),
+    "ground_water":    lambda: _ground(["water_deep", "water", "water_deep"], scale=4.0,
+                                       foam=(0.86, 0.92, 0.92, 1.0)),
+}
 
 # ---- scene / camera / lights -------------------------------------------------------------------
 CAM_AZ = math.radians(48)
@@ -439,6 +557,32 @@ def main():
         add_shadow_catcher()
         builder()
         frame_camera(cam)
+        scene.render.filepath = os.path.join(outdir, name + ".png")
+        bpy.ops.render.render(write_still=True)
+        done.append(name)
+        print(f"[diorama] rendered {name}.png")
+
+    # ---- second pass: top-down OPAQUE ground swatches (different camera + flat even light) -------
+    bpy.ops.object.select_all(action="SELECT")
+    bpy.ops.object.delete()
+    scene.render.film_transparent = False
+    gcam_d = bpy.data.cameras.new("GCam")
+    gcam_d.type = "ORTHO"
+    gcam_d.ortho_scale = 2.0
+    gcam = bpy.data.objects.new("GCam", gcam_d)
+    scene.collection.objects.link(gcam)
+    gcam.location = (0, 0, 8)
+    gcam.rotation_euler = (0, 0, 0)
+    scene.camera = gcam
+    glight = bpy.data.lights.new("GKey", "SUN")
+    glight.energy = 2.6
+    go = bpy.data.objects.new("GKey", glight)
+    scene.collection.objects.link(go)
+    go.rotation_euler = (math.radians(8), 0, math.radians(-30))
+    scene.world.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.95
+    for name, builder in GROUNDS.items():
+        clear_meshes()
+        builder()
         scene.render.filepath = os.path.join(outdir, name + ".png")
         bpy.ops.render.render(write_still=True)
         done.append(name)
