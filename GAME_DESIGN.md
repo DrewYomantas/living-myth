@@ -1,16 +1,24 @@
 # Living Myth Sandbox — Game Design Notes
 
-A no-generative-AI living myth sandbox / god sim about watching authored procedural histories unfold across peoples, places, families, faiths, customs, rumors, wars, disasters, and remembered causes.
+- **No runtime generative AI for storytelling or content generation inside the shipped game.** The game should not call LLMs or live AI systems during gameplay. It should use authored procedural systems: event templates, tags, conditions, cause-links, memory, and pacing. AI-assisted development and asset production are allowed under the AI Use Doctrine below.
 
 This document captures high-level design direction that should guide future Claude Design, Figma, Claude Code, and implementation passes. It is not a sprint checklist. `PROJECT_STATE.md` remains the current milestone tracker.
 
 ## Core Pillars
 
-- **No generative AI for storytelling or content generation.** The game should use authored procedural systems: event templates, tags, conditions, cause-links, memory, and pacing.
+- **No runtime generative AI for storytelling or content generation.** The shipped game uses authored procedural systems — event templates, tags, conditions, cause-links, memory, and pacing — and never calls a live AI during gameplay. AI-assisted *development* and asset production are allowed (see the AI Use Doctrine below).
 - **Legible causality is the product.** A player should be able to ask why something happened and follow the thread through people, places, customs, rumors, faiths, and prior wounds.
 - **Authored richness over infinite mush.** Prefer compact systems that combine meaningfully over unlimited text generation.
 - **The world should feel lived in at multiple scales.** Island-scale events matter, but so do regions, settlements, families, shrines, roads, ruins, refugee camps, and local memory.
 - **Time should serve attention.** The player should be able to watch history at god-scale, then descend into a place or event and naturally slow down enough to follow what is happening.
+
+## Living Myth AI Use Doctrine
+
+The final game must not rely on live generative AI during gameplay. No runtime LLM calls, no AI-written live dialogue, no AI-generated quests, no AI-authored player-facing facts.
+
+AI tools are allowed and encouraged during development. Claude Code, ChatGPT, Blender automation, image generation, asset generation, code generation, design critique, test writing, and production tooling may all be used to help build the game.
+
+The shipped game’s story system must remain deterministic, inspectable, and authored/procedural. Any player-facing AI-assisted assets or marketing materials must be tracked honestly for licensing, disclosure, and replacement decisions.
 
 ## Region Lens / Settlement Layer
 
