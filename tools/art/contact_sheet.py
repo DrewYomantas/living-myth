@@ -11,7 +11,7 @@ OUT = os.path.abspath(argv[1]) if len(argv) > 1 else os.path.abspath("contact.pn
 # proof-kit order: grounds, then trees, then settlements/markers
 NAMES = [
     "ground_coast", "ground_forest", "ground_highland", "ground_water",
-    "tree_broadleaf_1", "tree_conifer_1", "rocks", "field",
+    "tree_broadleaf_1", "tree_conifer_1", "rocks", "crag",
     "keep", "house_b", "watchtower", "dock",
     "standing_stones", "shrine", "banner", "pulse_marker",
 ]

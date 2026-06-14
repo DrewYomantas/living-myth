@@ -468,6 +468,21 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       as the production art route** — next gains are content (richer Krita chains, more silhouettes),
       not plumbing. Viewer/asset-only — **verify held 823/559/910/632**, all 9 gates green, both
       builds clean.
+- [x] North Star Biome Silhouette V1 (2026-06-14, Blender forms + 1 scatter tweak + docs, NO sim) —
+      spent the budget on art direction (silhouette + biome identity + the seat as a landmark), not
+      plumbing, by improving the **Blender source forms** in `render_diorama.py`: broadleaf gets 3
+      crown profiles (round/wide-oak/tall-birch) + a visible 2-seg trunk + broken crown; conifer
+      gets a tall ragged fir spire + a bushier pine variant; rocks become angular faceted stone;
+      a NEW **crag** (stratified ridge outcrop) wired into highland scatter (stone-first now); the
+      **keep** becomes a real seat (curtain wall + corner turrets + gatehouse + dominant tower — the
+      biggest read jump); dock gains a moored rowboat; standing-stones gain a true trilithon. The
+      three biomes now read distinct (coast=open shore+dock+seat, forest=canopy depth, highland=
+      stone/crags/firs+hill-fort). **Honest North Star score 6.5→7.0**; what blocks 7.5+ is all art
+      direction (broadleaf macro-massing still reads as sphere clusters; composition is uniform-
+      density scatter with no focal hierarchy; no macro depth/AO; quiet ground at zoom) — content,
+      not plumbing. Evidence: `docs/visual_pass/BIOME_SILHOUETTE_V1.md` + `biome_silhouette_v1/`
+      (before/after coast·forest·highland, compare_old_new, contact_sheet). Viewer/asset-only —
+      **verify held exactly 823/559/910/632**, all 9 gates green, both builds clean.
 - [ ] Later — **diorama art fidelity** (turn the Blender blockout props into hand-finished
       illustrated assets: textured albedo, painterly canopies, roof/timber/stone detail — the 5→7+
       gap; or adopt licensed grounded-medieval assets per the asset-scout policy); person↔site

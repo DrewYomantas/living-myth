@@ -116,49 +116,84 @@ def clear_meshes():
             bpy.data.materials.remove(m)
 
 # ---- foliage helpers ---------------------------------------------------------------------------
-def canopy(x, y, base_z, r, h, tones, rng):
-    """A rounded broadleaf crown: many overlapping smooth lobes in mixed greens, a darker
-    underskirt for depth and a sun-kissed crown highlight — a fuller, more textured silhouette."""
-    # darker base lobes (shadowed underside)
+# Profiles give the broadleaf crown a real SILHOUETTE instead of a single round puffball:
+#   round → irregular ball   wide → low broad oak umbrella   tall → upright birch/poplar column
+_PROFILE = {            # (n masses, lateral spread×r, vertical lift, z-squash, crown tones)
+    "round": (5, 0.55, 0.95, 0.92),
+    "wide":  (6, 0.82, 0.70, 0.74),
+    "tall":  (4, 0.34, 1.18, 1.20),
+}
+
+def canopy(x, y, base_z, r, h, tones, rng, profile="round"):
+    """An ASYMMETRIC broadleaf crown built from a few big overlapping masses with an irregular,
+    broken top — never a smooth dome. Shadowed underskirt for depth, a sun-kissed NW highlight,
+    and a couple of top tufts that break the silhouette so it reads as a tree, not a bush."""
+    nmass, spread, lift, squash = _PROFILE[profile]
+    # shadowed underskirt (reads as foliage shadow, anchors the crown over the trunk)
     for _ in range(3):
-        ang = rng.uniform(0, 6.28); rad = rng.uniform(0, r*0.55)
-        rr = r * rng.uniform(0.55, 0.85)
+        ang = rng.uniform(0, 6.28); rad = rng.uniform(0, r*spread*0.7)
+        rr = r * rng.uniform(0.5, 0.8)
         add("primitive_ico_sphere_add", rgba("leaf_dark", jitter=0.08, rng=rng),
-            loc=(x+math.cos(ang)*rad, y+math.sin(ang)*rad, base_z + h*0.4),
-            scale=(rr, rr, rr*0.85), subdivisions=2, radius=1, smooth=True)
-    # main crown lobes
-    for _ in range(rng.randint(5, 7)):
-        ang = rng.uniform(0, 6.28); rad = rng.uniform(0, r*0.5)
-        rr = r * rng.uniform(0.5, 0.95)
+            loc=(x+math.cos(ang)*rad, y+math.sin(ang)*rad, base_z + h*0.34),
+            scale=(rr, rr, rr*0.78*squash), subdivisions=2, radius=1, smooth=True)
+    # main masses — fewer, larger, at irregular heights so the crown has lumps and gaps
+    for k in range(nmass):
+        ang = rng.uniform(0, 6.28); rad = rng.uniform(0, r*spread)
+        rr = r * rng.uniform(0.55, 1.0)
+        zz = base_z + h*0.42*lift + rng.uniform(0, h*0.55)
         tone = tones[rng.randrange(len(tones))]
         add("primitive_ico_sphere_add", rgba(tone, jitter=0.1, rng=rng),
-            loc=(x+math.cos(ang)*rad, y+math.sin(ang)*rad, base_z + h*0.5 + rng.uniform(0, h*0.32)),
-            scale=(rr, rr, rr*0.95), subdivisions=2, radius=1, smooth=True)
+            loc=(x+math.cos(ang)*rad, y+math.sin(ang)*rad, zz),
+            scale=(rr, rr, rr*squash), subdivisions=2, radius=1, smooth=True)
+    # small tufts that poke past the mass — break the round-dome read
+    for _ in range(2):
+        ang = rng.uniform(0, 6.28); rad = rng.uniform(r*0.2, r*spread*0.9)
+        rr = r * rng.uniform(0.28, 0.42)
+        add("primitive_ico_sphere_add", rgba(tones[rng.randrange(len(tones))], jitter=0.1, rng=rng),
+            loc=(x+math.cos(ang)*rad, y+math.sin(ang)*rad, base_z + h*(0.7 + 0.4*lift) + rng.uniform(0, h*0.3)),
+            scale=(rr, rr, rr*squash), subdivisions=2, radius=1, smooth=True)
     # sun-kissed crown highlight (NW, matching the key light)
     add("primitive_ico_sphere_add", rgba("leaf_warm", jitter=0.05, rng=rng),
-        loc=(x - r*0.16, y + r*0.16, base_z + h*0.82),
-        scale=(r*0.5, r*0.5, r*0.46), subdivisions=2, radius=1, smooth=True)
+        loc=(x - r*0.16, y + r*0.16, base_z + h*(0.74 + 0.3*lift)),
+        scale=(r*0.46, r*0.46, r*0.44*squash), subdivisions=2, radius=1, smooth=True)
 
 def broadleaf(x, y, scale, rng):
-    th = 0.34 * scale
+    profile = rng.choice(("round", "wide", "tall", "round", "wide"))
+    # a TALLER, clearly visible two-segment trunk (wider at the base) so the form reads as a tree
+    th = (0.66 if profile == "tall" else 0.48) * scale
+    tr = 0.055 * scale
+    add("primitive_cylinder_add", rgba("trunk_dark", jitter=0.1, rng=rng),
+        loc=(x, y, th*0.28), scale=(tr*1.25, tr*1.25, 1), vertices=8, radius=1, depth=th*0.56)
     add("primitive_cylinder_add", rgba("trunk", jitter=0.1, rng=rng),
-        loc=(x, y, th*0.5), scale=(0.05*scale, 0.05*scale, 1), vertices=8, radius=1, depth=th)
-    canopy(x, y, th, 0.42*scale, 0.62*scale,
-           ("leaf_warm", "leaf_mid", "leaf_dark", "leaf_cool"), rng)
+        loc=(x, y, th*0.7), scale=(tr*0.9, tr*0.9, 1), vertices=8, radius=1, depth=th*0.6)
+    crown_r = (0.34 if profile == "tall" else (0.5 if profile == "wide" else 0.44)) * scale
+    crown_h = (0.74 if profile == "tall" else 0.56) * scale
+    canopy(x, y, th, crown_r, crown_h,
+           ("leaf_warm", "leaf_mid", "leaf_dark", "leaf_cool"), rng, profile)
 
 def conifer(x, y, scale, rng):
-    th = 0.22 * scale
+    # fir → a tall, narrow, slightly ragged spire; pine → a shorter, bushier, broader cone
+    pine = rng.random() < 0.34
+    th = 0.20 * scale
     add("primitive_cylinder_add", rgba("trunk_dark", jitter=0.1, rng=rng),
-        loc=(x, y, th*0.5), scale=(0.04*scale, 0.04*scale, 1), vertices=6, radius=1, depth=th)
-    layers = 5
+        loc=(x, y, th*0.5), scale=(0.038*scale, 0.038*scale, 1), vertices=6, radius=1, depth=th)
+    layers = 5 if pine else 7
+    top = 0.60 if pine else 0.98
+    botr = 0.46 if pine else 0.38
     for i in range(layers):
         t = i / (layers - 1)
-        cz = th + 0.12*scale + t * 0.62*scale
-        cr = (0.34 - 0.27*t) * scale
+        cz = th + 0.06*scale + t * top * scale
+        cr = (botr - (botr - 0.05) * t) * scale * (1 + rng.uniform(-0.10, 0.10))
         tone = "fir_dark" if i % 2 else "fir_mid"
+        # each tier tilted a hair off-axis so the spire reads ragged/organic, not a stacked toy
+        tilt = rng.uniform(-0.05, 0.05)
         add("primitive_cone_add", rgba(tone, jitter=0.07, rng=rng),
-            loc=(x, y, cz), scale=(cr, cr, 1), vertices=9, radius1=1, radius2=0,
-            depth=0.26*scale, smooth=True)
+            loc=(x + tilt*0.3, y + tilt*0.2, cz), scale=(cr, cr, 1), vertices=8, radius1=1, radius2=0,
+            depth=(0.26 if pine else 0.32)*scale, rot=(tilt, tilt*0.6, rng.uniform(0, 1.0)), smooth=True)
+    # a sharp apex tip so the silhouette comes to a clean point
+    add("primitive_cone_add", rgba("fir_dark", jitter=0.06, rng=rng),
+        loc=(x, y, th + 0.06*scale + top*scale), scale=(0.08*scale, 0.08*scale, 1),
+        vertices=6, radius1=1, radius2=0, depth=0.2*scale, smooth=True)
 
 # ---- builders ----------------------------------------------------------------------------------
 def _cluster(seed, kind):
@@ -189,14 +224,47 @@ def build_hill():
             rot=(0, 0, rng.uniform(0, 3.14)), smooth=True)
 
 def build_rocks():
+    # ANGULAR faceted boulders (hard-shaded cubes/cones, not smooth pebbles) on a low slab — reads
+    # as broken stone, not a pile of eggs.
     rng = random.Random(404)
-    for _ in range(6):
-        x, y = rng.uniform(-0.5, 0.5), rng.uniform(-0.45, 0.45)
-        s = rng.uniform(0.22, 0.46)
-        tone = "rock" if rng.random() < 0.6 else "rock_warm"
-        add("primitive_ico_sphere_add", rgba(tone, jitter=0.1, rng=rng),
-            loc=(x, y, s*0.35), scale=(s, s*rng.uniform(0.7, 1.0), s*rng.uniform(0.55, 0.8)),
-            subdivisions=1, radius=1, rot=(0, 0, rng.uniform(0, 3.14)), smooth=False, bevel=0.04)
+    add("primitive_cube_add", rgba("rock_dark", jitter=0.08, rng=rng), loc=(0, 0, 0.04),
+        scale=(0.5, 0.42, 0.05), rot=(0, 0, rng.uniform(0, 0.6)), bevel=0.01)
+    for _ in range(5):
+        x, y = rng.uniform(-0.42, 0.42), rng.uniform(-0.38, 0.38)
+        s = rng.uniform(0.2, 0.42)
+        tone = "rock" if rng.random() < 0.55 else "rock_warm"
+        if rng.random() < 0.5:   # a tilted faceted block
+            add("primitive_cube_add", rgba(tone, jitter=0.1, rng=rng),
+                loc=(x, y, s*0.5), scale=(s, s*rng.uniform(0.7, 1.0), s*rng.uniform(0.7, 1.1)),
+                rot=(rng.uniform(-0.3, 0.3), rng.uniform(-0.3, 0.3), rng.uniform(0, 3.14)),
+                smooth=False, bevel=0.015)
+        else:                    # a crystalline shard (few-sided cone)
+            add("primitive_cone_add", rgba(tone, jitter=0.1, rng=rng),
+                loc=(x, y, s*0.4), scale=(s*0.8, s*0.8, 1), vertices=rng.choice((5, 6)),
+                radius1=1, radius2=rng.uniform(0.2, 0.45), depth=s*1.5,
+                rot=(rng.uniform(-0.25, 0.25), rng.uniform(-0.25, 0.25), rng.uniform(0, 3.14)),
+                smooth=False)
+
+def build_crag():
+    # a STRATIFIED rock outcrop: stacked angular slabs stepping up to a tilted crag face on one
+    # side — a highland landmark (ridge/pass shoulder), reads as layered bedrock.
+    rng = random.Random(415)
+    layers = 5
+    for i in range(layers):
+        t = i / (layers - 1)
+        w = (0.66 - 0.34*t)
+        tone = ("rock", "rock_dark", "rock_warm")[i % 3]
+        add("primitive_cube_add", rgba(tone, jitter=0.08, rng=rng),
+            loc=(0.12*t, -0.05*t, 0.07 + t*0.42), scale=(w, w*0.74, 0.1),
+            rot=(0, rng.uniform(-0.04, 0.04), rng.uniform(-0.05, 0.05)), smooth=False, bevel=0.012)
+    # the crag face — a tall tilted slab rising off the back edge
+    add("primitive_cube_add", rgba("rock_dark", jitter=0.08, rng=rng), loc=(-0.18, 0.16, 0.66),
+        scale=(0.2, 0.3, 0.5), rot=(0.12, -0.22, 0.2), smooth=False, bevel=0.012)
+    # a couple of fallen blocks at the foot
+    for sx in (-1, 1):
+        add("primitive_cube_add", rgba("rock_warm", jitter=0.1, rng=rng),
+            loc=(sx*0.42, -0.3, 0.1), scale=(0.16, 0.13, 0.12),
+            rot=(rng.uniform(-0.3, 0.3), 0, rng.uniform(0, 3.14)), smooth=False, bevel=0.01)
 
 def _house(x, y, w, d, wall, roof, rng, ang=0.0):
     bh = w * 0.95
@@ -230,26 +298,39 @@ def build_house_b():
 
 def build_keep():
     rng = random.Random(707)
-    # stone base + tower + battlements, two-tone weathered stone
-    add("primitive_cube_add", rgba("stone", jitter=0.07, rng=rng), loc=(0, 0, 0.18),
-        scale=(0.62, 0.62, 0.18), bevel=0.025)
-    add("primitive_cube_add", rgba("stone_old", jitter=0.07, rng=rng), loc=(0, 0, 0.7),
-        scale=(0.42, 0.42, 0.55), bevel=0.025)
+    # A SEAT, not a chess piece: a low curtain-wall ring with corner turrets + a gatehouse, and a
+    # tall keep tower rising well above it. Two-tone weathered stone.
+    # 1) rocky motte/base
+    add("primitive_cube_add", rgba("stone", jitter=0.07, rng=rng), loc=(0, 0, 0.12),
+        scale=(0.78, 0.78, 0.12), bevel=0.03)
+    # 2) curtain walls (four low runs forming a ring)
+    for (lx, ly, sx, sy) in [(0, 0.62, 0.62, 0.07), (0, -0.62, 0.62, 0.07),
+                             (0.62, 0, 0.07, 0.62), (-0.62, 0, 0.07, 0.62)]:
+        add("primitive_cube_add", rgba("stone_old", jitter=0.06, rng=rng),
+            loc=(lx, ly, 0.4), scale=(sx, sy, 0.28), bevel=0.015)
+    # 3) corner turrets
+    for cx in (-0.62, 0.62):
+        for cy in (-0.62, 0.62):
+            add("primitive_cylinder_add", rgba("stone", jitter=0.07, rng=rng),
+                loc=(cx, cy, 0.5), scale=(0.12, 0.12, 1), vertices=8, radius=1, depth=0.86)
+            add("primitive_cone_add", rgba("slate", jitter=0.05, rng=rng), loc=(cx, cy, 1.02),
+                scale=(0.15, 0.15, 1), vertices=8, radius1=1, radius2=0, depth=0.22)
+    # 4) gatehouse on the south wall
+    add("primitive_cube_add", rgba("stone_old", jitter=0.06, rng=rng), loc=(0, 0.66, 0.52),
+        scale=(0.22, 0.1, 0.42), bevel=0.015)
+    add("primitive_cube_add", rgba("door"), loc=(0, 0.78, 0.34), scale=(0.1, 0.02, 0.24))
+    # 5) the keep tower — tall, dominant, battlemented
+    add("primitive_cube_add", rgba("stone_old", jitter=0.07, rng=rng), loc=(0, 0, 0.92),
+        scale=(0.4, 0.4, 0.66), bevel=0.025)
     for i in range(4):
         for j in range(4):
             if (i in (0, 3)) or (j in (0, 3)):
-                bx = -0.36 + i * 0.24
-                by = -0.36 + j * 0.24
                 add("primitive_cube_add", rgba("stone" if (i + j) % 2 else "stone_old", jitter=0.06, rng=rng),
-                    loc=(bx, by, 1.32), scale=(0.08, 0.08, 0.1))
-    # arrow-slit windows — dark insets that read the tower as a built thing
-    for (wx, wy, sx, sy) in [(0, 0.43, 0.05, 0.02), (0.43, 0, 0.02, 0.05), (-0.43, 0, 0.02, 0.05)]:
-        add("primitive_cube_add", rgba("ink"), loc=(wx, wy, 0.8), scale=(sx, sy, 0.12))
-    # slate roof cap seated inside the battlements
-    add("primitive_cone_add", rgba("slate", jitter=0.05, rng=rng), loc=(0, 0, 1.52),
-        scale=(0.4, 0.4, 1), vertices=4, radius1=1, radius2=0, depth=0.42, rot=(0, 0, 0.785))
-    add("primitive_cube_add", rgba("door"), loc=(0, 0.63, 0.42),
-        scale=(0.13, 0.02, 0.22))
+                    loc=(-0.34 + i*0.227, -0.34 + j*0.227, 1.66), scale=(0.075, 0.075, 0.1))
+    for (wx, wy, sx, sy) in [(0, 0.41, 0.05, 0.02), (0.41, 0, 0.02, 0.05), (-0.41, 0, 0.02, 0.05)]:
+        add("primitive_cube_add", rgba("ink"), loc=(wx, wy, 1.1), scale=(sx, sy, 0.13))
+    add("primitive_cone_add", rgba("slate", jitter=0.05, rng=rng), loc=(0, 0, 1.86),
+        scale=(0.38, 0.38, 1), vertices=4, radius1=1, radius2=0, depth=0.42, rot=(0, 0, 0.785))
 
 def build_watchtower():
     rng = random.Random(808)
@@ -263,18 +344,26 @@ def build_watchtower():
         vertices=4, radius1=1, radius2=0, depth=0.4, rot=(0, 0, 0.785), smooth=False)
 
 def build_standing_stones():
+    # taller megaliths + a true TRILITHON (two uprights bearing a lintel) so the marker reads as
+    # a deliberate sacred ring/barrow, not scattered pebbles.
     rng = random.Random(909)
-    n = 5
+    n = 6
     for i in range(n):
         a = i / n * math.tau
-        x, y = math.cos(a)*0.5, math.sin(a)*0.42
-        h = rng.uniform(0.5, 0.82)
+        x, y = math.cos(a)*0.52, math.sin(a)*0.44
+        h = rng.uniform(0.62, 0.98)
         add("primitive_cube_add", rgba("stone_old", jitter=0.06, rng=rng),
-            loc=(x, y, h*0.5), scale=(0.1, 0.14, h*0.5),
-            rot=(rng.uniform(-0.12, 0.12), rng.uniform(-0.12, 0.12), a), bevel=0.02)
-    # a fallen lintel across the centre
-    add("primitive_cube_add", rgba("stone"), loc=(0, 0, 0.12), scale=(0.4, 0.13, 0.1),
-        rot=(0, 0, 0.5), bevel=0.02)
+            loc=(x, y, h*0.5), scale=(0.11, 0.15, h*0.5),
+            rot=(rng.uniform(-0.1, 0.1), rng.uniform(-0.1, 0.1), a), bevel=0.02)
+    # the trilithon at the centre-back: two uprights + a bearing lintel
+    for sx in (-1, 1):
+        add("primitive_cube_add", rgba("stone", jitter=0.05, rng=rng), loc=(sx*0.2, 0.0, 0.5),
+            scale=(0.11, 0.15, 0.5), bevel=0.02)
+    add("primitive_cube_add", rgba("stone", jitter=0.05, rng=rng), loc=(0, 0.0, 1.04),
+        scale=(0.34, 0.14, 0.09), bevel=0.02)
+    # a low altar slab at the foot
+    add("primitive_cube_add", rgba("stone_old"), loc=(0, -0.12, 0.1), scale=(0.26, 0.16, 0.09),
+        rot=(0, 0, 0.3), bevel=0.02)
 
 def build_shrine():
     rng = random.Random(110)
@@ -290,18 +379,31 @@ def build_shrine():
 
 def build_dock():
     rng = random.Random(120)
-    add("primitive_cube_add", rgba("water"), loc=(0, -0.3, -0.01), scale=(1.0, 0.55, 0.01))
-    add("primitive_cube_add", rgba("water_deep"), loc=(0, -0.62, -0.012),
-        scale=(1.0, 0.25, 0.01))
-    # planks running out over the water
+    # a clearer coast silhouette: a plank jetty running out over water on posts, a MOORED ROWBOAT
+    # alongside, mooring posts, and a shore hut with stacked crates.
+    add("primitive_cube_add", rgba("water"), loc=(0, -0.34, -0.01), scale=(1.0, 0.6, 0.01))
+    add("primitive_cube_add", rgba("water_deep"), loc=(0, -0.7, -0.012), scale=(1.0, 0.3, 0.01))
+    # jetty deck (a continuous boardwalk) + support posts dropping into the water
+    add("primitive_cube_add", rgba("timber", jitter=0.06, rng=rng), loc=(0.0, -0.15, 0.085),
+        scale=(0.16, 0.62, 0.025), bevel=0.006)
     for i in range(5):
-        y = 0.35 - i * 0.22
-        add("primitive_cube_add", rgba("timber", jitter=0.07, rng=rng), loc=(0, y, 0.06),
-            scale=(0.26, 0.09, 0.03))
-        add("primitive_cylinder_add", rgba("timber_dark"), loc=(0.24, y, 0.0),
-            scale=(0.03, 0.03, 1), vertices=6, radius=1, depth=0.22)
-    # a small shore hut
-    _house(-0.04, 0.5, 0.22, 0.2, "timber", "thatch", rng)
+        y = 0.32 - i * 0.24
+        for sx in (-1, 1):
+            add("primitive_cylinder_add", rgba("timber_dark"), loc=(sx*0.15, y, -0.02),
+                scale=(0.022, 0.022, 1), vertices=6, radius=1, depth=0.26)
+    # mooring posts at the seaward end
+    for sx in (-1, 1):
+        add("primitive_cylinder_add", rgba("timber_dark"), loc=(sx*0.2, -0.66, 0.1),
+            scale=(0.03, 0.03, 1), vertices=6, radius=1, depth=0.34)
+    # a moored rowboat — hull (flattened, tapered) + a thwart
+    add("primitive_cube_add", rgba("timber_dark", jitter=0.05, rng=rng), loc=(0.34, -0.42, 0.05),
+        scale=(0.12, 0.26, 0.05), rot=(0, 0, 0.18), bevel=0.04)
+    add("primitive_cube_add", rgba("timber"), loc=(0.34, -0.42, 0.1), scale=(0.1, 0.04, 0.015), rot=(0, 0, 0.18))
+    # shore hut + a couple of crates
+    _house(-0.28, 0.5, 0.22, 0.2, "timber", "thatch", rng)
+    for (cx, cy) in [(0.16, 0.52), (0.26, 0.46)]:
+        add("primitive_cube_add", rgba("timber", jitter=0.07, rng=rng), loc=(cx, cy, 0.09),
+            scale=(0.07, 0.07, 0.07), rot=(0, 0, rng.uniform(0, 0.5)), bevel=0.008)
 
 def build_field():
     rng = random.Random(130)
@@ -359,6 +461,7 @@ BUILDERS = {
     "tree_conifer_cluster": build_tree_conifer_cluster,
     "hill": build_hill,
     "rocks": build_rocks,
+    "crag": build_crag,
     "house_a": build_house_a,
     "house_b": build_house_b,
     "keep": build_keep,

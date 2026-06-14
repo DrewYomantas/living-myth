@@ -576,8 +576,13 @@ public partial class DioramaCanvas : Control
                             else if (slot == 0 || roll < 0.5f) { key = (h & 1) == 0 ? broad : coni; tall = 2.9f; }
                             break;
                         case SurfaceTerrain.Highland:
-                            if (slot == 0) { if (roll < 0.4f) { key = "rocks"; tall = 1.9f; } else if (!clearing) { key = coni; tall = 2.6f; } }
-                            else if (roll < 0.35f && !clearing) { key = coni; tall = 2.3f; }
+                            // stone-first identity: ridge crags + scattered rock dominate, conifers recede
+                            if (slot == 0) {
+                                if (roll < 0.15f) { key = "crag"; tall = 3.0f; }
+                                else if (roll < 0.46f) { key = "rocks"; tall = 1.9f; }
+                                else if (!clearing) { key = coni; tall = 2.5f; }
+                            }
+                            else if (roll < 0.3f && !clearing) { key = coni; tall = 2.2f; }
                             break;
                         case SurfaceTerrain.Plains:
                             if (clearing) break;
