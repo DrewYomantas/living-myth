@@ -857,6 +857,11 @@ public partial class Main : Node
         _camBtn = new Button { Text = "✦ follow drama", TooltipText = "The lens leans toward notable events" };
         _camBtn.Pressed += () => { _map.CameraFollow = !_map.CameraFollow; RestyleToggles(); };
         lensRow.AddChild(_camBtn);
+        // Visual Pipeline Spike V1 — opt-in overlay of Blender placeholder dioramas (off by default).
+        var spikeBtn = new Button { Text = "▦ spike", TooltipText = "Visual Pipeline Spike V1 — overlay Blender placeholder dioramas on the atlas (opt-in, viewer-only test)" };
+        spikeBtn.Pressed += () => { _map.SpikeAssetsEnabled = !_map.SpikeAssetsEnabled; Ui.StyleButton(spikeBtn, _map.SpikeAssetsEnabled); };
+        lensRow.AddChild(spikeBtn);
+        Ui.StyleButton(spikeBtn, _map.SpikeAssetsEnabled);
 
         // --- Fate group: the ledger of the player's hand ---
         var fateRow = DockGroup(hb, "Fate");

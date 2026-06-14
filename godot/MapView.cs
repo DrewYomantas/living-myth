@@ -145,6 +145,25 @@ public partial class MapView : Control
     private const float FollowZoom = 1.9f;
     private const float ManualCamCooldownSecs = 4f;
 
+    // --- Visual Pipeline Spike V1 (opt-in, viewer-only) -------------------------------------------
+    // Overlays Blender-rendered PLACEHOLDER dioramas (res://assets/spike/*.png) on top of the
+    // data-driven surface to prove an asset-backed pipeline. Default OFF; reads ONLY sim facts the
+    // surface already exposes (terrain type, who holds the land, whether it starves) — the assets
+    // are presentation, never a new truth. Textures are loaded lazily and cached (nulls included,
+    // so a missing asset is tried once, never per frame). See docs/VISUAL_PIPELINE.md.
+    public bool SpikeAssetsEnabled = false;
+    private readonly Dictionary<string, Texture2D?> _spikeTex = new();
+    private const float SpikeAlpha = 0.9f;
+
+    private Texture2D? SpikeTexture(string name)
+    {
+        if (_spikeTex.TryGetValue(name, out var cached)) return cached;
+        var path = $"res://assets/spike/{name}.png";
+        var tex = ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null;
+        _spikeTex[name] = tex;
+        return tex;
+    }
+
     // Find-them focus: an explicit player ask (cast click) eases the lens onto a normalized
     // map point. Outranks the drama camera and ignores its cooldown; any manual pan/zoom
     // cancels it — the lens never fights the player.
@@ -399,6 +418,7 @@ public partial class MapView : Control
         DrawPlaceMemory(P, regionR);                                        // 5a. place memory
         DrawSites(P, regionR);                                              // 5. Sites V1 markers
         DrawPeople(P, regionR, font);                                       // 6+7. people + highlights
+        if (SpikeAssetsEnabled) DrawSpikeAssets(P, regionR);                // SPIKE: opt-in asset overlay
 
         // 7b. region lens ring — the inspected place, ringed gold beneath the labels.
         if (SelectedRegionId >= 0 && SelectedRegionId < World.Regions.Count)
@@ -658,6 +678,42 @@ public partial class MapView : Control
                 DrawMemorialCairn(c, s, a);
             }
         }
+    }
+
+    // Visual Pipeline Spike V1: a placeholder asset-backed pass over the data-driven atlas. Reads
+    // ONLY sim facts the surface already shows (region terrain, who holds it, whether it starves) —
+    // the dioramas are presentation, never a new truth, and no location is invented. Drawn above the
+    // surface, below the lens rings. The terrain mapping mirrors WorldSurface's classes; settlement
+    // markers appear only on HELD lands; the parched overlay only where Region.InFamine is true.
+    private void DrawSpikeAssets(Func<float, float, Vector2> P, float regionR)
+    {
+        float patchD = regionR * 2.4f;
+        var tint = new Color(1, 1, 1, SpikeAlpha);
+        foreach (var r in World!.Regions)
+        {
+            var c = P(r.X, r.Y);
+            string patch = r.TerrainType switch
+            {
+                "forest" => "forest_patch",
+                "highland" => "rocky_patch",
+                _ => "grassland_patch",
+            };
+            SpikeBlit(SpikeTexture(patch), c, patchD, tint, 0.12f);
+            if (r.ControllingFactionId is not null)
+                SpikeBlit(SpikeTexture("settlement_cluster_marker"), c, regionR * 1.5f, tint, 0.06f);
+            if (r.InFamine)
+                SpikeBlit(SpikeTexture("parched_famine_overlay"), c, patchD * 0.9f, tint, 0.10f);
+        }
+    }
+
+    // Blit a spike asset centred on a map point, lifted so the rendered ground disc (which sits low
+    // in its frame under the iso camera) lands on the region rather than the frame's middle.
+    private void SpikeBlit(Texture2D? tex, Vector2 center, float diameter, Color tint, float yLift)
+    {
+        if (tex is null) return;
+        var sz = new Vector2(diameter, diameter);
+        var topLeft = center - sz / 2f - new Vector2(0, diameter * yLift);
+        DrawTextureRect(tex, new Rect2(topLeft, sz), false, tint);
     }
 
     // A memorial cairn: stones stacked with intent, a small remembrance light kept at the top —
