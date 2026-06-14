@@ -368,12 +368,29 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       fantasy pixel diorama" across DESIGN/VISUAL_STYLE/VISUAL_PIPELINE/roadmap, stale verify
       baselines corrected to 823/559/910/632, the binding Kenney/AI adoption policy added to the
       Godot asset scout, famine-scar polish status reconciled to shipped.
+- [x] Visual North Star Push V1 (2026-06-13, sim read-model + viewer + console + docs): the first
+      pass to actually move the **atlas** toward the locked North Star — *stylized semi-realistic
+      fantasy pixel diorama, a living atlas*. The surface coloring moved out of MapView into a shared
+      pure read-model **`src/LivingMyth.Sim/SurfacePainter.cs`** (zero Rng, never read by `Tick` —
+      baseline-inert like Sites/Replay), so the viewer and a new headless **`paint`** console command
+      render byte-identical pixels (a screenshot is the real render, not a mock). The painter replaces
+      flat terrain fills with: a **BFS depth-graded sea** + low-freq swell + pale surf line; a **warm
+      painterly coast** (beach-sand blend on the first land cells, retiring the hard shore-darken);
+      **NW-lit hillshade relief** off the elevation gradient; faint **contour ink** tracing elevation
+      bands and stronger **inked political borders** where holders meet; **two-octave mottling** so no
+      region reads as bucket-fill; 3 texels/cell. Markers gained a **contact shadow** (`DrawGroundShadow`)
+      so each site reads as a diorama miniature, and every inspector now wears a **heraldic
+      holder-colored header stripe** (`FactionTint`). New tooling: `PngWriter` (dependency-free PNG via
+      `ZLibStream`+CRC32) and a viewer **self-capture** (`LM_SHOTS=<dir>` fast-forwards a fresh world,
+      shoots the atlas + a region lens in-engine, quits — never touches the player's save). Evidence in
+      `docs/visual_pass/` (before/after + seed variety + in-engine shots, see its README). Viewer/read-
+      model only — **verify held exactly 823/559/910/632**, all 9 console gates green, both builds clean.
 - [ ] Later — person↔site anchoring (a home site, not just a home region); terrain-typed harvest
       (highland vs coast volatility) + viewer carding of `famine_end` / The Barren Years deepening;
-      more code-only visual treatment (territory boundary lines, elevation contours, marker outlines
-      — sandbox/screenshot-verify each); relationship constellation; local site-scale view; memorial
-      tableau upgrade; surface culture + gossip in the viewer; echo packs; timeline scrubbing;
-      followed-faith audit; per-launch seed choice (today seed is fixed at 7). ← NEXT
+      a map-table vignette/framing pass + marker outlines (sandbox/screenshot-verify each); relationship
+      constellation; local site-scale view; memorial tableau upgrade; surface culture + gossip in the
+      viewer; echo packs; timeline scrubbing; followed-faith audit; per-launch seed choice
+      (today seed is fixed at 7). ← NEXT
 
 ## Session log
 - [2026-06-13] Session: Beta-Readiness Pass V1 (lead as integrator + a read-only scout team +

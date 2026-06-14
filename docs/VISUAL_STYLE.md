@@ -373,6 +373,39 @@ Terrain palette (warm, per DESIGN.md guardrails): forest `3f5230`/`36482a` two-t
 plains `5d5e38`, highland `6a665a`, wetland `495843`, river/lake `3a6a74`, coast sand
 `6b6a48`, sea/shallows unchanged.
 
+## Painterly Atlas V1 — SHIPPED (2026-06-13, binding)
+
+The surface coloring moved out of MapView into **`src/LivingMyth.Sim/SurfacePainter.cs`** — a
+pure read-model (zero Rng, never read by `Tick`, same baseline-inert contract as Sites/Replay).
+It is the **single source of atlas pixels**: the Godot viewer builds its `Rgb8` texture from
+`SurfacePainter.Paint`, and the console `paint` command writes the *same* bytes to a PNG — so a
+screenshot is byte-faithful to the viewer (no mock-ups). This is the spine of the locked North
+Star, **stylized semi-realistic fantasy pixel diorama, a living atlas**. Binding properties:
+
+- **Painted sea, not flat fill**: a BFS depth field ramps the water from lit shore-shallows
+  (`3b6b72`) out to cold deep ocean (`1a333d`), a low-frequency value swell gives it motion, and
+  a pale surf line (`83a9a6`) traces every coast.
+- **Soft coast**: the first one–two land cells off the water blend toward warm beach sand
+  (`8f8154`) — a painterly shoreline, never the old hard darkened rim.
+- **Relief, contours, ink borders**: NW-lit hillshade from the elevation gradient gives the land
+  real form; faint contour ink (`23190d` @ ~0.11) traces elevation bands; the *same* ink at
+  ~0.34 traces where one people's land meets another's — the atlas reads as an inked political
+  map. Two-octave mottling (coarse value noise + fine per-texel grain) keeps any region from
+  reading as one bucket-fill. 3 texels/cell (was 2) for finer grain and hairline ink.
+- **Markers are miniatures**: every site marker gets a soft elliptical contact shadow
+  (`DrawGroundShadow`) so it reads as a diorama piece resting on the ground, not a flat icon.
+
+All of it is a deterministic function of cell coordinates + surface data — zero Rng, viewer-only,
+`verify` unmoved at 823/559/910/632. Tunables live at the top of `SurfacePainter.Paint`
+(`ContourStep`, relief strength, mottle/grain amplitudes, depth radius).
+
+## Lens heraldry (Inspect mode, 2026-06-13, binding)
+
+Every inspector (region / person / site / faction) is crowned by a **5px heraldic stripe in the
+holder's cloth color** (`FactionTint`: highland `6b7a99`, shore `4f8f89`, wood `5d8a4e`,
+wilderness = stone) — the lens wears whose land it is, so Inspect reads as a chronicle page, not a
+data table. The stripe is the only chrome added; the parchment panel recipe is unchanged.
+
 ## God-Hand visual language (Divine Pressure V1 — SHIPPED 2026-06-12, binding)
 
 Every act of the player's hand is explicit sim state (`World.DivinePressures`) with a
