@@ -1603,9 +1603,16 @@ public partial class Main : Node
                     if (dl.Count < 40) dl.Add(events[i].Id);
                 }
             }
-            // Place memory: a truly anchored event of a marking kind scars its region.
-            if (events[i].RegionId is int mrid && ClassifyMark(events[i]) is MapView.MarkKind mk)
-                _map.AddPlaceMark(mrid, mk, events[i].Year, events[i].Id);
+            // Place memory: a truly anchored event of a marking kind scars its region. A famine
+            // onset takes its own one-slot scar store (it recurs, so it never crowds the rare
+            // founding/war/battle ring); every other marking kind shares the 4-slot place ring.
+            if (events[i].RegionId is int mrid)
+            {
+                if (events[i].Type == "famine")
+                    _map.AddFamineScar(mrid, events[i].Year, events[i].Id);
+                else if (ClassifyMark(events[i]) is MapView.MarkKind mk)
+                    _map.AddPlaceMark(mrid, mk, events[i].Year, events[i].Id);
+            }
             // Life memory: a cairn-worthy life raises a memorial cairn at the home of its line
             // (Event.HomeRegionId) — remembered there, never a claim of where it happened.
             if (events[i].HomeRegionId is int hrid && IsCairnWorthy(events[i]))
@@ -1717,9 +1724,8 @@ public partial class Main : Node
         "territory" when e.Tags.Contains("abandonment") => MapView.MarkKind.AbandonCairn,
         "custom" => MapView.MarkKind.CultureRibbon,
         "battle" => MapView.MarkKind.Battle,
-        // A famine onset scars its land (the event carries RegionId, never SiteId). famine_end
-        // and boom don't scar — the parched ground is the memory; recovery and plenty don't mark.
-        "famine" => MapView.MarkKind.FamineScar,
+        // Famine is handled apart (AddFamineScar — its own one-slot store, RegionId never SiteId);
+        // famine_end and boom don't scar — the parched ground is the memory, recovery doesn't mark.
         _ => null,
     };
 
@@ -3496,7 +3502,6 @@ public partial class Main : Node
         MapView.MarkKind.FoundingStone => "[color=#90908a]⌑ standing stone[/color]",
         MapView.MarkKind.WarScar => $"[color=#{Ui.Hex(Ui.Ember)}]✕ war scar[/color]",
         MapView.MarkKind.AbandonCairn => "[color=#90908a]∴ cairn[/color]",
-        MapView.MarkKind.FamineScar => $"[color=#{Ui.Hex(Ui.Ochre)}]≋ parched land[/color]",
         _ => $"[color=#{Ui.Hex(Ui.Violet)}]❧ custom ribbon[/color]",
     };
 

@@ -77,14 +77,23 @@ public partial class MapView : Control
     // Place memory (V1): real anchored events leave subtle marks on the land. Only events that
     // truly carry Event.RegionId may mark — Main classifies the stream and feeds marks in here.
     // Capped per region (the oldest yields); alpha ages by sim year, deterministically — no RNG.
-    // TODO (next session — famine-scar polish, the #1 feel-test finding): famines recur often, so
-    // FamineScar crowds rarer founding/war/battle marks out of the 4-slot ring. Give famine its own
-    // scar store (like _homeMarks below) or cap it to 1-most-recent-per-region, and bump low-zoom
-    // legibility. Then: terrain-typed harvest. (viewer-only — must hold verify 823/559/910/632.)
+    // Famine scars are deliberately NOT in this ring (see _famineScars below): famines recur often,
+    // so sharing these 4 slots let them evict the rare founding/war/battle marks. They keep their
+    // own one-slot store now, so this ring is reserved for the rare, lasting marks again.
     public enum MarkKind { FoundingStone, WarScar, AbandonCairn, CultureRibbon, Battle, FamineScar }
     private readonly Dictionary<int, List<(MarkKind kind, int year, int eventId)>> _placeMarks = new();
     private const int MarksPerRegion = 4;
     private static readonly float[] MarkAngles = { 3.6f, 5.5f, 1.1f, 2.4f };   // fixed slots ringing the centre
+
+    // Famine scars: their OWN store, capped to the single most-recent failure per region. A famine
+    // is the land's standing condition, not one of a stack of rare events — one scar says "this
+    // ground has known hunger" without crowding the place ring. Drawn in a slot of its own, a touch
+    // larger with a low-zoom floor so the parched land reads even when the map is pulled far out.
+    private readonly Dictionary<int, (int year, int eventId)> _famineScars = new();
+    private const float FamineScarAngle = 1.75f;   // the wide gap between MarkAngles' 1.1 and 2.4 slots
+
+    public void AddFamineScar(int regionId, int year, int eventId) => _famineScars[regionId] = (year, eventId);
+    public bool HasFamineScar(int regionId) => _famineScars.ContainsKey(regionId);
 
     public void AddPlaceMark(int regionId, MarkKind kind, int year, int eventId)
     {
@@ -618,6 +627,20 @@ public partial class MapView : Control
             }
         }
 
+        // Famine scars: one per region, drawn a touch larger with a higher floor so the parched
+        // ground survives low zoom, in their own slot clear of the place ring and the cairn rim.
+        foreach (var (rid, scar) in _famineScars)
+        {
+            if (rid < 0 || rid >= World!.Regions.Count) continue;
+            var r = World.Regions[rid];
+            var center = P(r.X, r.Y);
+            float s = Mathf.Clamp(regionR * 0.18f, 6.5f, 15f);
+            float age = World.Year - scar.year;
+            float a = Mathf.Lerp(0.85f, 0.34f, Mathf.Clamp(age / 250f, 0f, 1f));
+            var c = center + new Vector2(Mathf.Cos(FamineScarAngle), Mathf.Sin(FamineScarAngle)) * regionR * 0.5f;
+            DrawMemoryMark(c, s, MarkKind.FamineScar, a);
+        }
+
         // Memorial cairns sit at the rim of the home lands, farther out than the place marks —
         // a remembered life, never "it happened here".
         foreach (var (rid, marks) in _homeMarks)
@@ -679,10 +702,12 @@ public partial class MapView : Control
                 DrawCircle(c + new Vector2(s * 0.22f, s * 0.1f), s * 0.2f, StoneMark with { A = a });
                 DrawCircle(c + new Vector2(0, -s * 0.18f), s * 0.18f, StoneMark.Lightened(0.1f) with { A = a });
                 break;
-            case MarkKind.FamineScar:      // parched, cracked ground where the harvest failed —
-            {                              // dry fissures in ochre, no stone and no red (not war, not ruin)
+            case MarkKind.FamineScar:      // parched, cracked ground where the harvest failed — a
+            {                              // discolored patch of dry earth (reads even pulled far out)
+                                           // cut by ochre fissures; no stone, no red, no gold light
                 var dry = Ui.Ochre.Darkened(0.1f) with { A = a };
-                float fw = Mathf.Max(1f, s * 0.11f);
+                DrawCircle(c, s * 0.62f, Ui.Ochre with { A = a * 0.3f });    // the parched patch — legible when small
+                float fw = Mathf.Max(1.4f, s * 0.13f);
                 DrawLine(c + new Vector2(-s * 0.45f, s * 0.16f), c + new Vector2(s * 0.45f, s * 0.16f), dry, fw);
                 DrawLine(c + new Vector2(-s * 0.24f, s * 0.16f), c + new Vector2(-s * 0.33f, s * 0.52f), dry, fw * 0.8f);
                 DrawLine(c + new Vector2(0f, s * 0.16f), c + new Vector2(s * 0.06f, s * 0.56f), dry, fw * 0.8f);
