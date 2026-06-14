@@ -168,10 +168,19 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   props gain illustrated ink). **Recommendation: adopt as the production art route** — next gains are
   content (richer Krita chains, more silhouettes), not plumbing. Evidence: docs/visual_pass/
   ART_PIPELINE_V1.md + artpipeline_v1/. Viewer/asset-only: verify held 823/559/910/632, 9 gates green.
+- **North Star Biome Silhouette V1** (2026-06-14, Blender forms + 1 scatter tweak + docs, NO sim) —
+  improved the **source shapes** in `render_diorama.py` (not the Krita filters): broadleaf 3 crown
+  profiles (round/wide/tall) + visible trunk; conifer ragged fir spire vs bushy pine; angular
+  rocks; NEW **crag** stratified outcrop (highland scatter now stone-first); **keep** → real seat
+  (curtain wall + turrets + gatehouse + tower); dock + moored boat; standing-stones trilithon.
+  Biomes now read distinct. **Score 6.5→7.0**; blocks-7.5+ are art direction (broadleaf macro-
+  massing still sphere-clusters; uniform-density composition w/ no focal hierarchy; no macro
+  depth/AO) — content, not plumbing. Evidence: docs/visual_pass/BIOME_SILHOUETTE_V1.md +
+  biome_silhouette_v1/. Viewer/asset-only: verify held 823/559/910/632, all 9 gates green.
 - **Next** — **terrain-typed harvest** (highland/coast/plains volatility, the deferred sim follow-up
-  — moves the baseline); **deepen the art pipeline** (per-biome Krita chains — oilpaint/texture-bomb
-  the grounds; more tree silhouette variety) or **diorama art fidelity** (hand-finished/licensed
-  assets — the 6.5→8 gap) or
+  — moves the baseline); **diorama composition + canopy authoring** (the 7.0→7.5+ gap: art-directed
+  density/focal hierarchy, real broadleaf trunk+branch massing, macro depth/AO — content in the
+  proven pipeline) or **diorama art fidelity** (hand-finished/licensed assets) or
   seamless atlas→diorama zoom (retire the bridge button per its doctrine); more code-only visual
   treatment (territory boundary lines, elevation contours, marker outlines — sandbox/screenshot-verify
   each); still-unwatched Theater of War / Chronicle Replay / persistence / Cast / Harvest F5
