@@ -29,7 +29,11 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   `PlaceSeeds.cs` (legacy hash helpers; its map hints retired by Sites V1), `StoryCopy.cs` (ALL
   connector/canon/anchor/replay/turning-point English + glossary), `CanonPanel.cs` (the canon writing
   desk), `PersonSigils.cs` (deterministic per-soul marks), `CastPanel.cs` (the dramatis-personae
-  roster), `FateLedger.cs` (the god-hand's act-and-consequence sheet).
+  roster), `FateLedger.cs` (the god-hand's act-and-consequence sheet), `DioramaView.cs` (the
+  read-only region-diorama bridge — Blender-rendered miniatures billboarded over an isometric
+  terrain plane for the live selected region; freezes time while open). The diorama asset pipeline
+  is `tools/art/render_diorama.py` (headless Blender → Cycles → transparent PNGs in
+  `godot/assets/diorama/`); `godot/shaders/parchment_post.gdshader` is the warm-grade post.
 
 ## Milestones
 - **M0–M5.1** — spatial island, regions, territory, extinction land-release.
@@ -139,11 +143,22 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   verify held exactly 823/559/910/632, all 10 gates green, both builds clean. Docs locked the visual
   thesis to "stylized semi-realistic fantasy pixel diorama" + added the binding Kenney/license/AI
   adoption policy to the asset scout. Commits 97eac0a (docs) + c46f0c3 (viewer).
+- **North Star Diorama arc** (2026-06-14, viewer + Blender pipeline + docs — visual prototype, NOT
+  new sim) — built `DioramaView.cs`, an isometric region-diorama read-model (Blender miniatures over
+  a terrain plane, parchment chrome, warm post). Prototype Pass V1 proved the direction; Bridge V1
+  wired it to the LIVE selected region (overlay from the Region Lens / F3, never a scene swap) and
+  removed the fake god-hand action bar (read-only — real verbs stay in the atlas where they journal);
+  Hardening V1 fixed the true `IsSeat` seat label, added label collision-avoidance + title/edge
+  clamping, and **froze time while open**. Honest judge rating: production atlas 3/10, diorama 5/10;
+  the 5→7+ gap is dedicated art labor, not code. See docs/visual_pass/DIORAMA_PROTOTYPE.md (binding
+  doctrine: the "Enter the Diorama" button is a TRANSITIONAL bridge — the final UX is seamless atlas
+  zoom into a land, not a clicked mode; not built yet). Viewer-only: verify held 823/559/910/632.
 - **Next** — **terrain-typed harvest** (highland/coast/plains volatility, the deferred sim follow-up
-  — moves the baseline) → more code-only visual treatment (territory boundary lines, elevation
-  contours, marker outlines — sandbox/screenshot-verify each); still-unwatched Theater of War /
-  Chronicle Replay / persistence / Cast / Harvest F5 feel-tests; person↔site anchoring; timeline
-  scrubbing; per-launch seed choice (today fixed at 7).
+  — moves the baseline); **diorama art fidelity** (hand-finished/licensed assets — the 5→7+ gap) or
+  seamless atlas→diorama zoom (retire the bridge button per its doctrine); more code-only visual
+  treatment (territory boundary lines, elevation contours, marker outlines — sandbox/screenshot-verify
+  each); still-unwatched Theater of War / Chronicle Replay / persistence / Cast / Harvest F5
+  feel-tests; person↔site anchoring; timeline scrubbing; per-launch seed choice (today fixed at 7).
 
 ## Commands
 ```bash
@@ -258,6 +273,13 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
   dramatic auto-slow) only changes the *wall-clock rate* at which existing ticks are shown — `Tick()`
   must still be called the same number of times in the same order. So viewer-only work can never move
   the `verify` counts; if it does, sim code was touched by accident. `verify` is the guard.
+- **The diorama overlay freezes time, never forks the world.** `DioramaView` is opened over the
+  live `World` (shared object, never a copy); its chrome is a SNAPSHOT of the opened year, so
+  `Main.OpenDiorama` sets `_running = false` (and `CloseDiorama` restores it) — same pause pattern
+  as Chronicle Mode's replay. It calls no sim verbs, so it's verify-inert by construction. Screenshot
+  capture is env-driven and viewer-only: `LM_SHOTS=<dir>` (Main's self-capture sequence),
+  `LM_DIORAMA_SHOT=<dir>` + `LM_DIORAMA_TERRAIN`/`LM_DIORAMA_NAME`/`LM_DIORAMA_NOAVOID` (DioramaView
+  standalone self-shot — terrain pick, output name, collision-avoidance toggle for before/after).
 - **Divine pressure is multiplier-only.** God-hand mechanics may only modulate EXISTING Rng
   rolls (bless eases the death roll; protect/doom scale the famine multiplier and bias the
   prosperity walk inside self-expiring windows) — never add a draw to the tick. That is why
@@ -319,18 +341,18 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 <!-- TOKENOMICS:START -->
 ## Token Optimization Insights
 
-_Last updated: 2026-06-13_
+_Last updated: 2026-06-14_
 
 ### Context Management
-- Your context snowballs at **turn 18** on average (38% of sessions). Use `/compact` proactively after turn 16-18 on long sessions to prevent unbounded growth.
+- Your context snowballs at **turn 18** on average (36% of sessions). Use `/compact` proactively after turn 16-18 on long sessions to prevent unbounded growth.
 - Some sessions use significantly more tokens than others. Consider shorter, more focused sessions with clear goals.
 - You could benefit from subagents for parallel tasks. Consider splitting multi-file operations into parallel agent tasks.
 - You read files you don't end up using. Use `Grep` first to locate relevant files before reading them — reduces unnecessary context by ~0%.
 - You receive verbose command output. Prefer `Grep`/`Read` tools over bash commands when searching files to reduce output tokens.
 
 ### Model Usage
-- You use Opus/Claude for **7%** of simple tasks. Prefer **Sonnet** for editing, small fixes, and exploration tasks to reduce token usage by ~5x on those sessions.
-- MCP server(s) **unity-mcp** are loaded but never used. Consider removing them to reduce per-session overhead.
+- You use Opus/Claude for **8%** of simple tasks. Prefer **Sonnet** for editing, small fixes, and exploration tasks to reduce token usage by ~5x on those sessions.
+- MCP server(s) **unity-mcp, ide, computer-use, robinhood-trading, 465a7fa2-43f0-4b8d-88cf-f8c5c5acb227, claude_ai_Notion, 5575e70a-2d9c-4611-bffd-614e75e6c3dd, unity, Apify, PDF_Tools_-_View, pdf-viewer** are loaded but never used. Consider removing them to reduce per-session overhead.
 
 ### Prompt Quality
 - **5%** of your prompts are under 10 words. Include specific file paths, function names, and expected outcomes to reduce clarification rounds.
