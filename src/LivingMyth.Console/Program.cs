@@ -26,8 +26,9 @@ switch (cmd)
     case "sites": SitesCmd(Years(120)); break;
     case "replay": ReplayCmd(Years(120)); break;
     case "harvest": HarvestCmd(Years(120)); break;
+    case "paint": PaintCmd(Seed(7), Years(120)); break;
     default:
-        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine | save | sites | replay | harvest");
+        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine | save | sites | replay | harvest | paint");
         break;
 }
 return;
@@ -64,6 +65,41 @@ void RunCmd(int seed, int years, int trace)
         if (juicy is not null) Console.WriteLine(TraceBlock(world, juicy.Id));
     }
     Console.WriteLine($"\nFull chronicle written to {outPath}\n");
+}
+
+// ----------------------------------------------------------------------------- paint
+// Headless atlas render: run the sim, then write the SurfacePainter's pixels to a PNG. This is
+// the SAME read-model the Godot viewer paints with, so the image is byte-faithful to the map
+// the player sees. Pure presentation evidence — painting draws zero Rng, so `verify` is unmoved.
+//   dotnet run -- paint --seed 7 --years 120 --out atlas.png [--scale 4]
+void PaintCmd(int seed, int years)
+{
+    var (config, names) = Load();
+    int cap = GetInt("--cap", -1);
+    if (cap >= 0) config.Params["carrying_capacity"] = cap;
+    var world = new World(seed, config, names);
+    world.Run(years);
+
+    int side = SurfacePainter.Side;
+    var rgb = SurfacePainter.Paint(world);
+
+    int scale = Math.Max(1, GetInt("--scale", 4));   // nearest-neighbour upscale for legible PNGs
+    int outSide = side * scale;
+    var big = new byte[outSide * outSide * 3];
+    for (int y = 0; y < outSide; y++)
+        for (int x = 0; x < outSide; x++)
+        {
+            int si = ((y / scale) * side + (x / scale)) * 3;
+            int di = (y * outSide + x) * 3;
+            big[di] = rgb[si]; big[di + 1] = rgb[si + 1]; big[di + 2] = rgb[si + 2];
+        }
+
+    int oi = Array.IndexOf(args, "--out");
+    string outPath = oi >= 0 && oi + 1 < args.Length
+        ? args[oi + 1]
+        : Path.Combine(AppContext.BaseDirectory, $"atlas_seed{seed}_yr{world.Year}.png");
+    PngWriter.Write(outPath, outSide, outSide, big);
+    Console.WriteLine($"Painted {world.Island} (seed {seed}, year {world.Year}) — {outSide}×{outSide} → {outPath}");
 }
 
 string Summary(World world)

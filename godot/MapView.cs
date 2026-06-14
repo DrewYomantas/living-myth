@@ -178,10 +178,8 @@ public partial class MapView : Control
     // Old-world palette (V2 handoff, warmed toward the Batch 1 atlas references): muted
     // teal-slate water with a shallows rim, dry-grass-warmed land, muted banner colors.
     // Faction color is a cloth/banner accent — territory paint stays restrained.
-    private static readonly Color Sea = new("22424d");
-    private static readonly Color Shallows = new("2e5560");
-    private static readonly Color Land = new("474c31");
-    private static readonly Color Coast = new("5d6242");
+    private static readonly Color Sea = new("22424d");             // map water (marker accents only)
+    private static readonly Color Land = new("474c31");            // barrow earth (marker accents only)
     private static readonly Color Neutral = new("6f6a58");          // unclaimed wilderness
     private static readonly Dictionary<string, Color> FactionColors = new()
     {
@@ -618,6 +616,7 @@ public partial class MapView : Control
         {
             var c = P(site.Nx, site.Ny);
             float ss = s * (site.IsSeat ? 1.3f : 1f);
+            DrawGroundShadow(c, ss);            // a soft contact shadow seats the marker on the land
             DrawSiteMarker(c, ss, site.Type);
             if (site.IsSeat && World.Regions[site.RegionId].ControllingFactionId is string holder)
                 DrawBannerFlag(c + new Vector2(ss * 0.95f, ss * 0.55f), ss * 1.15f,
@@ -914,6 +913,22 @@ public partial class MapView : Control
         }, TentCloth);
     }
 
+    // A soft elliptical contact shadow under a marker, so each place reads as a little diorama
+    // piece resting on the ground rather than a flat icon stamped on the map.
+    private void DrawGroundShadow(Vector2 c, float s)
+    {
+        const int seg = 16;
+        var pts = new Vector2[seg];
+        var ctr = c + new Vector2(0, s * 0.46f);
+        float rx = s * 0.66f, ry = s * 0.24f;
+        for (int i = 0; i < seg; i++)
+        {
+            float a = i / (float)seg * Mathf.Tau;
+            pts[i] = ctr + new Vector2(Mathf.Cos(a) * rx, Mathf.Sin(a) * ry);
+        }
+        DrawColoredPolygon(pts, new Color(0.07f, 0.05f, 0.03f, 0.24f));
+    }
+
     // Faction identity as cloth: a small pennant beside the place marker, not territory paint.
     private void DrawBannerFlag(Vector2 basePos, float s, Color col)
     {
@@ -1094,43 +1109,8 @@ public partial class MapView : Control
     }
 
     // ---- the living-atlas skin ----
-
-    // Warm terrain palette per DESIGN.md guardrails (moss, dry grass, clay, stone, faded
-    // slate water): one base color per terrain class, hash-speckled per texel so the land
-    // reads as handmade pixel ground, never flat fill.
-    private static readonly Color TerForest = new("3f5230");
-    private static readonly Color TerForestDeep = new("36482a");
-    private static readonly Color TerPlains = new("5d5e38");
-    private static readonly Color TerHighland = new("6a665a");
-    private static readonly Color TerWetlandC = new("495843");
-    private static readonly Color TerRiver = new("3a6a74");
-    private static readonly Color TerCoastSand = new("6b6a48");
-
-    private static Color TerrainColor(SurfaceTerrain t) => t switch
-    {
-        SurfaceTerrain.Ocean => Sea,
-        SurfaceTerrain.Shallows => Shallows,
-        SurfaceTerrain.Coast => TerCoastSand,
-        SurfaceTerrain.Plains => TerPlains,
-        SurfaceTerrain.Forest => TerForest,
-        SurfaceTerrain.Highland => TerHighland,
-        SurfaceTerrain.Wetland => TerWetlandC,
-        SurfaceTerrain.River => TerRiver,
-        SurfaceTerrain.Lake => TerRiver,
-        _ => Land,
-    };
-
-    private static bool IsSeaTerrain(SurfaceTerrain t) => t is SurfaceTerrain.Ocean or SurfaceTerrain.Shallows;
-
-    private static float Speckle(int x, int y)
-    {
-        unchecked
-        {
-            uint h = (uint)(x * 374761393 + y * 668265263);
-            h = (h ^ (h >> 13)) * 1274126177u;
-            return ((h ^ (h >> 16)) & 0xff) / 255f - 0.5f;
-        }
-    }
+    // Terrain coloring now lives in the shared Sim read-model SurfacePainter (so the viewer and
+    // the headless `paint` command render identical pixels). MapView only triggers a rebuild.
 
     private string TerritorySignature()
     {
@@ -1150,46 +1130,12 @@ public partial class MapView : Control
         _texSurfaceVersion = surface.Version;
         _texTerritorySig = sig;
 
-        const int TS = 2;   // texels per cell
-        int S = WorldSurface.Size * TS;
-        // Out-of-bounds reads as sea (the island sits inside the grid, ringed by ocean) — Idx
-        // does not clamp, so neighbour lookups must guard their own bounds.
-        bool SeaAt(int x, int y) => x < 0 || y < 0 || x >= WorldSurface.Size || y >= WorldSurface.Size
-                                    || IsSeaTerrain(surface.TerrainAt(x, y));
-        var img = Image.CreateEmpty(S, S, false, Image.Format.Rgba8);
-        for (int cy = 0; cy < WorldSurface.Size; cy++)
-            for (int cx = 0; cx < WorldSurface.Size; cx++)
-            {
-                var t = surface.TerrainAt(cx, cy);
-                var baseCol = TerrainColor(t);
-                // Painted shore: a land cell touching the sea darkens a touch, so the island
-                // reads as a placed thing on the water (atlas signature, not a flat cell field).
-                bool shore = !IsSeaTerrain(t)
-                    && (SeaAt(cx - 1, cy) || SeaAt(cx + 1, cy) || SeaAt(cx, cy - 1) || SeaAt(cx, cy + 1));
-                float elev = surface.ElevationAt(cx, cy);
-                int rid = surface.RegionAt(cx, cy);
-                Color? cloth = null;
-                if (rid >= 0 && rid < World.Regions.Count
-                    && World.Regions[rid].ControllingFactionId is string fid
-                    && t is not (SurfaceTerrain.River or SurfaceTerrain.Lake))
-                    cloth = FactionColors.GetValueOrDefault(fid, Neutral);
-
-                for (int sy = 0; sy < TS; sy++)
-                    for (int sx = 0; sx < TS; sx++)
-                    {
-                        int px = cx * TS + sx, py = cy * TS + sy;
-                        // Forest speckles in two tones (clustered canopy, not flat green);
-                        // everything else gets a soft handmade grain + elevation shading.
-                        var col = t == SurfaceTerrain.Forest && Speckle(px * 7, py * 5) > 0.12f
-                            ? TerForestDeep : baseCol;
-                        float shade = 1f + Math.Clamp(elev - 0.18f, -0.2f, 0.6f) * 0.22f
-                                      + Speckle(px, py) * 0.085f;
-                        col = new Color(col.R * shade, col.G * shade, col.B * shade);
-                        if (cloth is Color cc) col = col.Lerp(cc, 0.13f);   // banner-cloth wash, restrained
-                        if (shore) col = col.Darkened(0.20f);               // the painted shore rim
-                        img.SetPixel(px, py, col);
-                    }
-            }
+        // The atlas skin is painted by the shared Sim read-model so the viewer and the headless
+        // `paint` console command render byte-identical pixels (screenshots stay faithful). Rgb8
+        // from a flat buffer — no per-pixel SetPixel, no Godot color math on the hot path.
+        int S = SurfacePainter.Side;
+        var rgb = SurfacePainter.Paint(World);
+        var img = Image.CreateFromData(S, S, false, Image.Format.Rgb8, rgb);
         _surfaceTex = ImageTexture.CreateFromImage(img);
     }
 
