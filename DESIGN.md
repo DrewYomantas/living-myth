@@ -9,11 +9,11 @@ an honest/aspirational/forbidden reading of the references, and the staged visua
 
 ## Visual Thesis
 
-Living Myth should look like a **mythic pixel diorama**: an ancient world that begins as a readable living atlas, then deepens into inspectable regions, settlements, shrines, roads, ruins, and remembered places.
+Living Myth should look like a **stylized semi-realistic fantasy pixel diorama**: an ancient, mythic world that begins as a readable living atlas, then deepens into inspectable regions, settlements, shrines, roads, ruins, and remembered places. Stylized and semi-realistic — pixel-rooted but with painterly depth, light, and material weight; never flat retro pixel art, never photoreal.
 
 The player should feel like they are watching history unfold on a sacred map-table, then zooming down into places where people actually live.
 
-The target is not a cute mobile god-sim island. It is not a generic dark strategy dashboard. It is not a realistic 3D civilization map. It is a warm, readable, pixel-rooted historical diorama with enough place detail to make stories feel remembered.
+The target is not a cute mobile god-sim island. It is not a generic dark strategy dashboard. It is not a realistic 3D civilization map, and not flat retro pixel art. It is a warm, readable, stylized semi-realistic fantasy pixel diorama with enough place detail to make stories feel remembered.
 
 ## Reference Stack
 
@@ -82,9 +82,9 @@ At every zoom level, the world should feel inhabited. Settlements should not be 
 
 The player should discover detail by moving closer. Island view should be readable and calm. Region view should reveal roads, hamlets, shrines, farms, camps, and local factions. Local view should show market lanes, homes, gardens, tiny people, rituals, and aftermath.
 
-### 3. Ancient, not generic fantasy
+### 3. Stylized fantasy, not generic fantasy-MMO
 
-The world should lean mythic, old, handmade, and regional. Avoid fantasy-MMO excess. Prefer timber, thatch, stone, clay, reeds, banners, hearths, cairns, small shrines, fields, boats, footpaths, grave mounds, sacred trees, and ruined masonry.
+The world is fantasy — but semi-realistic and grounded: mythic, old, handmade, and regional. Embrace fantasy material and atmosphere; avoid fantasy-MMO excess and cliché kitsch. Prefer timber, thatch, stone, clay, reeds, banners, hearths, cairns, small shrines, fields, boats, footpaths, grave mounds, sacred trees, and ruined masonry.
 
 ### 4. Readability before ornament
 
@@ -477,4 +477,4 @@ Viewer-only work must not change the sim verify baseline. Sim-layer work must up
 
 ## One-Sentence Art Direction
 
-Living Myth is a warm mythic pixel diorama: a living atlas that zooms into ancient settlements, where authored procedural history leaves visible marks on people, places, roads, shrines, ruins, and memory.
+Living Myth is a warm, stylized semi-realistic fantasy pixel diorama: a living atlas that zooms into ancient settlements, where authored procedural history leaves visible marks on people, places, roads, shrines, ruins, and memory.

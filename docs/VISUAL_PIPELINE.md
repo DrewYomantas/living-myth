@@ -75,8 +75,8 @@ default** (opt-in). Toggling it overlays the dioramas; toggling off restores the
 
 ## How this supports the Northstar look
 
-The Northstar (`docs/VISUAL_STYLE.md`) is a *"warm mythic pixel diorama presented as a living
-atlas"* — painted land, named places, settlement dioramas, history that leaves marks. Code-only
+The Northstar (`docs/VISUAL_STYLE.md`) is a *"stylized semi-realistic fantasy pixel diorama
+presented as a living atlas"* — painted land, named places, settlement dioramas, history that leaves marks. Code-only
 draw calls (lines, arcs, polylines) are reaching their ceiling for that hand-made density. Authored
 assets are how a diorama gets *texture and silhouette* — conifers, thatch roofs, standing stones —
 without faking data. This spike proves the assets can be produced deterministically, dropped into

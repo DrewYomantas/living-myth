@@ -8,7 +8,7 @@ and the staged roadmap. Future pacing/story sessions start here.
 
 Binding constraint, restated from the honesty contract: **pacing is wall-clock
 presentation only.** `Tick()` count and order are sacred; one tick is one year; viewer
-pacing work must leave `verify` at its recorded baseline (884/699/567/706, seeds
+pacing work must leave `verify` at its recorded baseline (823/559/910/632, seeds
 1/18/42/7). Anything in this doc that needs new sim state or new RNG draws is marked
 **[sim contract]** and is a deliberate, baseline-moving milestone — never a side effect.
 
@@ -285,7 +285,7 @@ Shipped: catch-up modal (Quick beats / Full thread), region anchors shown when k
    VISUAL_STYLE roadmap 4.
 
 Each slice ends the same way: `dotnet build LivingMyth.slnx` clean, `verify` at
-884/699/567/706, Godot build clean, F5 feel-check.
+823/559/910/632, Godot build clean, F5 feel-check.
 
 ## Later sim/data contracts (each moves the verify baseline; deliberate milestones)
 

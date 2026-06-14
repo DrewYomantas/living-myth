@@ -61,7 +61,7 @@ prerequisite — is in. Movement is not: nothing migrates, and ideas diffuse but
 
 ## Look and feel
 
-The look crystallized: a warm mythic pixel diorama presented as a **living atlas** — a
+The look crystallized: a **stylized semi-realistic fantasy pixel diorama** presented as a **living atlas** — a
 sacred map-table wrapped in a parchment-and-ink chronicle UI (DESIGN.md +
 docs/VISUAL_STYLE.md are binding). Never a SaaS dashboard, never a glossy mobile
 god-game. What survives from the WorldBox reference is the *hands*: tactile,

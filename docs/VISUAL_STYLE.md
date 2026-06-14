@@ -9,12 +9,14 @@ models it. Future Claude Code sessions doing visual work start here.
 
 Everything in this file is **viewer-only**. Nothing here may touch `src/LivingMyth.Sim/`
 or move the verify baseline (`dotnet run --project src/LivingMyth.Console -- verify`,
-currently 884/699/567/706 for seeds 1/18/42/7).
+currently 823/559/910/632 for seeds 1/18/42/7).
 
 ## Visual thesis
 
-Living Myth is a warm mythic pixel diorama presented as a **living atlas**: a sacred
-map-table where history unfolds, wrapped in a parchment-and-ink chronicle UI. The world
+Living Myth is a **stylized semi-realistic fantasy pixel diorama** presented as a
+**living atlas**: a sacred map-table where history unfolds, wrapped in a parchment-and-ink
+chronicle UI. Stylized and warm, mythic and semi-realistic — pixel-rooted but with painterly
+depth, light, and material weight; never flat retro pixel art, never photoreal. The world
 reads as a place (painted island, named sites, roads, banners); the UI reads as a history
 book laid over it (parchment cards, soft ink borders, brass/gold accents, serif editorial
 type). Never a SaaS dashboard, never a glossy mobile god-game.
@@ -34,8 +36,8 @@ are **concept references only**, never in-game assets):
 ### Batch 2 references (2026-06-12) — identity and attention
 
 Six more concept images (`Visual references/gpt-b2-*.png`, concept-reference-only): the
-style settles into a **stylized semi-realistic fantasy pixel diorama** presented as the
-living mythic atlas. What Batch 2 locks beyond Batch 1 is the *identity language* — and
+style is first named as a **stylized semi-realistic fantasy pixel diorama** presented as the
+living mythic atlas — now the locked visual thesis above. What Batch 2 locks beyond Batch 1 is the *identity language* — and
 it arrived alongside the playtest verdict that cast-tracking is the build's weak point:
 
 | File | What it locks |
@@ -88,9 +90,12 @@ Each image mixes three kinds of content. Read them with this discipline:
 - Per-settlement population ("98 souls") — people are not anchored to sites.
 - Named buildings/features ("Market Square", "Fishery Docks") — no site state.
 - Event location pins for events that carry no `RegionId`.
-- God tools that don't exist: **Bless, Prophecy, Plague, Terrain** appear in the
-  references — do NOT render them (not even disabled) until the sim has them. Only
-  Inspect, Follow, and Curse are real.
+- God tools that don't exist: **Prophecy, Plague** appear in the references but remain
+  unmodeled — do NOT render them (not even disabled) until the sim has them.
+  *(Original Batch-1 reading, now SUPERSEDED: this once also forbade Bless and Terrain
+  and said "Only Inspect, Follow, and Curse are real." God-Hand V1 shipped Bless,
+  Protect, Doom, Omen, SeedForest, and CallSpring — see the God-Hand visual language
+  section below for the live mark table; only Prophecy/Plague stay forbidden.)*
 - Any generative-AI storytelling, any network calls.
 
 ## Target zoom levels
@@ -145,8 +150,8 @@ single-sourced in `Ui` — never re-inline hex duplicates in MapView.
   (dry-grass-warmed moss), coast `5d6242`, neutral wilderness `6f6a58`.
 - **Faction cloth:** muted banner colors (highland `6b7a99`, shore `4f8f89`, wood
   `5d8a4e`) — cloth accents, pennants, and territory hints, never paint spills.
-- **Materials:** timber/thatch/stone/dirt marker palette per DESIGN.md ("ancient, not
-  generic").
+- **Materials:** timber/thatch/stone/dirt marker palette per DESIGN.md — stylized fantasy,
+  not generic fantasy-MMO; prefer ancient-world materials.
 - Guardrails (from DESIGN.md): no neon, no candy greens, no pure saturated blues;
   ritual gold sparingly.
 
@@ -413,6 +418,7 @@ As built, against what's honestly anchored today:
 | territory abandonment (extinct people) | cairn (`∴`) |
 | custom born / faded / clash / diffusion | culture ribbon (`❧`, violet) |
 | **battle** (Battle Sites V1, 2026-06-13) | **crossed swords (`⚔`, ember)** — full-length crossed blades at the front, brighter and pole-free so it reads apart from the war scorch |
+| **famine onset** (Harvest Memory polish, 2026-06-13) | **ochre cracked-earth disc** — drawn on famine ONSET only; kept in its OWN per-region 1-slot scar store (NOT the 4-slot place-mark ring, so rare founding/war/battle marks survive recurring famines), at a dedicated reserved slot angle, drawn larger with a higher alpha floor than ring marks for low-zoom legibility |
 | rumor | **no mark by design** — gossip is social, not a physical scar |
 
 Constraints honored: marks age/fade deterministically by sim-year (no RNG, no wall
