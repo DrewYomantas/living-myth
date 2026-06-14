@@ -1,0 +1,589 @@
+using Godot;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using LivingMyth.Sim;
+
+// North Star Diorama prototype (Prototype Pass V1) — a dedicated, sandboxed zoomed-in region
+// view that renders Blender-authored diorama miniatures at REAL sim site positions over a
+// zoomed crop of the painted atlas, wrapped in parchment/brass North Star chrome with a
+// warm-grade + grain + vignette post shader.
+//
+// 100% viewer-only / read-model: builds its own World, ticks it, reads regions/sites/chronicle.
+// Never writes sim state, never saves. Launch standalone:
+//   <godot> --path godot res://DioramaView.tscn
+// or press F3 in the main viewer. Esc / ← Atlas returns to the atlas.
+public partial class DioramaView : Control
+{
+    private const int Seed = 7;
+    private const int Years = 462;   // a settled age — echoes the North Star reference frames
+
+    private World _world = null!;
+    private int _regionId;
+    private Font _serif = null!, _sc = null!;
+    private readonly Dictionary<string, Texture2D> _tex = new();
+
+    private static readonly Color Parchment = new("f2e5c2");
+    private static readonly Color ParchmentDeep = new("e7d4a8");
+    private static readonly Color Ink = new("3a2c19");
+    private static readonly Color InkSoft = new("6f5b3e");
+    private static readonly Color Gold = new("c9973f");
+    private static readonly Color Ember = new("b0432e");
+
+    public override void _Ready()
+    {
+        if (OS.GetEnvironment("LM_DIORAMA_SHOT") != "")
+            DisplayServer.WindowSetSize(new Vector2I(1600, 920));
+
+        _serif = LoadFont("res://assets/fonts/Alegreya-VariableFont.ttf");
+        _sc = LoadFont("res://assets/fonts/AlegreyaSC-Medium.ttf");
+        LoadTextures();
+
+        var (config, names) = DataLoader.Load();
+        _world = new World(Seed, config, names);
+        _world.SeedWorld();
+        while (_world.Year < Years) _world.Tick();
+        _regionId = PickRegion();
+
+        var bg = new ColorRect { Color = new Color("23323a") };  // atlas-sea base behind the crop
+        bg.SetAnchorsPreset(LayoutPreset.FullRect);
+        AddChild(bg);
+
+        var canvas = new DioramaCanvas { View = this };
+        canvas.SetAnchorsPreset(LayoutPreset.FullRect);
+        canvas.TextureFilter = TextureFilterEnum.Linear;
+        AddChild(canvas);
+
+        BuildChrome();
+        BuildPost();
+
+        if (OS.GetEnvironment("LM_DIORAMA_SHOT") is string shot && shot != "")
+            _ = SelfShot(shot);
+    }
+
+    public override void _UnhandledInput(InputEvent e)
+    {
+        if (e is InputEventKey { Pressed: true } k && (k.Keycode == Key.Escape || k.Keycode == Key.F3))
+            GetTree().ChangeSceneToFile("res://Main.tscn");
+    }
+
+    private static Font LoadFont(string path)
+    {
+        var f = new FontFile();
+        f.LoadDynamicFont(ProjectSettings.GlobalizePath(path));
+        return f;
+    }
+
+    private void LoadTextures()
+    {
+        string dir = ProjectSettings.GlobalizePath("res://assets/diorama/");
+        foreach (var f in System.IO.Directory.GetFiles(dir, "*.png"))
+        {
+            var img = Image.LoadFromFile(f);
+            _tex[System.IO.Path.GetFileNameWithoutExtension(f)] = ImageTexture.CreateFromImage(img);
+        }
+    }
+
+    public Texture2D? Tex(string key) => _tex.GetValueOrDefault(key);
+    public World World => _world;
+    public int RegionId => _regionId;
+    public Font Serif => _serif;
+    public Font Sc => _sc;
+
+    private int PickRegion()
+    {
+        int best = -1, bestSites = -1;
+        double bestH = -1;
+        foreach (var r in _world.Regions)
+        {
+            if (r.ControllingFactionId == null) continue;
+            int s = _world.Sites.ForRegion(r.Id).Count;
+            if (s > bestSites || (s == bestSites && r.Harvest > bestH))
+            {
+                best = r.Id; bestSites = s; bestH = r.Harvest;
+            }
+        }
+        if (best < 0)   // no held region — fall back to whoever has the most places
+            foreach (var r in _world.Regions)
+            {
+                int s = _world.Sites.ForRegion(r.Id).Count;
+                if (s > bestSites) { best = r.Id; bestSites = s; }
+            }
+        return Math.Max(0, best);
+    }
+
+    public static Color FactionTint(string? fid) => fid switch
+    {
+        "highland" => new Color("6b7a99"),
+        "shore" => new Color("4f8f89"),
+        "wood" => new Color("5d8a4e"),
+        _ => new Color("8a8a86"),
+    };
+
+    // ---- chrome ---------------------------------------------------------------------------------
+    private StyleBoxFlat PanelStyle(float alpha = 0.96f)
+    {
+        var sb = new StyleBoxFlat
+        {
+            BgColor = new Color(Parchment, alpha),
+            BorderColor = Gold,
+            ShadowColor = new Color(0, 0, 0, 0.4f),
+            ShadowSize = 10,
+        };
+        sb.SetBorderWidthAll(2);
+        sb.SetCornerRadiusAll(7);
+        sb.SetContentMarginAll(14);
+        return sb;
+    }
+
+    private Label Lab(string text, Font font, int size, Color col, bool wrap = false)
+    {
+        var l = new Label { Text = text };
+        l.AddThemeFontOverride("font", font);
+        l.AddThemeFontSizeOverride("font_size", size);
+        l.AddThemeColorOverride("font_color", col);
+        if (wrap) l.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        return l;
+    }
+
+    private void BuildChrome()
+    {
+        var r = _world.Regions[_regionId];
+        string? holderId = r.ControllingFactionId;
+        Faction? holder = holderId != null && _world.Factions.TryGetValue(holderId, out var hh) ? hh : null;
+        var sites = _world.Sites.ForRegion(_regionId);
+        string condition = r.InFamine ? "Famine grips the fields"
+            : r.InBoom ? "A season of plenty"
+            : "Steady harvests";
+
+        // A) Year plate — top-left
+        var plate = new PanelContainer { Position = new Vector2(20, 18) };
+        plate.AddThemeStyleboxOverride("panel", PanelStyle());
+        var pv = new VBoxContainer();
+        pv.AddChild(Lab("LIVING MYTH", _sc, 13, Gold));
+        pv.AddChild(Lab($"Year {_world.Year}", _serif, 32, Ink));
+        pv.AddChild(Lab($"{_world.LivingCount} souls · {_world.Chronicle.Events.Count} tales", _serif, 14, InkSoft));
+        plate.AddChild(pv);
+        AddChild(plate);
+
+        // B) Title — top-center
+        var title = new VBoxContainer
+        {
+            Position = new Vector2(0, 22),
+            Size = new Vector2(GetViewportRect().Size.X, 70),
+        };
+        title.Alignment = BoxContainer.AlignmentMode.Center;
+        var tn = Lab(r.Name, _serif, 34, new Color("efe2bf"));
+        tn.HorizontalAlignment = HorizontalAlignment.Center;
+        tn.Size = new Vector2(GetViewportRect().Size.X, 40);
+        var ts = Lab($"{Cap(r.TerrainType)} country · region diorama — prototype", _sc, 15, new Color("d8c79a"));
+        ts.HorizontalAlignment = HorizontalAlignment.Center;
+        ts.Size = new Vector2(GetViewportRect().Size.X, 22);
+        title.AddChild(tn);
+        title.AddChild(ts);
+        AddChild(title);
+
+        // C) Inspector card — left
+        var card = new PanelContainer { Position = new Vector2(20, 104), CustomMinimumSize = new Vector2(312, 0) };
+        card.AddThemeStyleboxOverride("panel", PanelStyle());
+        var cv = new VBoxContainer();
+        cv.AddThemeConstantOverride("separation", 7);
+        cv.AddChild(Lab(r.Name, _serif, 24, Ink));
+        cv.AddChild(Lab(SiteIndex.TypeLabel(sites.Count > 0 ? sites[0].Type : SiteType.Farmstead) + " seat · " + Cap(r.TerrainType), _sc, 13, InkSoft));
+        cv.AddChild(MakeRule());
+
+        var holderRow = new HBoxContainer();
+        holderRow.AddThemeConstantOverride("separation", 8);
+        var chip = new ColorRect { Color = FactionTint(holderId), CustomMinimumSize = new Vector2(16, 16) };
+        holderRow.AddChild(chip);
+        holderRow.AddChild(Lab(holder != null ? $"Held by {holder.Name}" : "Unclaimed wilderland", _serif, 16, Ink));
+        cv.AddChild(holderRow);
+        cv.AddChild(Lab(condition, _serif, 15, r.InFamine ? Ember : InkSoft));
+        cv.AddChild(MakeRule());
+
+        cv.AddChild(Lab("KNOWN PLACES", _sc, 12, Gold));
+        foreach (var s in sites.Take(7))
+            cv.AddChild(Lab($"·  {s.Name} — {SiteIndex.TypeLabel(s.Type)}", _serif, 14, Ink));
+        cv.AddChild(MakeRule());
+
+        string flavor = $"{r.Name} is a {r.TerrainType} country of {sites.Count} known places"
+            + (holder != null ? $", held by {holder.Name}." : ", as yet unclaimed.");
+        var fl = Lab(flavor, _serif, 14, InkSoft, wrap: true);
+        fl.CustomMinimumSize = new Vector2(284, 0);
+        cv.AddChild(fl);
+
+        var btns = new HBoxContainer();
+        btns.AddThemeConstantOverride("separation", 8);
+        btns.AddChild(BrassPill("Inspect"));
+        btns.AddChild(BrassPill("Follow"));
+        cv.AddChild(btns);
+        card.AddChild(cv);
+        AddChild(card);
+
+        // D) The Saga (here) — right
+        var saga = new PanelContainer
+        {
+            Position = new Vector2(GetViewportRect().Size.X - 312, 104),
+            CustomMinimumSize = new Vector2(292, 0),
+        };
+        saga.AddThemeStyleboxOverride("panel", PanelStyle());
+        var sv = new VBoxContainer();
+        sv.AddThemeConstantOverride("separation", 6);
+        sv.AddChild(Lab("THE SAGA — HERE", _sc, 13, Gold));
+        sv.AddChild(MakeRule());
+        var siteIds = sites.Select(s => s.Id).ToHashSet();
+        var here = _world.Chronicle.Events
+            .Where(e => e.RegionId == _regionId || (e.SiteId is int sid && siteIds.Contains(sid)))
+            .OrderByDescending(e => e.Year).Take(8).ToList();
+        if (here.Count == 0) sv.AddChild(Lab("No tales yet sung here.", _serif, 14, InkSoft));
+        foreach (var e in here)
+        {
+            var row = new HBoxContainer();
+            row.AddThemeConstantOverride("separation", 8);
+            row.AddChild(new ColorRect { Color = EventColor(e.Type), CustomMinimumSize = new Vector2(10, 10) });
+            var col = new VBoxContainer();
+            col.AddChild(Lab($"{e.Type.ToUpperInvariant().Replace('_', ' ')}  ·  yr {e.Year}", _sc, 11, InkSoft));
+            var txt = Lab(Trunc(e.Text, 60), _serif, 14, Ink, wrap: true);
+            txt.CustomMinimumSize = new Vector2(238, 0);
+            col.AddChild(txt);
+            row.AddChild(col);
+            sv.AddChild(row);
+        }
+        saga.AddChild(sv);
+        AddChild(saga);
+
+        // E) Legend — bottom-left
+        var legend = new PanelContainer { Position = new Vector2(20, GetViewportRect().Size.Y - 132) };
+        legend.AddThemeStyleboxOverride("panel", PanelStyle(0.92f));
+        var lv = new VBoxContainer();
+        foreach (var (name, c) in new (string, Color)[]
+                 { ("Your lands", new Color("5d8a4e")), ("Allied", new Color("4f8f89")),
+                   ("Neutral", new Color("8a8a86")), ("Contested", Ember) })
+        {
+            var row = new HBoxContainer();
+            row.AddThemeConstantOverride("separation", 8);
+            row.AddChild(new ColorRect { Color = c, CustomMinimumSize = new Vector2(13, 13) });
+            row.AddChild(Lab(name, _serif, 13, Ink));
+            lv.AddChild(row);
+        }
+        legend.AddChild(lv);
+        AddChild(legend);
+
+        // F) Brass action bar — bottom-center
+        var bar = new PanelContainer
+        {
+            Position = new Vector2(GetViewportRect().Size.X / 2 - 250, GetViewportRect().Size.Y - 92),
+        };
+        var barSb = PanelStyle(0.95f);
+        barSb.BgColor = new Color("2a2117", 0.95f);
+        barSb.BorderColor = Gold;
+        bar.AddThemeStyleboxOverride("panel", barSb);
+        var bh = new HBoxContainer();
+        bh.AddThemeConstantOverride("separation", 16);
+        foreach (var a in new[] { "Inspect", "Follow", "Curse", "Bless", "Prophecy", "Plague", "Terrain" })
+            bh.AddChild(BrassDisc(a));
+        bar.AddChild(bh);
+        AddChild(bar);
+
+        // G) Return + prototype tag — bottom-right
+        var back = BrassPill("← Atlas (Esc)");
+        back.Position = new Vector2(GetViewportRect().Size.X - 170, GetViewportRect().Size.Y - 52);
+        AddChild(back);
+    }
+
+    private Control MakeRule()
+    {
+        var r = new ColorRect { Color = new Color(Gold, 0.45f), CustomMinimumSize = new Vector2(0, 1) };
+        return r;
+    }
+
+    private Control BrassPill(string text)
+    {
+        var p = new PanelContainer();
+        var sb = new StyleBoxFlat { BgColor = new Color("3a2c19") };
+        sb.SetCornerRadiusAll(5);
+        sb.SetContentMarginAll(7);
+        sb.BorderColor = Gold; sb.SetBorderWidthAll(1);
+        p.AddThemeStyleboxOverride("panel", sb);
+        p.AddChild(Lab(text, _sc, 13, new Color("e7d4a8")));
+        return p;
+    }
+
+    private Control BrassDisc(string label)
+    {
+        var v = new VBoxContainer();
+        v.Alignment = BoxContainer.AlignmentMode.Center;
+        var disc = new PanelContainer { CustomMinimumSize = new Vector2(42, 42) };
+        var sb = new StyleBoxFlat { BgColor = new Color("4a3a22") };
+        sb.SetCornerRadiusAll(21);
+        sb.BorderColor = Gold; sb.SetBorderWidthAll(2);
+        disc.AddThemeStyleboxOverride("panel", sb);
+        var g = Lab(label.Substring(0, 1), _serif, 18, new Color("e7d4a8"));
+        g.HorizontalAlignment = HorizontalAlignment.Center;
+        g.VerticalAlignment = VerticalAlignment.Center;
+        disc.AddChild(g);
+        v.AddChild(disc);
+        var cap = Lab(label, _sc, 10, new Color("c8b48a"));
+        cap.HorizontalAlignment = HorizontalAlignment.Center;
+        v.AddChild(cap);
+        return v;
+    }
+
+    private void BuildPost()
+    {
+        var layer = new CanvasLayer { Layer = 12 };
+        var rect = new ColorRect { Color = Colors.White, MouseFilter = MouseFilterEnum.Ignore };
+        rect.SetAnchorsPreset(LayoutPreset.FullRect);
+        var shader = GD.Load<Shader>("res://shaders/parchment_post.gdshader");
+        rect.Material = new ShaderMaterial { Shader = shader };
+        layer.AddChild(rect);
+        AddChild(layer);
+    }
+
+    private async System.Threading.Tasks.Task SelfShot(string dir)
+    {
+        await ToSignal(GetTree().CreateTimer(0.9), SceneTreeTimer.SignalName.Timeout);
+        var img = GetViewport().GetTexture().GetImage();
+        System.IO.Directory.CreateDirectory(dir);
+        img.SavePng(System.IO.Path.Combine(dir, "diorama_prototype.png"));
+        GetTree().Quit();
+    }
+
+    private static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+    private static string Trunc(string s, int n) => s.Length <= n ? s : s.Substring(0, n - 1).TrimEnd() + "…";
+
+    public static Color EventColor(string type) => type switch
+    {
+        "birth" => new Color("6f9e54"),
+        "death" or "murder" => new Color("8a8a86"),
+        "war_declared" or "battle" or "peace" => new Color("b0432e"),
+        "famine" or "famine_end" or "boom" => new Color("b8862e"),
+        "founding" or "abandonment" => new Color("c9973f"),
+        _ => new Color("9a8b6a"),
+    };
+}
+
+// The custom-draw surface: an ISOMETRIC ground plane (tilted diamonds) + the Blender diorama
+// miniatures billboarded and depth-sorted on top + parchment label callouts. The oblique
+// projection is what makes it read as a diorama rather than a top-down texture mat: the already-
+// angled sprites gain volume, and you see roofs, walls, and tree silhouettes against the tilt.
+public partial class DioramaCanvas : Control
+{
+    public DioramaView View = null!;
+
+    private int _minCx, _minCy, _bw, _bh;
+    private float _tw, _th, _ox, _oy;   // tile width/height (iso) + screen origin
+
+    private static Color TerrainColor(SurfaceTerrain t) => t switch
+    {
+        SurfaceTerrain.Ocean => new Color("2c5159"),
+        SurfaceTerrain.Shallows => new Color("3f6b73"),
+        SurfaceTerrain.River or SurfaceTerrain.Lake => new Color("4f8f89"),
+        SurfaceTerrain.Coast => new Color("9a8a5e"),
+        SurfaceTerrain.Plains => new Color("8c8447"),
+        SurfaceTerrain.Forest => new Color("50632f"),
+        SurfaceTerrain.Highland => new Color("6f6f5a"),
+        SurfaceTerrain.Wetland => new Color("5f7048"),
+        _ => new Color("8c8447"),
+    };
+
+    public override void _Ready()
+    {
+        var w = View.World;
+        // centre a fixed zoom window on the region's heart (centroid of its cells) — framing the
+        // full bbox of an irregular region leaves dead space; the North Star zooms into the core.
+        long sx = 0, sy = 0, cnt = 0;
+        for (int y = 0; y < WorldSurface.Size; y++)
+            for (int x = 0; x < WorldSurface.Size; x++)
+                if (w.Surface.RegionAt(x, y) == View.RegionId) { sx += x; sy += y; cnt++; }
+        int ccx = cnt > 0 ? (int)(sx / cnt) : 48, ccy = cnt > 0 ? (int)(sy / cnt) : 48;
+        const int half = 13;
+        _bw = _bh = 2 * half + 1;
+        _minCx = Math.Clamp(ccx - half, 0, WorldSurface.Size - _bw);
+        _minCy = Math.Clamp(ccy - half, 0, WorldSurface.Size - _bh);
+        Resized += QueueRedraw;
+    }
+
+    // iso projection: cell (cx,cy) → screen. The grid is rotated 45° and foreshortened in Y.
+    private Vector2 Iso(float cx, float cy)
+    {
+        float a = cx - _minCx, b = cy - _minCy;
+        return new(_ox + (a - b) * _tw * 0.5f, _oy + (a + b) * _th * 0.5f);
+    }
+
+    public override void _Draw()
+    {
+        var w = View.World;
+        var size = Size;
+        float span = _bw + _bh;
+        _tw = Math.Min(size.X * 1.28f * 2f / span, size.Y * 1.0f * 2f / (span * 0.55f));
+        _th = _tw * 0.55f;
+        _ox = size.X / 2f - (_bw - _bh) * 0.5f * _tw * 0.5f;
+        _oy = size.Y / 2f - (_bw + _bh - 2) * 0.5f * _th * 0.5f;
+
+        // settlement clearings: keep foliage off the sites so roofs/stones read in open ground
+        var siteCells = w.Sites.ForRegion(View.RegionId)
+            .Select(s => new Vector2(s.Nx * WorldSurface.Size, s.Ny * WorldSurface.Size)).ToList();
+        bool NearSite(float cx, float cy)
+        {
+            foreach (var sc in siteCells)
+                if (Math.Abs(cx - sc.X) < 2.6f && Math.Abs(cy - sc.Y) < 2.6f) return true;
+            return false;
+        }
+        // low-frequency clearing mask — opens ~quarter of the canopy so earth/paths/water show
+        bool Clearing(int cx, int cy) => Hash(cx / 3, cy / 3, Seed: 9) % 100 < 26;
+
+        // 1) ground: tilted iso diamonds, one per cell, coloured by terrain with a NW raking key
+        //    light over the elevation field (carves relief), region cells bright, neighbours dimmed.
+        for (int b = 0; b < _bh; b++)
+            for (int a = 0; a < _bw; a++)
+            {
+                int cx = _minCx + a, cy = _minCy + b;
+                var t = w.Surface.TerrainAt(cx, cy);
+                bool inRegion = w.Surface.RegionAt(cx, cy) == View.RegionId;
+                uint gh = Hash(cx, cy, Seed: 3);
+                float j = ((gh & 0xff) / 255f - 0.5f) * 0.10f;
+                int cl = Math.Max(0, cx - 1), cr = Math.Min(WorldSurface.Size - 1, cx + 1);
+                int ct = Math.Max(0, cy - 1), cb = Math.Min(WorldSurface.Size - 1, cy + 1);
+                float relief = (w.Surface.ElevationAt(cl, cy) - w.Surface.ElevationAt(cr, cy)) * 0.6f
+                             + (w.Surface.ElevationAt(cx, ct) - w.Surface.ElevationAt(cx, cb)) * 0.4f;
+                float shade = Math.Clamp(relief * 2.2f, -0.16f, 0.20f);
+                var col = TerrainColor(t);
+                col = new Color(Math.Clamp(col.R + j + shade, 0, 1), Math.Clamp(col.G + j + shade, 0, 1), Math.Clamp(col.B + j + shade * 0.9f, 0, 1));
+                if (!inRegion) col = col.Darkened(0.18f).Lerp(new Color("2c3138"), 0.2f);
+                var c0 = Iso(cx, cy); var c1 = Iso(cx + 1, cy);
+                var c2 = Iso(cx + 1, cy + 1); var c3 = Iso(cx, cy + 1);
+                var ctr = (c0 + c1 + c2 + c3) * 0.25f;
+                Vector2 Ex(Vector2 p) => ctr + (p - ctr) * 1.04f;
+                DrawColoredPolygon(new[] { Ex(c0), Ex(c1), Ex(c2), Ex(c3) }, col);
+            }
+
+        var sprites = new List<(Texture2D tex, Rect2 rect, Color mod, float sortY)>();
+
+        void Place(string key, float cx, float cy, float tilesTall, Color? mod = null)
+        {
+            var tex = View.Tex(key);
+            if (tex == null) return;
+            var p = Iso(cx + 0.5f, cy + 0.5f);
+            float sz = tilesTall * _tw;
+            var rect = new Rect2(p.X - sz / 2f, p.Y - sz * 0.82f, sz, sz);
+            sprites.Add((tex, rect, mod ?? Colors.White, p.Y));
+        }
+
+        // 2) scatter foliage/terrain over every land cell in view — region cells bright, the
+        //    neighbouring lands dimmed, so the diorama reads edge-to-edge like the North Star
+        for (int cy = _minCy; cy < _minCy + _bh; cy++)
+            for (int cx = _minCx; cx < _minCx + _bw; cx++)
+            {
+                var t = w.Surface.TerrainAt(cx, cy);
+                bool inRegion = w.Surface.RegionAt(cx, cy) == View.RegionId;
+                Color mod = inRegion ? Colors.White : new Color(0.74f, 0.76f, 0.78f);
+                if (NearSite(cx, cy)) continue;        // settlement clearing — buildings get open ground
+                bool clearing = Clearing(cx, cy);      // open earth/path/water shows through
+                // up to two scattered features per cell, each at a hashed sub-cell offset and a
+                // hashed tree variant — breaks the regular-grid / repeated-stamp read
+                for (int slot = 0; slot < 2; slot++)
+                {
+                    uint h = Hash(cx * 2 + slot, cy, Seed: 7);
+                    float roll = (h & 0xffff) / 65535f;
+                    float jx = ((int)((h >> 16) & 0xff) / 255f - 0.5f) * 0.9f;
+                    float jy = ((int)((h >> 24) & 0xff) / 255f - 0.5f) * 0.9f;
+                    int variant = (int)((h >> 8) % 3) + 1;
+                    string broad = $"tree_broadleaf_{variant}", coni = $"tree_conifer_{variant}";
+                    string? key = null; float tall = 2.6f;
+                    switch (t)
+                    {
+                        case SurfaceTerrain.Forest:
+                            if (clearing) { if (slot == 0 && roll < 0.25f) { key = "rocks"; tall = 1.5f; } }
+                            else if (slot == 0 || roll < 0.5f) { key = (h & 1) == 0 ? broad : coni; tall = 2.9f; }
+                            break;
+                        case SurfaceTerrain.Highland:
+                            if (slot == 0) { if (roll < 0.4f) { key = "rocks"; tall = 1.9f; } else if (!clearing) { key = coni; tall = 2.6f; } }
+                            else if (roll < 0.35f && !clearing) { key = coni; tall = 2.3f; }
+                            break;
+                        case SurfaceTerrain.Plains:
+                            if (clearing) break;
+                            if (slot == 0) { key = roll < 0.5f ? broad : (roll < 0.74f ? coni : "rocks"); tall = roll < 0.74f ? 2.3f : 1.5f; }
+                            else if (roll < 0.4f) { key = broad; tall = 2.1f; }
+                            break;
+                        case SurfaceTerrain.Coast:
+                            if (slot == 0 && roll < 0.55f && !clearing) { key = broad; tall = 2.2f; }
+                            break;
+                        case SurfaceTerrain.Wetland:
+                            if (slot == 0 && roll < 0.5f && !clearing) { key = broad; tall = 2.3f; }
+                            break;
+                    }
+                    if (key != null) Place(key, cx + jx, cy + jy, tall * (0.72f + roll * 0.6f), mod);
+                }
+            }
+
+        // 3) sites: type-keyed buildings + a banner at the seat
+        var sites = w.Sites.ForRegion(View.RegionId);
+        var labels = new List<(string name, string type, Vector2 feet, Color dot)>();
+        var holderTint = DioramaView.FactionTint(w.Regions[View.RegionId].ControllingFactionId);
+        foreach (var s in sites)
+        {
+            float cx = s.Nx * WorldSurface.Size - 0.5f;
+            float cy = s.Ny * WorldSurface.Size - 0.5f;
+            (string key, float tall) = s.Type switch
+            {
+                SiteType.MarketVillage => ("house_b", 2.4f),
+                SiteType.HillFort => ("keep", 3.0f),
+                SiteType.WatchPost => ("watchtower", 2.6f),
+                SiteType.SacredGrove => ("standing_stones", 2.2f),
+                SiteType.OldBarrow => ("standing_stones", 2.2f),
+                SiteType.CairnField => ("standing_stones", 2.2f),
+                SiteType.Shrine => ("shrine", 1.9f),
+                SiteType.Farmstead => ("field", 2.4f),
+                SiteType.FishingDock => ("dock", 2.6f),
+                SiteType.WildernessCamp => ("house_a", 1.8f),
+                _ => ("house_a", 1.8f),
+            };
+            if (s.Type == SiteType.MarketVillage)
+            {
+                Place("house_a", cx - 1.0f, cy + 0.6f, 1.7f);
+                Place("house_a", cx + 1.0f, cy + 0.5f, 1.6f);
+            }
+            if (s.Type == SiteType.Farmstead) Place("house_a", cx + 1.2f, cy - 0.4f, 1.6f);
+            Place(key, cx, cy, tall);
+            if (s.IsSeat) Place("banner", cx + 0.9f, cy - 0.9f, 2.4f, holderTint);
+            labels.Add((s.Name, SiteIndex.TypeLabel(s.Type), Iso(cx + 0.5f, cy + 0.5f),
+                        DioramaView.FactionTint(w.Regions[View.RegionId].ControllingFactionId)));
+        }
+
+        // 4) painter's algorithm — far (low Y) first
+        foreach (var sp in sprites.OrderBy(s => s.sortY))
+            DrawTextureRect(sp.tex, sp.rect, false, sp.mod);
+
+        // 5) parchment label callouts on top
+        var pill = new StyleBoxFlat { BgColor = new Color("f2e5c2", 0.95f), BorderColor = new Color("c9973f") };
+        pill.SetBorderWidthAll(1); pill.SetCornerRadiusAll(5); pill.SetContentMarginAll(5);
+        foreach (var (name, type, feet, dot) in labels)
+        {
+            var nameSize = View.Serif.GetStringSize(name, HorizontalAlignment.Left, -1, 15);
+            float pw = nameSize.X + 30, ph = 34;
+            var anchor = new Vector2(feet.X - pw / 2f, feet.Y - _tw * 2.6f);
+            anchor.X = Math.Clamp(anchor.X, 6, Size.X - pw - 6);
+            anchor.Y = Math.Max(6, anchor.Y);
+            DrawLine(new Vector2(feet.X, feet.Y - _tw * 0.5f),
+                     new Vector2(anchor.X + pw / 2f, anchor.Y + ph), new Color("3a2c19", 0.5f), 1.5f);
+            DrawStyleBox(pill, new Rect2(anchor, new Vector2(pw, ph)));
+            DrawCircle(anchor + new Vector2(12, ph / 2f), 5, dot);
+            DrawString(View.Serif, anchor + new Vector2(22, 15), name, HorizontalAlignment.Left, -1, 15, new Color("3a2c19"));
+            DrawString(View.Sc, anchor + new Vector2(22, 29), type, HorizontalAlignment.Left, -1, 10, new Color("6f5b3e"));
+        }
+    }
+
+    private static uint Hash(int a, int b, int Seed)
+    {
+        unchecked
+        {
+            uint h = 2166136261u;
+            h = (h ^ (uint)Seed) * 16777619u;
+            h = (h ^ (uint)a) * 16777619u;
+            h = (h ^ (uint)b) * 16777619u;
+            h ^= h >> 13; h *= 0x5bd1e995u; h ^= h >> 15;
+            return h;
+        }
+    }
+}

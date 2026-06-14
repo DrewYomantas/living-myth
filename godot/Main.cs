@@ -295,6 +295,13 @@ public partial class Main : Node
         if (!resumed) ShowHelp();        // first sight of a fresh age: open the Guide (pauses; "Begin watching" dismisses)
     }
 
+    // F3 opens the North Star Diorama prototype (a sandboxed zoomed-in region view). Esc returns.
+    public override void _UnhandledInput(InputEvent e)
+    {
+        if (e is InputEventKey { Pressed: true, Keycode: Key.F3 })
+            GetTree().ChangeSceneToFile("res://DioramaView.tscn");
+    }
+
     // Dev evidence only (LM_SHOTS): fast-forward a fresh world, then write in-engine PNGs of the
     // atlas and a region lens so a screenshot is the REAL viewer, not a mock. Never saves.
     private async System.Threading.Tasks.Task CaptureSequence()
