@@ -127,11 +127,23 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   F5 feel-tested live (Year 316): Recovery glyph + harvest filter + channel honesty confirmed;
   KNOWN ISSUE — famine scars are subtle at low zoom and, recurring often, crowd the 4-slot
   per-region mark ring (a dedicated famine-scar store/cap is the fix).
-- **Next** — **famine-scar polish** (own scar store or 1-most-recent cap so rare founding/war/battle
-  marks survive; low-zoom legibility — the #1 feel-test finding) → **terrain-typed harvest**
-  (highland/coast/plains volatility, the deferred sim follow-up, pairs with the scar mood); still-
-  unwatched Theater of War / Chronicle Replay / persistence / Cast feel-tests; person↔site
-  anchoring; timeline scrubbing; fresh-world affordance (today: delete the save).
+- **Beta-Readiness Pass V1** (2026-06-13, viewer + docs — beta-testability, not new systems): the
+  Watcher's Guide (player-invoked Chronicle-Mode onboarding card — controls + honest map legend with
+  every mark/ring drawn, glyphs mirrored from MapView; auto-opens once on a fresh world), the in-app
+  `✶ New World` (confirmation-gated: discards the world save + reloads, keeps canon — the first
+  fresh-world affordance, and the fix for an old save whose acts all quarantine after a baseline
+  move), and a painted shoreline on the atlas surface (land cells touching sea darken — atlas
+  signature). Empirically launched + screenshotted the real viewer (clean resume + fresh paths,
+  Guide + shoreline confirmed); Drew's save backed up + restored byte-identical. Famine-scar polish
+  was found ALREADY shipped (commit 55862fb) — docs were just stale, now reconciled. Viewer-only:
+  verify held exactly 823/559/910/632, all 10 gates green, both builds clean. Docs locked the visual
+  thesis to "stylized semi-realistic fantasy pixel diorama" + added the binding Kenney/license/AI
+  adoption policy to the asset scout. Commits 97eac0a (docs) + c46f0c3 (viewer).
+- **Next** — **terrain-typed harvest** (highland/coast/plains volatility, the deferred sim follow-up
+  — moves the baseline) → more code-only visual treatment (territory boundary lines, elevation
+  contours, marker outlines — sandbox/screenshot-verify each); still-unwatched Theater of War /
+  Chronicle Replay / persistence / Cast / Harvest F5 feel-tests; person↔site anchoring; timeline
+  scrubbing; per-launch seed choice (today fixed at 7).
 
 ## Commands
 ```bash
@@ -310,7 +322,7 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 _Last updated: 2026-06-13_
 
 ### Context Management
-- Your context snowballs at **turn 19** on average (38% of sessions). Use `/compact` proactively after turn 17-19 on long sessions to prevent unbounded growth.
+- Your context snowballs at **turn 18** on average (38% of sessions). Use `/compact` proactively after turn 16-18 on long sessions to prevent unbounded growth.
 - Some sessions use significantly more tokens than others. Consider shorter, more focused sessions with clear goals.
 - You could benefit from subagents for parallel tasks. Consider splitting multi-file operations into parallel agent tasks.
 - You read files you don't end up using. Use `Grep` first to locate relevant files before reading them — reduces unnecessary context by ~0%.
