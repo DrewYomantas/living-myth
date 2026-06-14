@@ -97,6 +97,8 @@ public partial class Main : Node
     private readonly HashSet<int> _followedSouls = new();   // souls followed as individuals — never expanded into kin
     private readonly HashSet<int> _followedRegions = new(); // lands watched as places — tales anchored here and lives remembered here are YOURS
     private Button _regionBtn = null!;
+    private Button _dioramaBtn = null!;                     // Region Lens → open the diorama bridge
+    private DioramaView? _diorama;                          // the diorama overlay, when open (read-only)
     private const int YoursBoost = 70;                      // weight added to a marked-bloodline event
     private const int FeedWindow = 60;                      // rolling world-feed window
     private const int YoursWindow = 14;                     // rolling your-story window (its own section)
@@ -295,11 +297,48 @@ public partial class Main : Node
         if (!resumed) ShowHelp();        // first sight of a fresh age: open the Guide (pauses; "Begin watching" dismisses)
     }
 
-    // F3 opens the North Star Diorama prototype (a sandboxed zoomed-in region view). Esc returns.
+    // F3 opens the North Star Diorama for the currently selected region (most-built held region
+    // if nothing is selected) as a read-only overlay. Esc / "← Atlas" closes it, atlas intact.
     public override void _UnhandledInput(InputEvent e)
     {
-        if (e is InputEventKey { Pressed: true, Keycode: Key.F3 })
-            GetTree().ChangeSceneToFile("res://DioramaView.tscn");
+        if (e is InputEventKey { Pressed: true, Keycode: Key.F3 } && _diorama == null)
+            OpenDiorama(_map.SelectedRegionId >= 0 ? _map.SelectedRegionId : MostBuiltRegion());
+    }
+
+    // Open the diorama as a read-only overlay over the live world (never a scene swap — the
+    // atlas, follows, and save stay exactly as they are underneath). Viewer-only by construction.
+    private void OpenDiorama(int regionId)
+    {
+        if (_diorama != null) return;
+        if (regionId < 0 || regionId >= _world.Regions.Count) regionId = MostBuiltRegion();
+        _diorama = new DioramaView { SourceWorld = _world, SourceRegionId = regionId, OnClose = CloseDiorama };
+        _diorama.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        AddChild(_diorama);                       // last child → draws over the atlas + its panels
+    }
+
+    private void CloseDiorama()
+    {
+        _diorama?.QueueFree();
+        _diorama = null;
+    }
+
+    // The most-built held region (fallback when nothing is selected); any most-built region if landless.
+    private int MostBuiltRegion()
+    {
+        int best = -1, bestN = -1;
+        foreach (var r in _world.Regions)
+            if (r.ControllingFactionId != null)
+            {
+                int n = _world.Sites.ForRegion(r.Id).Count;
+                if (n > bestN) { bestN = n; best = r.Id; }
+            }
+        if (best < 0)
+            for (int i = 0; i < _world.Regions.Count; i++)
+            {
+                int n = _world.Sites.ForRegion(i).Count;
+                if (n > bestN) { bestN = n; best = i; }
+            }
+        return Math.Max(0, best);
     }
 
     // Dev evidence only (LM_SHOTS): fast-forward a fresh world, then write in-engine PNGs of the
@@ -332,6 +371,33 @@ public partial class Main : Node
         if (rid >= 0) { OnRegionPicked(rid); _map.FocusRegion(rid); }
         await ToSignal(GetTree().CreateTimer(1.8), SceneTreeTimer.SignalName.Timeout);
         Shot("02_region_lens");
+
+        // The production bridge: open the diorama overlay for the SAME selected region of the
+        // LIVE world (the real OpenDiorama path, not the standalone seed-7 scene).
+        if (rid >= 0)
+        {
+            OpenDiorama(rid);
+            await ToSignal(GetTree().CreateTimer(1.0), SceneTreeTimer.SignalName.Timeout);
+            Shot("03_diorama_bridge");
+            CloseDiorama();
+        }
+
+        // Fallback: a wild / sparse region (unclaimed — no banner, honest "unclaimed country").
+        int wild = -1, wbest = -1;
+        foreach (var r in _world.Regions)
+            if (r.ControllingFactionId is null)
+            {
+                int n = _world.Sites.ForRegion(r.Id).Count;
+                if (n > wbest) { wbest = n; wild = r.Id; }
+            }
+        if (wild >= 0)
+        {
+            await ToSignal(GetTree().CreateTimer(0.3), SceneTreeTimer.SignalName.Timeout);
+            OpenDiorama(wild);
+            await ToSignal(GetTree().CreateTimer(1.0), SceneTreeTimer.SignalName.Timeout);
+            Shot("04_diorama_fallback");
+            CloseDiorama();
+        }
 
         await ToSignal(GetTree().CreateTimer(0.2), SceneTreeTimer.SignalName.Timeout);
         GetTree().Quit();
@@ -1082,6 +1148,12 @@ public partial class Main : Node
         Ui.StyleButton(_regionBtn);
         _regionBtn.Pressed += OnFollowRegionPressed;
         vb.AddChild(_regionBtn);
+
+        _dioramaBtn = new Button { Text = "⛰ Enter the Diorama", Visible = false,
+            TooltipText = "See this land up close — an isometric diorama of its real places (read-only view)" };
+        Ui.StyleButton(_dioramaBtn);
+        _dioramaBtn.Pressed += () => { if (_map.SelectedRegionId >= 0) OpenDiorama(_map.SelectedRegionId); };
+        vb.AddChild(_dioramaBtn);
 
         // Fate verbs pinned at the bottom: the curse tool (a living, not-yet-cursed person only)
         // and the Yours channel (follow this one soul / a bloodline / a people).
@@ -3297,6 +3369,7 @@ public partial class Main : Node
         _glimpsePanel.Visible = false;
         _lensFactionBtn.Visible = false;
         _regionBtn.Visible = false;
+        _dioramaBtn.Visible = false;
         _curseBtn.Visible = p.Alive && !p.Cursed;
         _blessBtn.Visible = p.Alive && !p.Blessed;
         _protectBtn.Visible = false;
@@ -3519,6 +3592,7 @@ public partial class Main : Node
         _regionBtn.Visible = true;
         _regionBtn.Text = landFollowed ? "★ Following this land — unfollow" : "☆ Follow this land";
         Ui.StyleButton(_regionBtn, landFollowed);
+        _dioramaBtn.Visible = true;
 
         _inspectorAccent.Color = FactionTint(holder?.Id);
         _inspectorTitle.Text = region.Name;
@@ -3673,6 +3747,7 @@ public partial class Main : Node
         _followBtn.Visible = false;
         _soulBtn.Visible = false;
         _regionBtn.Visible = false;
+        _dioramaBtn.Visible = true;   // site picks still scope to a region — offer its diorama
         _lensFactionId = null;
         _lensFactionBtn.Visible = false;
 
@@ -3781,6 +3856,7 @@ public partial class Main : Node
         _glimpsePanel.Visible = false;
         _lensFactionBtn.Visible = false;
         _regionBtn.Visible = false;
+        _dioramaBtn.Visible = false;
         _curseBtn.Visible = false;
         _blessBtn.Visible = false;
         _omenBtn.Visible = false;

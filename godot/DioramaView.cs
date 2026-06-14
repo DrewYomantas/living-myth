@@ -4,19 +4,26 @@ using System.Collections.Generic;
 using System.Linq;
 using LivingMyth.Sim;
 
-// North Star Diorama prototype (Prototype Pass V1) — a dedicated, sandboxed zoomed-in region
-// view that renders Blender-authored diorama miniatures at REAL sim site positions over a
-// zoomed crop of the painted atlas, wrapped in parchment/brass North Star chrome with a
-// warm-grade + grain + vignette post shader.
+// North Star Diorama — the zoomed-in region slice of the living-atlas viewer. Renders
+// Blender-authored diorama miniatures at REAL sim site positions over an isometric terrain
+// plane, wrapped in parchment/brass North Star chrome with a warm-grade + grain + vignette post.
 //
-// 100% viewer-only / read-model: builds its own World, ticks it, reads regions/sites/chronicle.
-// Never writes sim state, never saves. Launch standalone:
-//   <godot> --path godot res://DioramaView.tscn
-// or press F3 in the main viewer. Esc / ← Atlas returns to the atlas.
+// 100% viewer-only / read-model: reads regions/sites/chronicle, never writes sim state, never
+// saves. Two entry modes:
+//   • PRODUCTION BRIDGE — opened as an overlay from the atlas (Region Lens "⛰ Enter the Diorama"
+//     or F3) for the *currently selected region of the live world*. Main sets SourceWorld +
+//     SourceRegionId + OnClose before adding it; "← Atlas"/Esc closes the overlay, atlas intact.
+//   • STANDALONE/DEV — launched as its own scene (res://DioramaView.tscn) or for screenshots;
+//     with no source it builds its own deterministic seed-7 world and picks the most-built region.
 public partial class DioramaView : Control
 {
     private const int Seed = 7;
     private const int Years = 462;   // a settled age — echoes the North Star reference frames
+
+    // Production-bridge inputs (set by Main before AddChild); null ⇒ standalone/dev mode.
+    public World? SourceWorld;
+    public int SourceRegionId = -1;
+    public System.Action? OnClose;
 
     private World _world = null!;
     private int _regionId;
@@ -39,13 +46,24 @@ public partial class DioramaView : Control
         _sc = LoadFont("res://assets/fonts/AlegreyaSC-Medium.ttf");
         LoadTextures();
 
-        var (config, names) = DataLoader.Load();
-        _world = new World(Seed, config, names);
-        _world.SeedWorld();
-        while (_world.Year < Years) _world.Tick();
-        _regionId = PickRegion();
+        if (SourceWorld != null)
+        {
+            // production bridge: render the live world's currently selected region
+            _world = SourceWorld;
+            _regionId = SourceRegionId >= 0 && SourceRegionId < _world.Regions.Count ? SourceRegionId : PickRegion();
+        }
+        else
+        {
+            // standalone/dev: a fresh deterministic world, most-built region
+            var (config, names) = DataLoader.Load();
+            _world = new World(Seed, config, names);
+            _world.SeedWorld();
+            while (_world.Year < Years) _world.Tick();
+            _regionId = PickRegion();
+        }
 
-        var bg = new ColorRect { Color = new Color("23323a") };  // atlas-sea base behind the crop
+        MouseFilter = MouseFilterEnum.Stop;   // overlay swallows clicks meant for the atlas beneath
+        var bg = new ColorRect { Color = new Color("23323a"), MouseFilter = MouseFilterEnum.Stop };
         bg.SetAnchorsPreset(LayoutPreset.FullRect);
         AddChild(bg);
 
@@ -64,7 +82,16 @@ public partial class DioramaView : Control
     public override void _UnhandledInput(InputEvent e)
     {
         if (e is InputEventKey { Pressed: true } k && (k.Keycode == Key.Escape || k.Keycode == Key.F3))
-            GetTree().ChangeSceneToFile("res://Main.tscn");
+        {
+            GetViewport().SetInputAsHandled();   // don't let Main's F3 re-open while we close
+            Close();
+        }
+    }
+
+    private void Close()
+    {
+        if (OnClose != null) OnClose();                          // overlay mode: Main frees us
+        else GetTree().ChangeSceneToFile("res://Main.tscn");     // standalone mode: swap back
     }
 
     private static Font LoadFont(string path)
@@ -176,7 +203,8 @@ public partial class DioramaView : Control
         var tn = Lab(r.Name, _serif, 34, new Color("efe2bf"));
         tn.HorizontalAlignment = HorizontalAlignment.Center;
         tn.Size = new Vector2(GetViewportRect().Size.X, 40);
-        var ts = Lab($"{Cap(r.TerrainType)} country · region diorama — prototype", _sc, 15, new Color("d8c79a"));
+        string realm = holder != null ? $"realm of {holder.Name}" : "unclaimed country";
+        var ts = Lab($"{Cap(r.TerrainType)} country · {realm}", _sc, 15, new Color("d8c79a"));
         ts.HorizontalAlignment = HorizontalAlignment.Center;
         ts.Size = new Vector2(GetViewportRect().Size.X, 22);
         title.AddChild(tn);
@@ -202,21 +230,19 @@ public partial class DioramaView : Control
         cv.AddChild(MakeRule());
 
         cv.AddChild(Lab("KNOWN PLACES", _sc, 12, Gold));
+        if (sites.Count == 0)
+            cv.AddChild(Lab("·  no places yet named — an unwritten country", _serif, 14, InkSoft));
         foreach (var s in sites.Take(7))
             cv.AddChild(Lab($"·  {s.Name} — {SiteIndex.TypeLabel(s.Type)}", _serif, 14, Ink));
         cv.AddChild(MakeRule());
 
-        string flavor = $"{r.Name} is a {r.TerrainType} country of {sites.Count} known places"
-            + (holder != null ? $", held by {holder.Name}." : ", as yet unclaimed.");
+        string flavor = sites.Count == 0
+            ? $"{r.Name} is a {r.TerrainType} country the record has not yet marked with a single place."
+            : $"{r.Name} is a {r.TerrainType} country of {sites.Count} known places"
+              + (holder != null ? $", held by {holder.Name}." : ", as yet unclaimed.");
         var fl = Lab(flavor, _serif, 14, InkSoft, wrap: true);
         fl.CustomMinimumSize = new Vector2(284, 0);
         cv.AddChild(fl);
-
-        var btns = new HBoxContainer();
-        btns.AddThemeConstantOverride("separation", 8);
-        btns.AddChild(BrassPill("Inspect"));
-        btns.AddChild(BrassPill("Follow"));
-        cv.AddChild(btns);
         card.AddChild(cv);
         AddChild(card);
 
@@ -269,25 +295,27 @@ public partial class DioramaView : Control
         legend.AddChild(lv);
         AddChild(legend);
 
-        // F) Brass action bar — bottom-center
+        // F) Honest bottom bar — this is a READ-ONLY view. No fake god-hand tools live here: the
+        //    real verbs (Curse/Bless/Protect/Doom/Omen/Forest/Spring) stay in the atlas inspector,
+        //    where they journal to the save. The brass plate keeps the North Star language, honest.
         var bar = new PanelContainer
         {
-            Position = new Vector2(GetViewportRect().Size.X / 2 - 250, GetViewportRect().Size.Y - 92),
+            Position = new Vector2(GetViewportRect().Size.X / 2 - 220, GetViewportRect().Size.Y - 60),
         };
         var barSb = PanelStyle(0.95f);
         barSb.BgColor = new Color("2a2117", 0.95f);
         barSb.BorderColor = Gold;
         bar.AddThemeStyleboxOverride("panel", barSb);
         var bh = new HBoxContainer();
-        bh.AddThemeConstantOverride("separation", 16);
-        foreach (var a in new[] { "Inspect", "Follow", "Curse", "Bless", "Prophecy", "Plague", "Terrain" })
-            bh.AddChild(BrassDisc(a));
+        bh.AddThemeConstantOverride("separation", 10);
+        bh.AddChild(Lab("◆", _serif, 14, Gold));
+        bh.AddChild(Lab("REGION DIORAMA · READ-ONLY CHRONICLE VIEW · ART IN PROGRESS", _sc, 12, new Color("c8b48a")));
         bar.AddChild(bh);
         AddChild(bar);
 
-        // G) Return + prototype tag — bottom-right
-        var back = BrassPill("← Atlas (Esc)");
-        back.Position = new Vector2(GetViewportRect().Size.X - 170, GetViewportRect().Size.Y - 52);
+        // G) Back to the atlas — a real button (Esc also returns)
+        var back = BrassButton("← Back to the Atlas", Close);
+        back.Position = new Vector2(GetViewportRect().Size.X - 218, GetViewportRect().Size.Y - 58);
         AddChild(back);
     }
 
@@ -297,36 +325,23 @@ public partial class DioramaView : Control
         return r;
     }
 
-    private Control BrassPill(string text)
+    private Button BrassButton(string text, System.Action onPressed)
     {
-        var p = new PanelContainer();
-        var sb = new StyleBoxFlat { BgColor = new Color("3a2c19") };
-        sb.SetCornerRadiusAll(5);
-        sb.SetContentMarginAll(7);
-        sb.BorderColor = Gold; sb.SetBorderWidthAll(1);
-        p.AddThemeStyleboxOverride("panel", sb);
-        p.AddChild(Lab(text, _sc, 13, new Color("e7d4a8")));
-        return p;
-    }
-
-    private Control BrassDisc(string label)
-    {
-        var v = new VBoxContainer();
-        v.Alignment = BoxContainer.AlignmentMode.Center;
-        var disc = new PanelContainer { CustomMinimumSize = new Vector2(42, 42) };
-        var sb = new StyleBoxFlat { BgColor = new Color("4a3a22") };
-        sb.SetCornerRadiusAll(21);
-        sb.BorderColor = Gold; sb.SetBorderWidthAll(2);
-        disc.AddThemeStyleboxOverride("panel", sb);
-        var g = Lab(label.Substring(0, 1), _serif, 18, new Color("e7d4a8"));
-        g.HorizontalAlignment = HorizontalAlignment.Center;
-        g.VerticalAlignment = VerticalAlignment.Center;
-        disc.AddChild(g);
-        v.AddChild(disc);
-        var cap = Lab(label, _sc, 10, new Color("c8b48a"));
-        cap.HorizontalAlignment = HorizontalAlignment.Center;
-        v.AddChild(cap);
-        return v;
+        var b = new Button { Text = text };
+        b.AddThemeFontOverride("font", _sc);
+        b.AddThemeFontSizeOverride("font_size", 14);
+        var face = new StyleBoxFlat { BgColor = new Color("4a3a22"), BorderColor = Gold };
+        face.SetBorderWidthAll(1); face.SetCornerRadiusAll(5); face.SetContentMarginAll(9);
+        var hover = (StyleBoxFlat)face.Duplicate(); hover.BgColor = new Color("5d4a2b");
+        var pressed = (StyleBoxFlat)face.Duplicate(); pressed.BgColor = new Color("3a2c19");
+        b.AddThemeStyleboxOverride("normal", face);
+        b.AddThemeStyleboxOverride("hover", hover);
+        b.AddThemeStyleboxOverride("pressed", pressed);
+        b.AddThemeStyleboxOverride("focus", new StyleBoxEmpty());
+        foreach (var c in new[] { "font_color", "font_hover_color", "font_pressed_color", "font_focus_color" })
+            b.AddThemeColorOverride(c, new Color("e7d4a8"));
+        b.Pressed += () => onPressed();
+        return b;
     }
 
     private void BuildPost()
@@ -520,7 +535,8 @@ public partial class DioramaCanvas : Control
         // 3) sites: type-keyed buildings + a banner at the seat
         var sites = w.Sites.ForRegion(View.RegionId);
         var labels = new List<(string name, string type, Vector2 feet, Color dot)>();
-        var holderTint = DioramaView.FactionTint(w.Regions[View.RegionId].ControllingFactionId);
+        string? holderId = w.Regions[View.RegionId].ControllingFactionId;
+        var holderTint = DioramaView.FactionTint(holderId);
         foreach (var s in sites)
         {
             float cx = s.Nx * WorldSurface.Size - 0.5f;
@@ -546,9 +562,8 @@ public partial class DioramaCanvas : Control
             }
             if (s.Type == SiteType.Farmstead) Place("house_a", cx + 1.2f, cy - 0.4f, 1.6f);
             Place(key, cx, cy, tall);
-            if (s.IsSeat) Place("banner", cx + 0.9f, cy - 0.9f, 2.4f, holderTint);
-            labels.Add((s.Name, SiteIndex.TypeLabel(s.Type), Iso(cx + 0.5f, cy + 0.5f),
-                        DioramaView.FactionTint(w.Regions[View.RegionId].ControllingFactionId)));
+            if (s.IsSeat && holderId != null) Place("banner", cx + 0.9f, cy - 0.9f, 2.4f, holderTint);
+            labels.Add((s.Name, SiteIndex.TypeLabel(s.Type), Iso(cx + 0.5f, cy + 0.5f), holderTint));
         }
 
         // 4) painter's algorithm — far (low Y) first
