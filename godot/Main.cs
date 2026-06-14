@@ -52,6 +52,7 @@ public partial class Main : Node
     private readonly List<FeedVisRow> _yoursVis = new();
     private RichTextLabel _inspector = null!;
     private Panel _inspectorPanel = null!;
+    private ColorRect _inspectorAccent = null!;   // heraldic holder-colored stripe atop the lens
     private Label _inspectorTitle = null!;
     private Label _inspectorSub = null!;
     private Button _curseBtn = null!;
@@ -142,6 +143,10 @@ public partial class Main : Node
     // every follow change, every transition into pause, and on window close.
     private PlayerWorldStore _worldStore = null!;
     private bool _catchingUp;            // resume fast-forward: indexes update, but no cards, no pulses
+    // Self-capture (dev evidence only): when LM_SHOTS is set to a directory, the viewer builds a
+    // fresh world, fast-forwards, and writes in-engine PNGs of the atlas + a region lens, then
+    // quits — never touching the player's save. Empty string = normal interactive launch.
+    private string _capture = "";
     private int _ticksSinceSave;
     private const int AutosaveTicks = 200;        // crash-safety cadence (shown ticks)
     private const int CatchupFeedRows = 70;       // feed rows actually built for replayed history
@@ -256,6 +261,8 @@ public partial class Main : Node
 
     public override void _Ready()
     {
+        _capture = OS.GetEnvironment("LM_SHOTS");   // dev evidence capture: a directory, else ""
+
         var (config, names) = DataLoader.Load();
         _world = new World(Seed, config, names);
         _world.SeedWorld();
@@ -263,9 +270,11 @@ public partial class Main : Node
 
         LoadCanon();
         LoadWorldStore();
-        bool resumed = ReplayWorldJournal();   // fast-forward to the saved year, acts re-applied in place
+        // Capture mode never reads the player's journal or follows and never saves — it paints a
+        // pristine, deterministic world purely for screenshots.
+        bool resumed = _capture == "" && ReplayWorldJournal();   // fast-forward, acts re-applied in place
         _lastEchoYear = _world.Year;
-        RestoreFollows();
+        if (_capture == "") RestoreFollows();
         Ui.LoadFonts();
         BuildUi();
         _map.World = _world;
@@ -282,7 +291,51 @@ public partial class Main : Node
         if (resumed) _running = false;   // the resumed world waits for the player
         RefreshTimeBar();
         _map.QueueRedraw();
+        if (_capture != "") { _ = CaptureSequence(); return; }   // dev evidence run: shoot + quit
         if (!resumed) ShowHelp();        // first sight of a fresh age: open the Guide (pauses; "Begin watching" dismisses)
+    }
+
+    // Dev evidence only (LM_SHOTS): fast-forward a fresh world, then write in-engine PNGs of the
+    // atlas and a region lens so a screenshot is the REAL viewer, not a mock. Never saves.
+    private async System.Threading.Tasks.Task CaptureSequence()
+    {
+        _running = false;
+        DisplayServer.WindowSetSize(new Vector2I(1600, 920));   // crisp evidence frames
+        _catchingUp = true;                       // feed indexes/marks, no cards or pulses
+        int target = _world.Config.StartYear + 120;
+        while (_world.Year < target) { _world.Tick(); StreamNewHeadlines(); }
+        _catchingUp = false;
+        _pendingGuardEventId = null;
+        CastChanged();
+        RefreshTimeBar();
+        _map.ResetCamera();
+        _map.QueueRedraw();
+
+        await ToSignal(GetTree().CreateTimer(0.6), SceneTreeTimer.SignalName.Timeout);
+        Shot("01_atlas");
+
+        // The most-built held land makes the richest lens shot.
+        int rid = -1, bestSites = -1;
+        foreach (var r in _world.Regions)
+            if (r.ControllingFactionId is not null)
+            {
+                int n = _world.Sites.ForRegion(r.Id).Count;
+                if (n > bestSites) { bestSites = n; rid = r.Id; }
+            }
+        if (rid >= 0) { OnRegionPicked(rid); _map.FocusRegion(rid); }
+        await ToSignal(GetTree().CreateTimer(1.8), SceneTreeTimer.SignalName.Timeout);
+        Shot("02_region_lens");
+
+        await ToSignal(GetTree().CreateTimer(0.2), SceneTreeTimer.SignalName.Timeout);
+        GetTree().Quit();
+    }
+
+    private void Shot(string name)
+    {
+        var img = GetViewport().GetTexture().GetImage();
+        string path = System.IO.Path.Combine(_capture, name + ".png");
+        var err = img.SavePng(path);
+        GD.Print($"[capture] {name}.png → {path} ({err})");
     }
 
     public override void _Notification(int what)
@@ -396,6 +449,7 @@ public partial class Main : Node
     // together, atomically. Refuses quietly on a read-only store (file preserved).
     private void SaveWorldStore()
     {
+        if (_capture != "") return;   // dev capture must never overwrite the player's world
         if (_worldStore.ReadOnly) return;
         _worldStore.ResumeYear = _world.Year;
         _worldStore.SetFollows(_world, _followedSouls, _seedPeople, _markedFactions, _followedRegions);
@@ -960,6 +1014,11 @@ public partial class Main : Node
         var vb = new VBoxContainer();
         vb.AddThemeConstantOverride("separation", 6);
         margin.AddChild(vb);
+
+        // A heraldic stripe in the holder's cloth color crowns the lens — the inspected place or
+        // person wears whose land it is, so the panel reads as a chronicle page, not a data table.
+        _inspectorAccent = new ColorRect { Color = Ui.Gold, CustomMinimumSize = new Vector2(0, 5) };
+        vb.AddChild(_inspectorAccent);
 
         var hb = new HBoxContainer();
         vb.AddChild(hb);
@@ -3250,6 +3309,7 @@ public partial class Main : Node
         string spouse = p.SpouseId is int s && _world.People.TryGetValue(s, out var sp) ? sp.Name : "—";
         string status = p.Alive ? $"alive, age {p.Age(_world.Year)}" : $"died in year {p.DeathYear}";
 
+        _inspectorAccent.Color = FactionTint(p.FactionId);
         _inspectorTitle.Text = p.Name;
         _inspectorSub.Text = $"{(p.Sex == "f" ? "woman" : "man")} of {fac.Name}"
             + (p.IsLeader ? " · leader" : "");
@@ -3415,6 +3475,15 @@ public partial class Main : Node
     // to the holder's faction panel (that's now one click deeper, via button or link). Anchored
     // tales are real chronicle events whose RegionId names this region; everything the sim
     // doesn't model yet is said plainly rather than faked.
+    // The holder's cloth color (mirrors the atlas faction palette); wilderness wears stone grey.
+    private static Color FactionTint(string? fid) => fid switch
+    {
+        "highland" => new Color("6b7a99"),
+        "shore" => new Color("4f8f89"),
+        "wood" => new Color("5d8a4e"),
+        _ => Ui.Stone,
+    };
+
     private void OnRegionPicked(int regionId)
     {
         if (regionId < 0 || regionId >= _world.Regions.Count) return;
@@ -3444,6 +3513,7 @@ public partial class Main : Node
         _regionBtn.Text = landFollowed ? "★ Following this land — unfollow" : "☆ Follow this land";
         Ui.StyleButton(_regionBtn, landFollowed);
 
+        _inspectorAccent.Color = FactionTint(holder?.Id);
         _inspectorTitle.Text = region.Name;
         _inspectorSub.Text = $"{region.TerrainType} · {(holder is null ? "wilderness" : $"held by {holder.Name}")}";
 
@@ -3599,6 +3669,7 @@ public partial class Main : Node
         _lensFactionId = null;
         _lensFactionBtn.Visible = false;
 
+        _inspectorAccent.Color = FactionTint(region.ControllingFactionId);
         _inspectorTitle.Text = site.Name;
         _inspectorSub.Text = $"{SiteIndex.TypeLabel(site.Type)} · {region.Name}";
 
@@ -3719,6 +3790,7 @@ public partial class Main : Node
         _protectBtn.Visible = members.Count > 0 && fac.ProtectUntilYear <= _world.Year;
         _doomBtn.Visible = members.Count > 0 && fac.DoomUntilYear <= _world.Year;
 
+        _inspectorAccent.Color = FactionTint(fac.Id);
         _inspectorTitle.Text = fac.Name;
         _inspectorSub.Text = $"{fac.Culture} culture · of {fac.Homeland}";
 
