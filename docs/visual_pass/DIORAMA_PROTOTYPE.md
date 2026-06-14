@@ -6,10 +6,39 @@ atlas* — and to honestly measure the gap. This is a **prototype**, not product
 direction and an asset pipeline, it does not ship North Star visuals.
 
 ## How to run it
-- In the viewer: press **F3** (Esc / "← Atlas" returns to the atlas).
-- Standalone: `<godot-mono> --path godot res://DioramaView.tscn`
-- Self-capture (writes `diorama_prototype.png` here, never touches the save):
-  `LM_DIORAMA_SHOT=<dir> <godot-mono> --path godot res://DioramaView.tscn`
+- **Production bridge (the real path):** inspect a region (or a site) in the atlas, then click
+  **"⛰ Enter the Diorama"** in the Region Lens. It opens as a **read-only overlay** over the live
+  world for that selected region. **Esc** or **"← Back to the Atlas"** closes it — the atlas,
+  follows, and save are untouched underneath (it is an overlay, never a scene swap).
+- **F3** opens the diorama for the currently selected region (or the most-built held region if
+  nothing is selected) — handy dev shortcut.
+- **Standalone/dev:** `<godot-mono> --path godot res://DioramaView.tscn` (builds its own seed-7
+  world). Self-capture: `LM_DIORAMA_SHOT=<dir> <godot-mono> --path godot res://DioramaView.tscn`.
+
+## Production Bridge V1 (2026-06-14)
+The sandboxed F3 prototype became an honest bridge for *any* region of the *live* world:
+- **Wired to the live world** — `DioramaView` now takes `SourceWorld` + `SourceRegionId` from
+  Main and renders the currently selected region at the live year (souls/tales/holder/harvest all
+  read live). No more seed-7-only.
+- **Entry/exit** — a "⛰ Enter the Diorama" button in the Region Lens (region & site context);
+  `Main.OpenDiorama`/`CloseDiorama` add/free it as a full-rect overlay (no scene swap, save intact).
+- **Honest controls** — the fake 7-disc action bar (Inspect/Follow/**Curse/Bless/Prophecy/Plague/
+  Terrain**) is **gone**. The real god-hand verbs stay in the atlas inspector where they journal to
+  the save; the diorama bar now reads "READ-ONLY CHRONICLE VIEW · ART IN PROGRESS" + a real
+  "← Back to the Atlas". No mock tool is presented as real.
+- **Fallbacks** — wild/unclaimed regions render with **no banner** and honest "unclaimed country"
+  copy; no-sites regions show "an unwritten country"; sparse regions still frame on their centroid.
+- **Art-fidelity pass (small):** fuller, sun-kissed, multi-lobe broadleaf canopies (better
+  silhouette/texture) and a better-reading keep (slate roof, arrow-slit windows, two-tone stone).
+
+## Evidence files
+- `01_atlas.png` — the live atlas (production viewer).
+- `02_region_lens.png` — the selected region's lens in the atlas.
+- `03_diorama_bridge.png` — **the SAME selected region in the diorama bridge** (real overlay flow,
+  live world, captured in-engine).
+- `04_diorama_fallback.png` — a wild/unclaimed region in the diorama (honest fallback: no banner).
+- `diorama_prototype.png` — standalone showcase (seed-7, year 462, richest region).
+- `diorama_assets_contact.png` — the Blender miniatures (with the canopy + keep improvements).
 
 ## What it is
 - A dedicated Godot view that builds its own deterministic `World` (seed 7, ticked to year 462),

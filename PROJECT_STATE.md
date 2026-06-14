@@ -408,6 +408,25 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       North Star references — closing 5→7+ is art labor, not code. Viewer/read-model + tooling only —
       **verify held exactly 823/559/910/632**, all 9 console gates green, both builds clean. Evidence:
       `docs/visual_pass/DIORAMA_PROTOTYPE.md` (+ prototype / before-after / asset contact sheet).
+- [x] Production Diorama Bridge V1 (2026-06-14, viewer + small art pass + docs): turned the
+      sandboxed F3 diorama prototype into an honest production bridge for selected regions, without
+      replacing the atlas. **Wired to the live world** — `DioramaView` takes `SourceWorld` +
+      `SourceRegionId` from Main and renders the *currently selected region* at the *live year*
+      (souls/tales/holder/harvest read live), not a seed-7-only world. **Entry/exit** — a
+      "⛰ Enter the Diorama" button in the Region Lens (region & site context) + `Main.OpenDiorama`/
+      `CloseDiorama` open it as a full-rect **read-only overlay** (NOT a scene swap — atlas, follows,
+      and save stay intact underneath); F3 kept as a dev shortcut for the selected/most-built region;
+      Esc / "← Back to the Atlas" closes. **Honest controls** — the fake 7-disc action bar
+      (Curse/Bless/**Prophecy/Plague/Terrain** mocks) is removed; the real god-hand verbs stay in the
+      atlas inspector where they journal to the save, and the diorama bar now reads "READ-ONLY
+      CHRONICLE VIEW · ART IN PROGRESS" + a real Back button — no mock tool presented as real.
+      **Fallbacks** — wild/unclaimed regions render with no banner + "unclaimed country"; no-sites
+      regions show "an unwritten country"; sparse regions frame on their centroid. **Small art pass**
+      — fuller sun-kissed multi-lobe broadleaf canopies + a better-reading keep (slate roof,
+      arrow-slit windows, two-tone stone). Evidence captured via the REAL overlay flow in-engine
+      (`docs/visual_pass/` 01 atlas → 02 region lens → 03 diorama bridge [same region] → 04 wild
+      fallback). Viewer/read-model + offline-asset only — **verify held exactly 823/559/910/632**,
+      all 9 console gates green, both builds clean (0 warnings). Sim determinism untouched.
 - [ ] Later — **diorama art fidelity** (turn the Blender blockout props into hand-finished
       illustrated assets: textured albedo, painterly canopies, roof/timber/stone detail — the 5→7+
       gap; or adopt licensed grounded-medieval assets per the asset-scout policy); person↔site
