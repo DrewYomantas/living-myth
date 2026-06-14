@@ -348,14 +348,52 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       1/18/42/7). Balance preserved with **no tuning**: 5000-yr living `168/157/306/150`, all stable,
       no extinction (seed 42, the canary, holds 306; `carrying_capacity` stays 300). All NINE gates
       green; Godot build clean. Full contract below ("Harvest Economy V1 — the harvest contract").
+- [x] Beta-Readiness Pass V1 (2026-06-13, viewer + docs, lead + agent team): the first pass aimed at
+      Drew-beta-testability rather than new systems. **Onboarding & discoverability** (`godot/Main.cs`):
+      "The Watcher's Guide" — a player-invoked Chronicle-Mode reading card (and the one onboarding
+      surface, auto-opened once on a fresh world, "▶ Begin watching" dismisses) covering controls,
+      an honest map legend (every mark/ring drawn — founding stone / battle swords / war scorch /
+      abandon cairn / famine scar / memorial cairn / culture ribbon / turning-point diamond, and the
+      follow/blessed/omen rings — glyphs & colours mirrored from MapView so it can't drift), and the
+      powers of the hand (where the god-verbs live, since they're inspector-only). **Fresh-world
+      affordance** (`✶ New World`, confirmation-gated): discards the world save (acts/follows/resume)
+      and reloads the scene for a clean start, keeping the player's canon — closing the "delete the
+      save file by hand" gap (and the fix for an old save whose acts all quarantine after a
+      baseline-moving sim change). **Visual treatment** (`godot/MapView.cs`): a painted shoreline —
+      land cells touching the sea darken a touch, so the island reads as a placed thing on the water
+      (atlas signature). Empirically verified by launching the real viewer: clean resume (only the
+      expected act-quarantine warnings) and clean fresh launch (zero warnings), Guide renders,
+      shoreline confirmed on-direction. Viewer-only — verify held exactly 823/559/910/632, all 10
+      gates green, both builds clean. Docs: visual direction locked to "stylized semi-realistic
+      fantasy pixel diorama" across DESIGN/VISUAL_STYLE/VISUAL_PIPELINE/roadmap, stale verify
+      baselines corrected to 823/559/910/632, the binding Kenney/AI adoption policy added to the
+      Godot asset scout, famine-scar polish status reconciled to shipped.
 - [ ] Later — person↔site anchoring (a home site, not just a home region); terrain-typed harvest
-      (highland vs coast volatility) + the famine land-mood scar on the map (sim signal ships now;
-      `ClassifyMark` leaves famine unmarked by design) + viewer carding of `famine_end` / The Barren
-      Years; a fresh-world/new-seed affordance (today: delete `user://world_seed{N}.json`);
-      relationship constellation; local site-scale view; memorial tableau upgrade; visual/UX pass
-      (surface culture + gossip in the viewer); echo packs; timeline scrubbing; followed-faith audit. ← NEXT
+      (highland vs coast volatility) + viewer carding of `famine_end` / The Barren Years deepening;
+      more code-only visual treatment (territory boundary lines, elevation contours, marker outlines
+      — sandbox/screenshot-verify each); relationship constellation; local site-scale view; memorial
+      tableau upgrade; surface culture + gossip in the viewer; echo packs; timeline scrubbing;
+      followed-faith audit; per-launch seed choice (today seed is fixed at 7). ← NEXT
 
 ## Session log
+- [2026-06-13] Session: Beta-Readiness Pass V1 (lead as integrator + a read-only scout team +
+  a parallel doc-truth agent). Goal was beta-testability, not new systems. Alignment first proved
+  the project already green: both builds clean, all 10 gates pass, verify at 823/559/910/632, and
+  the documented "#1 known issue" (famine-scar ring crowding) was in fact ALREADY fixed in commit
+  55862fb — only the docs were stale. Shipped, all viewer-only (verify held exactly 823/559/910/632,
+  10 gates green): (1) The Watcher's Guide — controls + honest map legend + the powers of the hand,
+  auto-opened once on a fresh world; (2) `✶ New World` — a confirmation-gated fresh start that
+  discards the world save and reloads, keeping canon (the first in-app fresh-world affordance);
+  (3) a painted shoreline on the atlas surface. Empirically launched the real Godot viewer (console
+  exe, scene passed explicitly per the binary gotcha) and screenshotted: resume path clean (only the
+  expected act-quarantine warnings from a pre-Harvest save), fresh path zero warnings, Guide + new
+  shoreline confirmed rendering on-direction. Drew's `world_seed7.json` was backed up before any
+  launch and restored byte-identical after — fully non-destructive. Docs (parallel agent): visual
+  thesis locked to "stylized semi-realistic fantasy pixel diorama" everywhere, stale 884/699/567/706
+  "current baseline" references fixed to 823/559/910/632, binding Kenney/license/AI adoption policy
+  added to docs/GODOT_ASSETLIB_SCOUT.md, famine-scar status reconciled, god-tool forbidden list
+  corrected (Bless/Terrain shipped; only Prophecy/Plague stay forbidden). Untracked stray
+  `docs/spike_offon_compare.png` (1.4 MB, undocumented) left out of the commits by the screenshot rule.
 - [2026-06-13] Session: Harvest Memory Viewer Payoff V1 (viewer-only, small agent team + live F5
   feel-test). Wired the Harvest Economy's deferred viewer half across 4 godot/ files: `famine_end`
   Recovery event class (green ❀); `MapView.MarkKind.FamineScar` (ochre cracked-earth, famine onset
@@ -364,9 +402,16 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
   note); Remembered Places harvest filter chip. Pure read-model — verify held exactly
   823/559/910/632, all 10 gates green, independent channel-mixing verifier PASS. Commit 85729fd;
   claude.md milestone/Next refresh 4132cce. Live F5 feel-test (Year 316): confirmed Recovery glyph
-  + harvest filter + region-anchored channel honesty. KNOWN ISSUE: famine scars subtle at low zoom
-  and crowd the 4-slot per-region mark ring. Next: famine-scar polish (own scar store or
-  1-most-recent cap + low-zoom legibility), then terrain-typed harvest.
+  + harvest filter + region-anchored channel honesty. The KNOWN ISSUE here (famine scars subtle at
+  low zoom and crowding the 4-slot per-region mark ring) was RESOLVED by the famine-scar polish pass
+  below (commit 55862fb). Next: terrain-typed harvest, plus the still-unwatched F5 feel-tests.
+- [2026-06-13] Session: famine-scar polish (viewer-only, commit 55862fb "viewer: polish famine
+  scars outside place mark ring") — the deferred #1 feel-test finding fixed. Famine scars now live
+  in their OWN per-region scar store with a 1-most-recent cap (no longer competing for the 4-slot
+  place-mark ring, so rare founding/war/battle marks survive recurring famines), drawn at a
+  dedicated reserved slot angle outside the ring, and rendered larger with a higher alpha floor for
+  low-zoom legibility. Pure read-model / viewer-only — verify held 823/559/910/632, all 10 gates
+  green.
 - [2026-06-13] Session: Harvest Economy V1 (lead dev, single coherent pass). The paired half of
   the M4 economy and the SECOND deliberate baseline move since M8 — famine/plenty became a
   region's harvest. Moved the random-walk from `Faction.Prosperity` to a per-`Region` `Harvest`
@@ -1009,9 +1054,10 @@ NOT yet wired): run a few centuries and read the chronicle — does "Famine grip
 like the land itself starving and recovering? Do famine deaths still read as belonging to the
 person and their home (NOT the starved region — the channel split must hold)? Over a long run,
 does a single land that keeps starving feel like "the barren years"? The deferred viewer follow-up
-is where this becomes visible: card `famine_end` as a chapter close, surface The Barren Years echo,
-and (with terrain-typed harvest) a famine land-mood scar on the map — none of which are built yet
-(`ClassifyMark` leaves famine unmarked by design). Baseline moved deliberately to
+shipped (Harvest Memory Viewer Payoff V1 + the famine-scar polish pass, commit 55862fb): `famine_end`
+cards as a chapter close, The Barren Years echo, and the famine onset scar on the map (now in its own
+per-region 1-slot scar store outside the 4-slot ring, larger + higher alpha floor for low-zoom
+legibility). The remaining sim follow-up is terrain-typed harvest. Baseline moved deliberately to
 **823/559/910/632** (from 894/705/574/715); balance held (no extinction, no tuning).
 
 **Drew's F5 feel-test of Chronicle Replay + Site-Anchored Memory V1** (prior session):

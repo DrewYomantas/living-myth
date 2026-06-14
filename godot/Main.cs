@@ -240,6 +240,7 @@ public partial class Main : Node
     private Label _recapSub = null!;
     private RichTextLabel _recapBody = null!;
     private Button _recapChip = null!;                    // "a chapter closed" — click to read
+    private Panel _helpPanel = null!;                     // the Guide — controls + map legend + your hand (Chronicle Mode)
     private bool _wasRunning = true;                      // pause-transition edge for auto-showing a queued recap
 
     private sealed class RecapSnapshot
@@ -281,6 +282,7 @@ public partial class Main : Node
         if (resumed) _running = false;   // the resumed world waits for the player
         RefreshTimeBar();
         _map.QueueRedraw();
+        if (!resumed) ShowHelp();        // first sight of a fresh age: open the Guide (pauses; "Begin watching" dismisses)
     }
 
     public override void _Notification(int what)
@@ -492,6 +494,7 @@ public partial class Main : Node
         BuildReplayPanel(root);
         BuildGlimpse(root);
         BuildRecap(root);
+        BuildHelp(root);        // the Guide — opened by the player (Chronicle Mode reading surface)
         BuildGuardCard(root);   // last: the guard card (and its return chip) sits above everything
         BuildCanonPanel(root);  // very last: the player's writing desk outranks every card while open
     }
@@ -905,6 +908,17 @@ public partial class Main : Node
 
         var spacer = new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         hb.AddChild(spacer);
+
+        // --- Guide group: how to read the atlas, and a fresh start (far right) ---
+        var guideRow = DockGroup(hb, "Guide");
+        var helpBtn = new Button { Text = "? Guide", TooltipText = "How to watch — controls, the map's marks, and the powers of your hand" };
+        Ui.StyleButton(helpBtn);
+        helpBtn.Pressed += ShowHelp;
+        guideRow.AddChild(helpBtn);
+        var newWorldBtn = new Button { Text = "✶ New World", TooltipText = "Begin a fresh age — discards your saved acts, follows, and progress (your written canon is kept)" };
+        Ui.StyleButton(newWorldBtn);
+        newWorldBtn.Pressed += ConfirmNewWorld;
+        guideRow.AddChild(newWorldBtn);
 
         RestyleToggles();
         RestyleSpeedButtons();
@@ -2752,6 +2766,175 @@ public partial class Main : Node
         _recapChip.OffsetLeft = 264; _recapChip.OffsetRight = 264 + 290;
         _recapChip.OffsetTop = 10; _recapChip.OffsetBottom = 42;
         _recapChip.Pressed += ShowRecapCard;
+    }
+
+    // The Guide — the one onboarding surface. A player-invoked reading card (Chronicle Mode,
+    // so it may take the centre): how to watch, what every mark on the atlas means, and the
+    // powers of the hand. Static content built once; legend glyphs/colours mirror MapView and
+    // the binding tables in docs/VISUAL_STYLE.md, so it never drifts from what's drawn.
+    private void BuildHelp(Control root)
+    {
+        _helpPanel = new Panel { Visible = false };
+        root.AddChild(_helpPanel);
+        _helpPanel.AnchorLeft = 0.5f; _helpPanel.AnchorRight = 0.5f;
+        _helpPanel.AnchorTop = 0.5f; _helpPanel.AnchorBottom = 0.5f;
+        _helpPanel.OffsetLeft = -330; _helpPanel.OffsetRight = 330;
+        _helpPanel.OffsetTop = -262; _helpPanel.OffsetBottom = 262;
+        _helpPanel.AddThemeStyleboxOverride("panel", Ui.PanelBox());
+
+        var margin = new MarginContainer();
+        margin.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        foreach (var s in new[] { "left", "right", "top", "bottom" })
+            margin.AddThemeConstantOverride($"margin_{s}", 16);
+        _helpPanel.AddChild(margin);
+
+        var vb = new VBoxContainer();
+        vb.AddThemeConstantOverride("separation", 8);
+        margin.AddChild(vb);
+
+        var hb = new HBoxContainer();
+        hb.AddThemeConstantOverride("separation", 8);
+        vb.AddChild(hb);
+        var titles = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        titles.AddThemeConstantOverride("separation", 0);
+        hb.AddChild(titles);
+        var title = new Label { Text = "The Watcher's Guide" };
+        title.AddThemeFontOverride("font", Ui.SerifBold);
+        title.AddThemeFontSizeOverride("font_size", 21);
+        title.AddThemeColorOverride("font_color", Ui.InkDeep);
+        titles.AddChild(title);
+        var sub = new Label { Text = "How to watch an age unfold — and shape it" };
+        sub.AddThemeFontSizeOverride("font_size", 12);
+        sub.AddThemeColorOverride("font_color", Ui.FadedSub);
+        titles.AddChild(sub);
+        var close = new Button { Text = "✕", CustomMinimumSize = new Vector2(28, 28), TooltipText = "Close" };
+        Ui.StyleButton(close);
+        close.Pressed += () => _helpPanel.Visible = false;
+        hb.AddChild(close);
+
+        var rule = new HSeparator();
+        rule.AddThemeStyleboxOverride("separator", new StyleBoxFlat { BgColor = Ui.RowBorder, ContentMarginTop = 1 });
+        vb.AddChild(rule);
+
+        var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
+        vb.AddChild(scroll);
+        var body = new RichTextLabel
+        {
+            BbcodeEnabled = true,
+            FitContent = true,
+            ScrollActive = false,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(606, 0),
+        };
+        body.AddThemeColorOverride("default_color", Ui.Ink);
+        body.AddThemeFontOverride("bold_font", Ui.SerifBold);
+        scroll.AddChild(body);
+
+        string faded = Ui.Hex(Ui.Faded);
+        string gold = Ui.Hex(Ui.Gold);
+        string cyan = "7fc8d8";
+        string ember = Ui.Hex(Ui.Ember);
+        string violet = "9b6dc8";
+        var sb = new StringBuilder();
+        sb.AppendLine($"[color=#{faded}]You are a watcher over a living age. It unfolds on its own; you may slow it, follow the lives that matter to you, and lay a god's hand upon it.[/color]");
+        sb.AppendLine();
+
+        sb.AppendLine(SectionCap("How to watch"));
+        sb.AppendLine($"[b]Time[/b] — [b]▶/❚❚[/b] play & pause · the speed ladder [b]0.25×–16×[/b] (linger → ages) · [b]✦ drama[/b] slows the loud moments · [b]⛨ guard[/b] pauses when fate touches what you follow.");
+        sb.AppendLine($"[b]The lens[/b] — scroll to zoom, drag to pan, [b]⤢[/b] resets the view · [b]✦ follow drama[/b] leans the lens toward where things happen.");
+        sb.AppendLine($"[b]Inspect[/b] — click a land, a person (the dots), or a site to open its card. Underlined links jump between people, places, and peoples.");
+        sb.AppendLine($"[b]Read[/b] — click any tale in the Saga feed to see [i]how it happened[/i]. [b]✦ ledger[/b] holds your acts; [b]❖ places[/b] holds every remembered place.");
+        sb.AppendLine();
+
+        sb.AppendLine(SectionCap("The marks upon the map"));
+        sb.AppendLine($"[color=#{faded}]Dots are people standing in their land — leaders ringed gold, women's dots a shade lighter, a [color=#{ember}]cursed[/color] soul burning ember.[/color]");
+        sb.AppendLine($"[b]⌑[/b]  a standing stone — a people's [b]founding seat[/b]");
+        sb.AppendLine($"[color=#{ember}][b]⚔[/b][/color]  crossed swords — a [b]battle[/b] was fought here");
+        sb.AppendLine($"[color=#{ember}][b]✕[/b][/color]  scorch & a snapped pole — land [b]seized in war[/b]");
+        sb.AppendLine($"[b]∴[/b]  a scattered cairn — a land [b]abandoned[/b] when its people died out");
+        sb.AppendLine($"[color=#b07a2e][b]▦[/b][/color]  cracked ochre earth — a [b]famine[/b] struck this land");
+        sb.AppendLine($"[color=#{gold}][b]⊟[/b][/color]  stacked stones & a gold light — a [b]memorial cairn[/b], at the home of a remembered leader");
+        sb.AppendLine($"[color=#{violet}][b]❧[/b][/color]  a violet ribbon — a [b]custom[/b] was born or faded here");
+        sb.AppendLine($"[color=#{gold}][b]◆[/b][/color]  a gold diamond — a [b]turning point[/b]; click it to trace the chain");
+        sb.AppendLine($"[color=#{faded}]Marks fade with the years — the rare ones endure; the land's hungers pass.[/color]");
+        sb.AppendLine();
+
+        sb.AppendLine(SectionCap("The rings of your hand"));
+        sb.AppendLine($"[color=#{gold}][b]◌[/b][/color]  a breathing gold halo — a [b]soul[/b] you follow");
+        sb.AppendLine($"[color=#{cyan}][b]◌[/b][/color]  a cyan ring — a [b]bloodline[/b] you follow (its kin, and the children to come)");
+        sb.AppendLine($"[color=#{gold}][b]◌[/b][/color]  a quiet steady ring on a land — a [b]land[/b] you follow");
+        sb.AppendLine($"[color=#f2e2b0][b]◌[/b][/color]  a pale-gold ring — a [b]blessed[/b] soul · [color=#{violet}][b]✶[/b][/color]  an [b]omen[/b] you laid upon a land");
+        sb.AppendLine();
+
+        sb.AppendLine(SectionCap("The powers of your hand"));
+        sb.AppendLine($"[color=#{faded}]Open any card to act — the verbs live on the thing they touch:[/color]");
+        sb.AppendLine($"• Click a [b]soul[/b] → [b]Bless[/b] or [b]Curse[/b] them, or [b]Follow[/b] them.");
+        sb.AppendLine($"• Click a [b]people[/b] → [b]Protect[/b] or [b]Doom[/b] them.");
+        sb.AppendLine($"• Click a [b]land[/b] → lay an [b]Omen[/b], [b]Seed a Forest[/b], [b]Call a Spring[/b] — or [b]Follow[/b] it.");
+        sb.AppendLine($"[color=#{faded}]What you follow becomes [b]Your Story[/b] (pinned atop the feed); the guard can pause time when it turns. Every act is written in the Fate Ledger.[/color]");
+        sb.AppendLine();
+
+        sb.AppendLine(SectionCap("Your world"));
+        sb.AppendLine($"[color=#{faded}]Your acts, follows, and progress save on their own — close and return to the same age. [b]✶ New World[/b] begins a fresh age (your written canon is kept).[/color]");
+
+        body.Text = sb.ToString();
+
+        var btns = new HBoxContainer();
+        btns.AddThemeConstantOverride("separation", 8);
+        vb.AddChild(btns);
+        var got = new Button { Text = "▶ Begin watching" };
+        Ui.StyleButton(got, active: true);
+        got.Pressed += () => { _helpPanel.Visible = false; _running = true; };
+        btns.AddChild(got);
+    }
+
+    // Open the Guide. A reading surface, so it pauses the age (Chronicle Mode) and clears any
+    // other major reading panel — never sits under a guard card or memorial.
+    private void ShowHelp()
+    {
+        _running = false;
+        _glimpsePanel.Visible = false;
+        _catchupPanel.Visible = false;
+        _fateLedger.Visible = false;
+        _places.Visible = false;
+        if (_replayChain is not null) CloseReplay();
+        _helpPanel.Visible = true;
+        _helpPanel.MoveToFront();
+    }
+
+    // Begin a fresh age. Discards the player's world save (acts / follows / resume position)
+    // for this seed so the deterministic world replays from year 0 again; the player's written
+    // canon book is deliberately KEPT. A confirmation gates the reset — it throws away progress.
+    private void ConfirmNewWorld()
+    {
+        _running = false;
+        var dlg = new ConfirmationDialog
+        {
+            Title = "Begin a fresh age?",
+            DialogText = "This discards your saved acts, follows, and progress for this world.\n"
+                + "Your written canon (tellings, inscriptions, legends) is kept.\n\nStart over from the first year?",
+            OkButtonText = "✶ New World",
+            CancelButtonText = "Keep watching",
+        };
+        _root.AddChild(dlg);
+        dlg.Confirmed += DoNewWorld;   // reloads the scene, freeing the dialog with it
+        dlg.Canceled += dlg.QueueFree;
+        dlg.PopupCentered();
+    }
+
+    private void DoNewWorld()
+    {
+        // Drop the world journal (acts + follows + resume year). The store funnels every write,
+        // so disabling it here prevents the close-handler from re-saving the world we're leaving.
+        string path = ProjectSettings.GlobalizePath($"user://world_seed{Seed}.json");
+        try
+        {
+            if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
+        }
+        catch (System.Exception ex) when (ex is System.IO.IOException or System.UnauthorizedAccessException)
+        { GD.PushWarning($"new world: could not remove the save ({ex.GetType().Name})"); }
+        _worldStore = null!;   // the close-handler guards on null; the reload rebuilds a fresh store
+        GetTree().ReloadCurrentScene();
     }
 
     // -------------------------------------------------------------- inspectors

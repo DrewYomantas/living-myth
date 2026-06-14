@@ -1120,6 +1120,8 @@ public partial class MapView : Control
         _ => Land,
     };
 
+    private static bool IsSeaTerrain(SurfaceTerrain t) => t is SurfaceTerrain.Ocean or SurfaceTerrain.Shallows;
+
     private static float Speckle(int x, int y)
     {
         unchecked
@@ -1150,12 +1152,20 @@ public partial class MapView : Control
 
         const int TS = 2;   // texels per cell
         int S = WorldSurface.Size * TS;
+        // Out-of-bounds reads as sea (the island sits inside the grid, ringed by ocean) — Idx
+        // does not clamp, so neighbour lookups must guard their own bounds.
+        bool SeaAt(int x, int y) => x < 0 || y < 0 || x >= WorldSurface.Size || y >= WorldSurface.Size
+                                    || IsSeaTerrain(surface.TerrainAt(x, y));
         var img = Image.CreateEmpty(S, S, false, Image.Format.Rgba8);
         for (int cy = 0; cy < WorldSurface.Size; cy++)
             for (int cx = 0; cx < WorldSurface.Size; cx++)
             {
                 var t = surface.TerrainAt(cx, cy);
                 var baseCol = TerrainColor(t);
+                // Painted shore: a land cell touching the sea darkens a touch, so the island
+                // reads as a placed thing on the water (atlas signature, not a flat cell field).
+                bool shore = !IsSeaTerrain(t)
+                    && (SeaAt(cx - 1, cy) || SeaAt(cx + 1, cy) || SeaAt(cx, cy - 1) || SeaAt(cx, cy + 1));
                 float elev = surface.ElevationAt(cx, cy);
                 int rid = surface.RegionAt(cx, cy);
                 Color? cloth = null;
@@ -1176,6 +1186,7 @@ public partial class MapView : Control
                                       + Speckle(px, py) * 0.085f;
                         col = new Color(col.R * shade, col.G * shade, col.B * shade);
                         if (cloth is Color cc) col = col.Lerp(cc, 0.13f);   // banner-cloth wash, restrained
+                        if (shore) col = col.Darkened(0.20f);               // the painted shore rim
                         img.SetPixel(px, py, col);
                     }
             }
