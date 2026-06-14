@@ -385,7 +385,33 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       shoots the atlas + a region lens in-engine, quits — never touches the player's save). Evidence in
       `docs/visual_pass/` (before/after + seed variety + in-engine shots, see its README). Viewer/read-
       model only — **verify held exactly 823/559/910/632**, all 9 console gates green, both builds clean.
-- [ ] Later — person↔site anchoring (a home site, not just a home region); terrain-typed harvest
+- [x] North Star Diorama Prototype Pass V1 (2026-06-14, viewer + Blender pipeline + docs, lead +
+      brutal North Star judge agent): after the Visual North Star Push V1 atlas pass was honestly
+      rated "still alpha", a course-correction to build a REAL, sandboxed visual prototype proving
+      the *stylized fantasy diorama* direction rather than polishing the atlas further. **New asset
+      pipeline** `tools/art/render_diorama.py` (headless Blender 5.1 → Cycles 96spp + denoise →
+      shadow-catcher-grounded transparent PNGs → 19 diorama miniatures: tree clusters w/ 3 species
+      variants, hill, rocks, cottage/hall, keep, watchtower, standing stones, shrine, dock, field,
+      banner) — a real step up from the flat-cone spike (layered organic foliage, 3-point light,
+      bevels, per-object jitter, procedural material mottle). **New Godot view** `godot/DioramaView.cs`
+      + `.tscn` (F3 from the atlas / standalone / `LM_DIORAMA_SHOT` self-capture): an **isometric
+      region diorama** — tilted per-cell ground plane with NW raking-light relief, Blender miniatures
+      billboarded + depth-sorted at REAL `Sites` positions, low-freq clearing mask exposing earth/
+      water, settlement clearings, faction banners, parchment label callouts — wrapped in North Star
+      parchment/brass/ink chrome (Year plate, serif title, inspector card + house chip, region-
+      anchored Saga feed, legend, brass action bar) + `godot/shaders/parchment_post.gdshader`
+      (warm-grade + grain + vignette). 100% read-model: builds its own world, never writes/saves.
+      **Independent judge moved it 2→3→4→5/10** across four iterations (camera→variety→iso
+      projection→legibility); final verdict: a clear leap over the production viewer (~3/10) and a
+      legitimate prototype proving the direction. **The honest ceiling is ~5/10 without dedicated
+      art**: the miniatures are stylized flat-shaded low-poly, not the hand-painted material-rich
+      North Star references — closing 5→7+ is art labor, not code. Viewer/read-model + tooling only —
+      **verify held exactly 823/559/910/632**, all 9 console gates green, both builds clean. Evidence:
+      `docs/visual_pass/DIORAMA_PROTOTYPE.md` (+ prototype / before-after / asset contact sheet).
+- [ ] Later — **diorama art fidelity** (turn the Blender blockout props into hand-finished
+      illustrated assets: textured albedo, painterly canopies, roof/timber/stone detail — the 5→7+
+      gap; or adopt licensed grounded-medieval assets per the asset-scout policy); person↔site
+      anchoring (a home site, not just a home region); terrain-typed harvest
       (highland vs coast volatility) + viewer carding of `famine_end` / The Barren Years deepening;
       a map-table vignette/framing pass + marker outlines (sandbox/screenshot-verify each); relationship
       constellation; local site-scale view; memorial tableau upgrade; surface culture + gossip in the
