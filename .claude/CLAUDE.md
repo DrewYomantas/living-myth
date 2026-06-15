@@ -213,13 +213,28 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   region-anchored loop, never site/home); plague scar added to the Watcher's Guide legend. The Long
   Pestilence echo already surfaces via generic `Echoes.DetectAll`. Pure read-model — **verify held
   exactly 648/713/526/921**, all 10 gates green, both builds clean. Not yet live-F5-watched.
-- **Next** — **diorama art fidelity** (hand-finished/licensed assets — the 7.0→7.5+ gap) or
-  **diorama composition + canopy authoring**, or seamless atlas→diorama zoom (retire the bridge
-  button per its doctrine); more code-only visual treatment (territory boundary lines, elevation
-  contours, marker outlines — sandbox/screenshot-verify each); still-unwatched Theater of War /
-  Chronicle Replay / persistence / Cast / Harvest / Plague F5 feel-tests; migration / disease-V2
-  spread-chain echo / prejudice (Phase 2 forces); person↔site anchoring; timeline scrubbing;
-  per-launch seed choice (today fixed at 7).
+- **Migration V1** (2026-06-15, sim + read-models + gate — FIFTH deliberate baseline move; the last
+  missing natural force, Phase 2 opener): peoples MOVE in response to the land. New `Migration()`
+  engine (Economy → Pestilence → **Migration** → ProcessWars): one fixed-cost `Rng.Chance` draw per
+  faction per year decides whether a people moves; famine/plague → **flight** (relocate to the best
+  adjacent wilderness, cause-linked to the disaster), boom+population → **settlement** (expand into
+  wilderness, rootless). Destination always adjacent UNCLAIMED wilderness (zero-Rng pick, no war);
+  never abandons the last region; `HomeRegionId` untouched; `migration` anchors RegionId-only
+  (SiteAnchors NOT extended). Read-models: StoryGrammar `migration-from-famine`/`-plague`, Scoring 40,
+  Echo **The Promised Land** (destination drew the wandering ≥3×). New `migration` gate (anchoring,
+  flight-XOR-settlement tags, flight-cause honesty, settlement-rootlessness, territory integrity,
+  determinism, both-driver non-vacuity). Balance surprise was GOOD: fleeing famine cuts death
+  pressure, so the reshuffle needed NO tuning (5000-yr **260/274/163/280**, no extinction). Baseline
+  648/713/526/921 → **1131/880/425/998**. All 11 gates green; future-proofed the `replay` gate's one
+  fragile scenario (curse the oldest adult). No viewer payoff yet.
+- **Next** — **viewer payoff for migration** (movement arcs / a migration mark at the destination,
+  Region Lens "settled by the fleeing / a people spread here", the Promised Land echo — viewer-only,
+  must hold 1131/880/425/998); **diorama art fidelity** (hand-finished/licensed assets — the 7.0→7.5+
+  gap) or seamless atlas→diorama zoom (retire the bridge button per its doctrine); more code-only
+  visual treatment (territory boundary lines, elevation contours, marker outlines — sandbox/
+  screenshot-verify each); still-unwatched Theater of War / Chronicle Replay / persistence / Cast /
+  Harvest / Plague / Migration F5 feel-tests; disease-V2 spread-chain echo / prejudice (remaining
+  Phase 2 forces); person↔site anchoring; timeline scrubbing; per-launch seed choice (today fixed at 7).
 
 ## Commands
 ```bash
@@ -234,6 +249,7 @@ dotnet run --project src/LivingMyth.Console -- sites           # sites + Event.S
 dotnet run --project src/LivingMyth.Console -- replay          # chronicle-replay + turning-point gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- harvest         # per-region harvest economy gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- plague          # disease & plague contract gate (must pass; --years N)
+dotnet run --project src/LivingMyth.Console -- migration       # migration (flight & settlement) contract gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- run --seed 42
 dotnet run --project src/LivingMyth.Console -- divergence --seed 18
 dotnet run --project src/LivingMyth.Console -- surface --seed 1
@@ -244,12 +260,15 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 **Viewer:** open `godot/` with Godot mono editor and press **F5** to launch the viewer.
 
 ## Gotchas
-- **The yearly tick is a fixed engine order** (`World.Tick`): Economy → **Pestilence** → ProcessWars
-  → Deaths → Crime → ForbiddenRomance → Marriages → Births → DoReligion → Culture → Gossip →
-  MaybeDeclareWars → DecayTension → ReleaseExtinctLands → **(re-derive land-mood rollups)**. New
-  pressure engines slot into this order; where they sit changes RNG consumption (and the verify
-  baseline), so placement is a deliberate choice. Pestilence sits after Economy (reads this tick's
-  `InFamine`) and before Deaths (sets `InPlague` for mortality). The final re-derive of
+- **The yearly tick is a fixed engine order** (`World.Tick`): Economy → **Pestilence** →
+  **Migration** → ProcessWars → Deaths → Crime → ForbiddenRomance → Marriages → Births → DoReligion
+  → Culture → Gossip → MaybeDeclareWars → DecayTension → ReleaseExtinctLands → **(re-derive land-mood
+  rollups)**. New pressure engines slot into this order; where they sit changes RNG consumption (and
+  the verify baseline), so placement is a deliberate choice. Pestilence sits after Economy (reads
+  this tick's `InFamine`) and before Deaths (sets `InPlague` for mortality). Migration sits after
+  Pestilence (reads this tick's region famine/plague to decide who flees) and before ProcessWars
+  (territory settles before war plays out on the new map); a fled people is re-derived out of its
+  death pressure on the spot (zero-Rng). The final re-derive of
   Prosperity/famine/plague rollups is RNG-FREE and behaviourally INERT (nothing reads those flags
   again until next tick's Economy/Pestilence overwrite them) — it only keeps the end-of-tick snapshot
   honest after ProcessWars/ReleaseExtinctLands change territory, so verify stays byte-identical.
@@ -294,15 +313,17 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
   to extinction by shifting the trade-guard RNG stream — derive BEFORE trade (guard reads fresh
   mean) + re-derive the two traders after each trade (zero Rng) is the balance-safe order.
 - **The verify baseline moves whenever sim RNG consumption changes — OR a new event type is
-  recorded.** Current `verify` counts (120 yr, cap 300): **648/713/526/921** (seeds 1/18/42/7,
-  Disease & Plague V1 baseline — `Pestilence()` adds one `Rng.Chance` draw per region per year,
-  reshuffling the whole downstream stream). Prior baselines: Terrain-Typed Harvest 657/691/528/726,
-  Harvest Economy 823/559/910/632, Battle Sites 894/705/574/715, M8 gossip 884/699/567/706, M7
-  culture 814/594/525/652. The determinism gate is self-consistency (same seed → byte-identical run),
-  so it stays green regardless of feature work; these numbers are just the recorded expectation.
-  NOTE: adding a recorded event with NO new Rng (the Battle Sites trick) moves the count but not the
-  stream — but Harvest Economy and Disease & Plague are genuine new-Rng contracts, so re-run the
-  5000-yr balance probe (no extinction) when touching them. Current 5000-yr balance: **138/114/147/161**.
+  recorded.** Current `verify` counts (120 yr, cap 300): **1131/880/425/998** (seeds 1/18/42/7,
+  Migration V1 baseline — `Migration()` adds one `Rng.Chance` draw per faction per year + reshapes
+  territory, reshuffling the whole downstream stream). Prior baselines: Disease & Plague
+  648/713/526/921, Terrain-Typed Harvest 657/691/528/726, Harvest Economy 823/559/910/632, Battle
+  Sites 894/705/574/715, M8 gossip 884/699/567/706, M7 culture 814/594/525/652. The determinism gate
+  is self-consistency (same seed → byte-identical run), so it stays green regardless of feature work;
+  these numbers are just the recorded expectation. NOTE: adding a recorded event with NO new Rng (the
+  Battle Sites trick) moves the count but not the stream — but Harvest Economy, Disease & Plague, and
+  Migration are genuine new-Rng contracts, so re-run the 5000-yr balance probe (no extinction) when
+  touching them. Current 5000-yr balance: **260/274/163/280** (Migration helped — fleeing famine cuts
+  death pressure, so it needed no tuning, unlike plague's birth_chance nudge).
 - **Battle Sites are zero-Rng by construction.** `World.RecordBattle` records a `battle` event
   but draws NO Rng; the war's casualties are the same `Rng.RandInt(0,2)`/`Pick` rolls as before,
   just cause-linked to the battle. `FrontRegion` (the border region a war is fought over) is a
@@ -349,6 +370,31 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
   noise-sensitive); `harvest_target_plains` 1.05→1.2 restored the margin (sim-inert here — these seeds'
   plains are wilderness). ALWAYS re-run the 5000-yr balance probe (no extinction) AND the harvest gate
   when touching plague params, density, or the tick position.
+- **Migration is the only force that RESHAPES TERRITORY mid-tick — and its balance trap inverts the
+  plague one.** `Migration()` (after Pestilence, before ProcessWars) is the last natural force:
+  exactly ONE `Rng.Chance` draw per faction per year (fixed ULong cost — Chance(0) still consumes it,
+  so a landless/last-region/ineligible people still draws and the stream never forks), deciding
+  WHETHER a people moves; eligibility sets the probability and the kind. FLIGHT (its worst land in
+  famine/plague, `ControlledRegions.Count > 1`) RELOCATES — drop the worst stricken region, claim the
+  best adjacent wilderness — and cause-links to that region's `FamineEvent`/`PlagueEvent` (the
+  `migration-from-famine`/`-plague` grammar edge). SETTLEMENT (`InBoom` + `Members.Count >=
+  migration_settle_min_pop`) EXPANDS — claim adjacent wilderness, keep all holds — and is ROOTLESS
+  (no cause, silent like a boom). Flight beats settlement (crisis over growth). **The destination is
+  ALWAYS adjacent UNCLAIMED wilderness** (`BestAdjacentWilderness`: highest harvest, lowest-id tie —
+  ZERO Rng; contesting a HELD region is war, deliberately out of scope), so a move never starts a war
+  by itself; if none borders, the draw is spent and nothing moves (honest). A people **never abandons
+  its last region**; `HomeRegionId` is **UNTOUCHED** (territory ≠ lineage — a move is present-tense,
+  immutable heritage stays, exactly as under conquest). A fled people is re-derived (`DeriveProsperity`
+  +`DerivePestilence`, zero Rng) immediately so `Deaths()` reads its escape — that re-derive off the
+  new holdings is WHY fleeing cuts death pressure. `migration` events anchor **RegionId-only (the
+  destination), never SiteId** (`SiteAnchors` NOT extended — the `migration` gate proves Expected==null).
+  **The balance keystone is the GOOD-news inverse of plague:** the per-faction draw reshuffles the
+  stream (deliberate baseline move 648/713/526/921 → 1131/880/425/998), but because flight removes a
+  people from famine/plague death pressure, the net effect HELPED survival — 5000-yr 260/274/163/280,
+  no extinction, NO tuning needed (where plague's reshuffle alone forced a `birth_chance` nudge). Still
+  ALWAYS re-run the 5000-yr probe + the `migration` gate (both-driver non-vacuity) when touching
+  migration params or the tick position. Echo **The Promised Land** is destination-RegionId-keyed
+  (≥3 arrivals in a 25-yr-gapped age, Barren-Years discipline).
 - **M8 gossip tuning note.** `Gossip()` watches `[_lastGossipEventCount, count)` each year (no all-
   history scan), gates on importance (≥`gossip_min_importance` 42, which is why low-key events like
   plain scandals never reach the mill), and never gossips a `rumor` (no recursion). `The Blackened
