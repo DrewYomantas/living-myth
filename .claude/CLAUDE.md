@@ -177,14 +177,39 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   massing still sphere-clusters; uniform-density composition w/ no focal hierarchy; no macro
   depth/AO) — content, not plumbing. Evidence: docs/visual_pass/BIOME_SILHOUETTE_V1.md +
   biome_silhouette_v1/. Viewer/asset-only: verify held 823/559/910/632, all 9 gates green.
-- **Next** — **terrain-typed harvest** (highland/coast/plains volatility, the deferred sim follow-up
-  — moves the baseline); **diorama composition + canopy authoring** (the 7.0→7.5+ gap: art-directed
-  density/focal hierarchy, real broadleaf trunk+branch massing, macro depth/AO — content in the
-  proven pipeline) or **diorama art fidelity** (hand-finished/licensed assets) or
+- **Terrain-Typed Harvest V1** (2026-06-15, sim + gate — THIRD deliberate baseline move): the harvest
+  walk keys off `Region.TerrainType` via two data-driven levers on the SAME single `RandInt(-1,1)`
+  draw (zero new draws) — per-terrain volatility (`harvest_vol_*`) + revert target (`harvest_target_*`,
+  the fertility lever). Forest 1.0/1.0 is algebraically the old walk. Balance lesson: an aggressive
+  highland target (0.78) passed all 120-yr gates but EXTINCTED 2/4 seeds at 5000 yr — fertility-via-
+  mean is balance-constrained, so the band stayed tight (lean on volatility for famine drama).
+  Baseline 823/559/910/632 → **657/691/528/726**; 5000-yr 158/139/162/160. No viewer payoff yet.
+- **Disease & Plague V1** (2026-06-15, sim + read-models + gate — FOURTH deliberate baseline move):
+  the missing natural force, a famine clone driven by epidemic dynamics. New `Pestilence()` engine
+  (Economy → **Pestilence** → ProcessWars → Deaths): per-region `Region.Pestilence` decays toward 0
+  (acute burn-out), is SPARKED by the one new draw/region/year (a `Rng.Chance` whose probability —
+  not its fixed ULong cost — scales with the holder people's DENSITY and rises in famine), and SPREADS
+  by CONTAGION read from a FROZEN previous-year snapshot (order-independent). `plague`/`plague_end`
+  are RegionId-only (SiteAnchors NOT extended); onset cause-links to active famine + Doom/Protect;
+  `plague_end` cause-links its onset. Deaths: `plague_death_multiplier` STACKS with famine on the same
+  roll; proximate-cause priority **curse > plague > famine > blessing > natural** (Kill stays single-
+  cause); plague deaths home-anchored. StoryGrammar/StoryCopy `plague-from-famine`/`-under-doom`/
+  `-despite-protection`(But)/`-breaks`/`-death`; Scoring 55/35; Echo **The Long Pestilence** (region-
+  keyed ≥3, Barren-Years discipline); new `plague` gate. **Balance lesson (new):** the 5000-yr
+  extinction was the RNG-STREAM RESHUFFLE from adding draws, NOT lethality (a zero-spark control still
+  extincted seed 42) — no plague param fixed it; a global `birth_chance` 0.24→**0.26** absorbed it.
+  The reshuffle also flipped the harvest gate's fragile plains-mean signal (`harvest_target_plains`
+  1.05→**1.2**, sim-inert here) and exposed a latent end-of-tick rollup-staleness bug (inert re-derive
+  fix). Baseline 657/691/528/726 → **648/713/526/921**; 5000-yr 138/114/147/161, no extinction;
+  plague is deadly (1.45×) + visibly contagious. All 10 gates green. No viewer payoff yet.
+- **Next** — **viewer payoff for terrain-typed harvest + plague** (surface biome behavior and the
+  pestilence in the Region Lens / map — both shipped sim-only); **diorama composition + canopy
+  authoring** (the 7.0→7.5+ gap) or **diorama art fidelity** (hand-finished/licensed assets) or
   seamless atlas→diorama zoom (retire the bridge button per its doctrine); more code-only visual
   treatment (territory boundary lines, elevation contours, marker outlines — sandbox/screenshot-verify
-  each); still-unwatched Theater of War / Chronicle Replay / persistence / Cast / Harvest F5
-  feel-tests; person↔site anchoring; timeline scrubbing; per-launch seed choice (today fixed at 7).
+  each); still-unwatched Theater of War / Chronicle Replay / persistence / Cast / Harvest / Plague F5
+  feel-tests; migration / disease-V2 spread-chain echo / prejudice (Phase 2 forces); person↔site
+  anchoring; timeline scrubbing; per-launch seed choice (today fixed at 7).
 
 ## Commands
 ```bash
@@ -198,6 +223,7 @@ dotnet run --project src/LivingMyth.Console -- save            # world-save jour
 dotnet run --project src/LivingMyth.Console -- sites           # sites + Event.SiteId anchoring gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- replay          # chronicle-replay + turning-point gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- harvest         # per-region harvest economy gate (must pass; --years N)
+dotnet run --project src/LivingMyth.Console -- plague          # disease & plague contract gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- run --seed 42
 dotnet run --project src/LivingMyth.Console -- divergence --seed 18
 dotnet run --project src/LivingMyth.Console -- surface --seed 1
@@ -208,10 +234,15 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 **Viewer:** open `godot/` with Godot mono editor and press **F5** to launch the viewer.
 
 ## Gotchas
-- **The yearly tick is a fixed engine order** (`World.Tick`): Economy → ProcessWars → Deaths →
-  Crime → ForbiddenRomance → Marriages → Births → DoReligion → Culture → Gossip → MaybeDeclareWars
-  → DecayTension → ReleaseExtinctLands. New pressure engines slot into this order; where they sit
-  changes RNG consumption (and the verify baseline), so placement is a deliberate choice.
+- **The yearly tick is a fixed engine order** (`World.Tick`): Economy → **Pestilence** → ProcessWars
+  → Deaths → Crime → ForbiddenRomance → Marriages → Births → DoReligion → Culture → Gossip →
+  MaybeDeclareWars → DecayTension → ReleaseExtinctLands → **(re-derive land-mood rollups)**. New
+  pressure engines slot into this order; where they sit changes RNG consumption (and the verify
+  baseline), so placement is a deliberate choice. Pestilence sits after Economy (reads this tick's
+  `InFamine`) and before Deaths (sets `InPlague` for mortality). The final re-derive of
+  Prosperity/famine/plague rollups is RNG-FREE and behaviourally INERT (nothing reads those flags
+  again until next tick's Economy/Pestilence overwrite them) — it only keeps the end-of-tick snapshot
+  honest after ProcessWars/ReleaseExtinctLands change territory, so verify stays byte-identical.
 - **Determinism is sacred.** All randomness routes through `Rng`. C# dicts/sets are not
   order-stable like Python's — every iteration that feeds RNG or results MUST be explicitly
   ordered (people/religions by id, factions in config order, member sets sorted). `verify`
@@ -253,15 +284,15 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
   to extinction by shifting the trade-guard RNG stream — derive BEFORE trade (guard reads fresh
   mean) + re-derive the two traders after each trade (zero Rng) is the balance-safe order.
 - **The verify baseline moves whenever sim RNG consumption changes — OR a new event type is
-  recorded.** Current `verify` counts (120 yr, cap 300): **823/559/910/632** (seeds 1/18/42/7,
-  Harvest Economy V1 baseline — the harvest walk moved per-region, adding REAL new Rng per region
-  and reshaping faction-mean prosperity, so the stream moved in BOTH directions per seed:
-  894/705/574/715 → 823/559/910/632, Δ −71/−146/+336/−83). Prior baselines: Battle Sites
-  894/705/574/715, M8 gossip 884/699/567/706, M7 culture 814/594/525/652. The determinism gate is
-  self-consistency (same seed → byte-identical run), so it stays green regardless of feature work;
-  these numbers are just the recorded expectation. NOTE: adding a recorded event with NO new Rng
-  (the Battle Sites trick) moves the count but not the stream — but Harvest Economy is the opposite:
-  a genuine new-Rng contract, so re-run the 5000-yr balance probe (no extinction) when touching it.
+  recorded.** Current `verify` counts (120 yr, cap 300): **648/713/526/921** (seeds 1/18/42/7,
+  Disease & Plague V1 baseline — `Pestilence()` adds one `Rng.Chance` draw per region per year,
+  reshuffling the whole downstream stream). Prior baselines: Terrain-Typed Harvest 657/691/528/726,
+  Harvest Economy 823/559/910/632, Battle Sites 894/705/574/715, M8 gossip 884/699/567/706, M7
+  culture 814/594/525/652. The determinism gate is self-consistency (same seed → byte-identical run),
+  so it stays green regardless of feature work; these numbers are just the recorded expectation.
+  NOTE: adding a recorded event with NO new Rng (the Battle Sites trick) moves the count but not the
+  stream — but Harvest Economy and Disease & Plague are genuine new-Rng contracts, so re-run the
+  5000-yr balance probe (no extinction) when touching them. Current 5000-yr balance: **138/114/147/161**.
 - **Battle Sites are zero-Rng by construction.** `World.RecordBattle` records a `battle` event
   but draws NO Rng; the war's casualties are the same `Rng.RandInt(0,2)`/`Pick` rolls as before,
   just cause-linked to the battle. `FrontRegion` (the border region a war is fought over) is a
@@ -285,6 +316,29 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
   mixed. Trade lifts HARVEST (the ground truth) and re-derives the two traders (zero Rng); derive
   runs BEFORE trade so the guard reads this tick's fresh mean (the ordering that keeps balance — see
   the baseline gotcha). `famine_end` always carries the onset id as a cause, so it's never rootless.
+- **Plague is an EPIDEMIC walk, not a famine clone of the harvest walk — and its balance trap is the
+  RESHUFFLE, not lethality.** `Pestilence()` (after Economy, before Deaths) is the disease ground
+  truth: `Region.Pestilence` decays toward 0 (acute), is SPARKED by ONE new `Rng.Chance` draw per
+  region per year (unconditional — `Chance(0)` still consumes its ULong, so wilderness draws too;
+  the probability scales with the holder's `Members.Count`/`plague_density_full` AND rises in famine,
+  but the draw COST is fixed regardless of the odds — that's what keeps consumption deterministic),
+  and SPREADS via CONTAGION read from a FROZEN previous-year `Pestilence` snapshot (NEVER live in-loop
+  neighbour state — the snapshot is what makes cross-region coupling order-independent; a live read
+  would make iteration order leak into the result and break determinism). `Faction.InPlague`/
+  `PlagueEvent` are DERIVED caches (worst-stricken controlled region; highest `Pestilence` wins, sorted-
+  id tie-break) — never write them directly; the `plague` gate asserts the rollup. `plague`/`plague_end`
+  anchor RegionId-only (SiteAnchors NOT extended — proven Expected==null); `plague_end` cause-links its
+  onset; onset cause-links active famine + Doom/Protect when they contributed. In `Deaths()` the plague
+  multiplier STACKS with famine on the same roll (no draw), under proximate-cause priority
+  **curse > plague > famine > blessing > natural** — Kill stays single-cause; plague deaths stay
+  home-anchored. **The balance keystone:** adding the per-region draw RESHUFFLES the whole downstream
+  stream, and a zero-spark control (plague can never fire) STILL extincted seed 42 at 5000 yr — so the
+  extinction is the reshuffle, NOT plague deaths, and NO plague param fixes it. The fix was a global
+  `birth_chance` 0.24→0.26 (absorbs the reshuffle + real plague deaths). The reshuffle also flipped the
+  `harvest` gate's fragile plains>forest terrain-MEAN signal (it samples wilderness too, so it's RNG-
+  noise-sensitive); `harvest_target_plains` 1.05→1.2 restored the margin (sim-inert here — these seeds'
+  plains are wilderness). ALWAYS re-run the 5000-yr balance probe (no extinction) AND the harvest gate
+  when touching plague params, density, or the tick position.
 - **M8 gossip tuning note.** `Gossip()` watches `[_lastGossipEventCount, count)` each year (no all-
   history scan), gates on importance (≥`gossip_min_importance` 42, which is why low-key events like
   plain scandals never reach the mill), and never gossips a `rumor` (no recursion). `The Blackened
