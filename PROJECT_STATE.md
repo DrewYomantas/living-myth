@@ -483,17 +483,59 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       not plumbing. Evidence: `docs/visual_pass/BIOME_SILHOUETTE_V1.md` + `biome_silhouette_v1/`
       (before/after coast·forest·highland, compare_old_new, contact_sheet). Viewer/asset-only —
       **verify held exactly 823/559/910/632**, all 9 gates green, both builds clean.
-- [ ] Later — **diorama art fidelity** (turn the Blender blockout props into hand-finished
-      illustrated assets: textured albedo, painterly canopies, roof/timber/stone detail — the 5→7+
-      gap; or adopt licensed grounded-medieval assets per the asset-scout policy); person↔site
-      anchoring (a home site, not just a home region); terrain-typed harvest
-      (highland vs coast volatility) + viewer carding of `famine_end` / The Barren Years deepening;
+- [x] Terrain-Typed Harvest V1 (2026-06-15, sim + gate; the THIRD deliberate baseline move — lead +
+      Explore/architect/implement/review agent team): the deferred sim follow-up to Harvest Economy
+      V1 — biomes that *look* distinct (Biome Silhouette V1) now *behave* distinct. Each region's
+      yearly harvest walk keys off its immutable `Region.TerrainType` via two data-driven levers
+      applied to the SAME single `Rng.RandInt(-1,1)` draw (ZERO new draws — the determinism keystone):
+      per-terrain **volatility** (`harvest_vol_*`, a multiplier on the step) and a per-terrain revert
+      **target** (`harvest_target_*`, replacing the hardcoded 1.0 the walk reverts toward — the
+      fertility lever). `TerrainHarvestParams(string)` is a pure switch over the immutable terrain +
+      `Params` (zero Rng, fail-fast `throw` on unknown terrain). Forest stays vol 1.0 / target 1.0 —
+      algebraically byte-identical to the old walk, so the mechanism reduces EXACTLY to old behavior
+      at all-1.0 (balance-neutral by construction). Final balance-safe band: coast 1.0/0.7 (steady
+      safe land), forest 1.0/1.0 (baseline), plains 1.05/1.15 (fertile + swingy), highland 0.95/1.1
+      (poorer + famine-prone). **The balance lesson (caught by the probe, invisible to 120-yr gates):**
+      the architect's first band (highland target 0.78 / vol 1.3) passed all 9 gates at 120 yr but
+      EXTINCTED 2 of 4 seeds at 5000 yr — highland-heavy founding peoples (the Highland Clans seat on
+      highland terrain) starved early and collapsed to a revenge-murder spiral by ~yr 94. Fertility-
+      via-mean is balance-constrained: a strong sub-1.0 highland mean chronically suppresses faction
+      prosperity → death-spiral. The fix narrowed the band (lean on volatility for famine drama, keep
+      means in a tight survivable band). `harvest` gate extended to prove differentiation at the SAFE
+      band: plains fertility by suite mean (1.070 vs forest 1.024), highland harshness + coast safety
+      by famine RATE (region-normalized: highland 31 famines / forest 23 / coast 0). **Deliberate
+      baseline move** (real harvest-distribution reshape → downstream births/trade/war/deaths):
+      823/559/910/632 → **657/691/528/726**. 5000-yr balance **158/139/162/160 living, no extinction**
+      (old range 168/157/306/150). All 9 gates green, both builds clean (0 warnings). NO viewer payoff
+      yet — biomes behave differently but nothing surfaces it in-game (the next slice).
+- [ ] Later — **viewer carding of terrain-typed harvest** (← NEXT: surface the new biome behavior
+      in-game — Region Lens "hard country / a breadbasket / a steady shore" condition language off
+      `Region.TerrainType` + its harvest state, terrain-aware famine/plenty framing, deepen `The
+      Barren Years`; viewer-only, must hold 657/691/528/726); **diorama art fidelity** (turn the
+      Blender blockout props into hand-finished illustrated assets: textured albedo, painterly
+      canopies, roof/timber/stone detail — the 5→7+ gap; or adopt licensed grounded-medieval assets
+      per the asset-scout policy); person↔site anchoring (a home site, not just a home region);
       a map-table vignette/framing pass + marker outlines (sandbox/screenshot-verify each); relationship
       constellation; local site-scale view; memorial tableau upgrade; surface culture + gossip in the
       viewer; echo packs; timeline scrubbing; followed-faith audit; per-launch seed choice
       (today seed is fixed at 7). ← NEXT
 
 ## Session log
+- [2026-06-15] Session: Terrain-Typed Harvest V1 (lead dev + Explore/architect/implement/review
+  agent team, all 5 phases run through the lead for critical review). The deferred sim follow-up to
+  Harvest Economy V1 and the third deliberate baseline move. Per-terrain volatility + revert target
+  on the SAME single harvest Rng draw (zero new draws); forest byte-identical to old. The pivotal
+  moment was Phase 5: the architect's first band passed all 9 gates at 120 yr but the 5000-yr balance
+  probe EXTINCTED seeds 18 & 42 (highland-heavy peoples starved early → murder-spiral collapse by
+  ~yr 94). Lead diagnosed (traced the chronicle to the cause of death), recognized fertility-via-mean
+  is balance-constrained, narrowed the band to survivable, and recalibrated the gate to prove the
+  REAL safe-band differentiation (plains fertility by mean; highland harshness + coast safety by
+  region-normalized famine rate) rather than an aggressive mean spread that only existed at extinction
+  params. Final: all 9 gates green, both builds clean, 5000-yr 158/139/162/160 (no extinction), verify
+  re-baselined 823/559/910/632 → 657/691/528/726. Commit 32420cd (sim+gate). NO viewer payoff yet —
+  next slice is viewer carding of the new biome behavior. The lesson worth keeping: short-gate-green
+  ≠ balance-safe; the 5000-yr probe is the only thing that catches early-population extinction, and
+  any sub-1.0 revert target is a chronic faction-suppressor, not just a flavor knob.
 - [2026-06-14] Session: North Star Art Pipeline V1 + Biome Silhouette V1 (two milestones). Proved
   the reproducible Blender → headless Krita → Godot art pipeline (kritarunner plumbing solved: own
   resource dir + enable flag + args-tolerant entry + alpha-inherit ink fix), then improved the
