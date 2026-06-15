@@ -386,6 +386,39 @@ public static class Echoes
         return echoes;
     }
 
+    /// <summary>One land scourged again and again by sickness — its people remember the long
+    /// pestilence. The disease echo keyed on a PLACE (Event.RegionId), the exact bounded/clustered
+    /// discipline as The Barren Years (≥3 outbreaks within a 25-year-gapped age).</summary>
+    public static List<Echo> DetectLongPestilence(World world)
+    {
+        var byRegion = new Dictionary<int, List<Event>>();
+        foreach (var e in world.Chronicle.Events)
+            if (e.Type == "plague" && e.RegionId is int rid)
+            {
+                if (!byRegion.TryGetValue(rid, out var list)) { list = new(); byRegion[rid] = list; }
+                list.Add(e);
+            }
+        var echoes = new List<Echo>();
+        foreach (var rid in byRegion.Keys.OrderBy(k => k))
+        {
+            var ages = new List<List<Event>>();
+            List<Event>? age = null;
+            foreach (var pe in byRegion[rid].OrderBy(e => e.Year))
+            {
+                if (age is null || pe.Year - age[^1].Year > 25) { age = new(); ages.Add(age); }
+                age.Add(pe);
+            }
+            foreach (var g in ages.Where(g => g.Count >= 3))
+            {
+                var span = (g[0].Year, g[^1].Year);
+                string name = world.RegionName(rid) ?? "a lost land";
+                string label = $"{name} was scourged {g.Count} times {SpanPhrase(span.Item1, span.Item2)} — the long pestilence.";
+                echoes.Add(new Echo("The Long Pestilence", label, g.Select(e => e.Id).ToList(), span));
+            }
+        }
+        return echoes;
+    }
+
     public static List<Echo> DetectAll(World world)
     {
         var echoes = new List<Echo>();
@@ -404,6 +437,7 @@ public static class Echoes
         echoes.AddRange(DetectRumorWar(world));
         echoes.AddRange(DetectFieldOfBones(world));
         echoes.AddRange(DetectBarrenYears(world));
+        echoes.AddRange(DetectLongPestilence(world));
 
         var seen = new HashSet<(string, string)>();
         var unique = new List<Echo>();

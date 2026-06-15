@@ -134,7 +134,7 @@ public static class StoryGrammar
     /// story gate asserts no But ever fires outside this set.</summary>
     public static readonly HashSet<string> ButRules = new()
     { "persecution-of-faith", "scandal-breaks", "honor-killing", "war-despite-peace", "ways-shed", "ways-grate",
-      "famine-despite-protection", "death-despite-blessing" };
+      "famine-despite-protection", "death-despite-blessing", "plague-despite-protection" };
 
     /// <summary>Annotate the full causal chain behind one event (card-open one-shot —
     /// the same Trace cost the catch-up panel already pays).</summary>
@@ -257,6 +257,21 @@ public static class StoryGrammar
 
         if (effect.Type == "famine_end" && cause.Type == "famine")
             return (ConnectorKind.Therefore, "famine-breaks");   // the land that starved recovers
+
+        // Disease & Plague V1: an outbreak in a starving land was bred by that famine; one under an
+        // active doom was pressed up by it; one despite an active protection broke a shield that
+        // truly lowered the pestilence ("but"). All three edges exist only because Pestilence()
+        // recorded the honest cause.
+        if (effect.Type == "plague" && cause.Type == "famine")
+            return (ConnectorKind.Therefore, "plague-from-famine");
+        if (effect.Type == "plague" && cause.Type == "divine" && cause.Tags.Contains("doom"))
+            return (ConnectorKind.Therefore, "plague-under-doom");
+        if (effect.Type == "plague" && cause.Type == "divine" && cause.Tags.Contains("protect"))
+            return (ConnectorKind.But, "plague-despite-protection");
+        if (effect.Type == "plague_end" && cause.Type == "plague")
+            return (ConnectorKind.Therefore, "plague-breaks");   // the outbreak burns itself out
+        if (effect.Type == "death" && cause.Type == "plague")
+            return (ConnectorKind.Therefore, "plague-death");
 
         if (effect.Type == "death" && cause.Type == "famine")
             return (ConnectorKind.Therefore, "famine-death");

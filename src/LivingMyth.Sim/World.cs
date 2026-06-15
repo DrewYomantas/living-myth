@@ -916,6 +916,125 @@ public sealed class World
         }
     }
 
+    // ---------- disease (pestilence → plague / contagion) ----------
+
+    /// <summary>Disease & Plague V1, shaped like Economy() but driven by epidemic dynamics rather
+    /// than a symmetric walk: each region's Pestilence decays toward 0 (outbreaks burn out — acute,
+    /// not chronic), is SPARKED by the one yearly draw (famine raises the odds — a starving land
+    /// breeds sickness), and SPREADS by contagion from infected neighbours. Runs after Economy (so
+    /// it can read this tick's InFamine) and before Deaths (so mortality reads InPlague). Crossing
+    /// plague_threshold emits a region-anchored `plague`; falling back below emits `plague_end`.
+    ///
+    /// CONTAGION READS A FROZEN PREVIOUS-YEAR SNAPSHOT, never the live in-loop values: the snapshot
+    /// is taken before any region updates, so the spread a region feels cannot depend on whether its
+    /// neighbours were visited earlier or later this tick. That is what keeps the engine order-
+    /// independent (and the determinism gate green) despite the cross-region coupling.</summary>
+    private void Pestilence()
+    {
+        // Freeze last year's pestilence for contagion (the snapshot contract). Index == region id.
+        var prev = new double[Regions.Count];
+        for (int i = 0; i < Regions.Count; i++) prev[i] = Regions[i].Pestilence;
+
+        foreach (var r in Regions)   // id order == list order, deterministic
+        {
+            var holder = r.ControllingFactionId is string hid ? Factions[hid] : null;
+
+            // Exactly ONE new draw per region per year: the outbreak spark roll. Epidemics need a
+            // host population — the spark probability scales with the holder people's density (a
+            // founding tribe of 17 rarely sparks; a settled people of 45+ sparks at full rate), and
+            // a famine raises it (a starving land breeds sickness). Wilderness has no host → chance 0.
+            // Crucially the DRAW is unconditional (Chance(0) still consumes its ULong), so every
+            // region draws exactly once in id order regardless of who holds it — consumption is fixed.
+            double density = holder is null ? 0.0
+                : Math.Min(1.0, holder.Members.Count / Params.GetValueOrDefault("plague_density_full", 45.0));
+            double sparkChance = density * (r.InFamine
+                ? Params["plague_spark_chance_famine"]
+                : Params["plague_spark_chance"]);
+            bool spark = Rng.Chance(sparkChance);
+
+            // Contagion: each adjacent region that was infected LAST YEAR (frozen snapshot) presses
+            // sickness across the border. Pure deterministic read — zero draws.
+            double contagion = 0.0;
+            foreach (var nid in r.AdjacentRegionIds)
+                if (nid >= 0 && nid < prev.Length && prev[nid] >= Params["plague_threshold"])
+                    contagion += Params["plague_contagion"];
+
+            // Burn out first, then let this year's spark + contagion land on top (so a fresh spark
+            // clears the threshold the same year, and a quiet year decays an old outbreak away).
+            r.Pestilence -= r.Pestilence * Params["plague_decay"];
+            if (spark) r.Pestilence += Params["plague_spark"];
+            r.Pestilence += contagion;
+
+            // God-hand pressure biases the holder's lands — a flat bias on the SAME state, never a
+            // draw (inert without player acts). Protection eases the sickness; doom breeds it.
+            if (holder is not null)
+            {
+                if (holder.ProtectUntilYear > Year)
+                    r.Pestilence -= Params.GetValueOrDefault("plague_protect_bias", 0.03);
+                if (holder.DoomUntilYear > Year)
+                    r.Pestilence += Params.GetValueOrDefault("plague_doom_bias", 0.03);
+            }
+            r.Pestilence = Math.Clamp(r.Pestilence, 0.0, 2.0);
+
+            // Only a held land has people to sicken; wilderness pestilence still walks + spreads
+            // (so contagion can cross empty country) but emits no event and kills no one.
+            if (holder is null) { r.InPlague = false; r.PlagueEvent = null; continue; }
+
+            if (!r.InPlague && r.Pestilence >= Params["plague_threshold"])
+            {
+                r.InPlague = true;
+                // Honest cause-links: an outbreak in a starving land was bred by that famine
+                // ("therefore"); one under an active doom was pressed up by it; one despite an
+                // active protection broke through a shield that truly lowered the pestilence ("but").
+                var causes = new List<int>();
+                if (r.InFamine && r.FamineEvent is Event fe) causes.Add(fe.Id);
+                if (holder.DoomUntilYear > Year && holder.DoomEventId is int de) causes.Add(de);
+                if (holder.ProtectUntilYear > Year && holder.ProtectEventId is int pe) causes.Add(pe);
+                r.PlagueEvent = Chronicle.Record(Year, "plague",
+                    $"A pestilence breaks out in {r.Name}.",
+                    participants: holder.LeaderId is int pl ? new() { pl } : null,
+                    causes: causes.Count > 0 ? causes : null,
+                    tags: new() { "disease", "pestilence" },
+                    regionId: r.Id);
+            }
+            else if (r.InPlague && r.Pestilence < Params["plague_threshold"])
+            {
+                r.InPlague = false;
+                // Plague's-end is a real, region-anchored chapter-closing beat, cause-linked back
+                // to the onset it answers (so a recovery is never rootless).
+                Chronicle.Record(Year, "plague_end",
+                    $"The pestilence in {r.Name} burns out.",
+                    participants: holder.LeaderId is int el ? new() { el } : null,
+                    causes: r.PlagueEvent is Event pe ? new() { pe.Id } : null,
+                    tags: new() { "disease", "recovery" },
+                    regionId: r.Id);
+                r.PlagueEvent = null;
+            }
+        }
+
+        // Roll each people's plague state up from the lands it holds (no draws — pure aggregation):
+        // InPlague = its WORST-stricken controlled region is plagued; PlagueEvent = that region's
+        // onset (highest Pestilence wins; sorted-id walk makes the tie-break deterministic).
+        foreach (var fid in FactionsSorted())
+            DerivePestilence(Factions[fid]);
+    }
+
+    private void DerivePestilence(Faction f)
+    {
+        f.InPlague = false;
+        f.PlagueEvent = null;
+        if (f.ControlledRegions.Count == 0) return;
+        Region? worst = null;
+        foreach (var rid in f.ControlledRegions.Select(int.Parse).OrderBy(x => x))
+        {
+            var r = Regions[rid];
+            if (r.InPlague && (worst is null || r.Pestilence > worst.Pestilence))
+                worst = r;
+        }
+        f.InPlague = worst is not null;
+        f.PlagueEvent = worst?.PlagueEvent;
+    }
+
     // ---------- culture (values → customs → clash / diffusion) ----------
 
     private int? PrimaryRegion(Faction f)
@@ -1161,6 +1280,7 @@ public sealed class World
     {
         Year += 1;
         Economy();
+        Pestilence();
         ProcessWars();
         Deaths();
         Crime();
@@ -1173,6 +1293,19 @@ public sealed class World
         MaybeDeclareWars();
         DecayTension();
         ReleaseExtinctLands();
+        // Re-settle the derived land-mood rollups AFTER territory has finished changing this tick
+        // (ProcessWars conquests, extinct-land release): Economy/Pestilence derived them mid-tick,
+        // before those moves, so the END-OF-TICK snapshot would otherwise read a stale Prosperity/
+        // famine/plague for any people whose holdings just changed. This is pure aggregation (no RNG)
+        // and behaviourally INERT — nothing reads these flags again until next tick's Economy/
+        // Pestilence overwrite them before any use — so it keeps verify byte-identical while making
+        // the land-mood invariant (Prosperity == controlled-region mean; landless ⇒ neutral) hold at
+        // every tick boundary the gates and viewer observe.
+        foreach (var fid in FactionsSorted())
+        {
+            DeriveProsperity(Factions[fid]);
+            DerivePestilence(Factions[fid]);
+        }
     }
 
     /// <summary>When a people dies out (no war needed — internal collapse counts), their land
@@ -1222,6 +1355,18 @@ public sealed class World
             if (p.Cursed) dc = Math.Min(0.95, dc * Params["curse_death_multiplier"]);
             if (p.Blessed) dc *= Params.GetValueOrDefault("bless_death_multiplier", 0.7);
             var fac = Factions[p.FactionId];
+            // Plague and famine multipliers STACK on the same roll (a starving, plagued people dies
+            // hardest); divine protect/doom modulate each, mirroring famine. Multipliers only — no
+            // extra draw — so a pressure-free, plague-free run stays byte-identical.
+            if (fac.InPlague)
+            {
+                double pm = Params["plague_death_multiplier"];
+                if (fac.ProtectUntilYear > Year)
+                    pm = 1.0 + (pm - 1.0) * Params.GetValueOrDefault("protect_plague_relief", 0.5);
+                if (fac.DoomUntilYear > Year)
+                    pm = 1.0 + (pm - 1.0) * Params.GetValueOrDefault("doom_plague_burden", 1.5);
+                dc = Math.Min(0.95, dc * pm);
+            }
             if (fac.InFamine)
             {
                 double fm = Params["famine_death_multiplier"];
@@ -1233,8 +1378,13 @@ public sealed class World
             }
             if (Rng.Chance(dc))
             {
+                // Proximate-cause priority: curse > plague > famine > blessing > natural. One cause
+                // per death (Kill stays single-cause in V1); the stacked multipliers already shaped
+                // the roll — this only names which force the chronicle records as the proximate one.
                 if (p.Cursed && CurseEvent is not null)
                     Kill(p, reason: "as the old curse takes them", cause: CurseEvent);
+                else if (fac.InPlague && fac.PlagueEvent is not null)
+                    Kill(p, reason: "in the pestilence", cause: fac.PlagueEvent);
                 else if (fac.InFamine && fac.FamineEvent is not null)
                     Kill(p, reason: "in the famine", cause: fac.FamineEvent);
                 else if (p.Blessed && p.BlessEvent is not null)

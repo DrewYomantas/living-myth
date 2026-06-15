@@ -26,9 +26,10 @@ switch (cmd)
     case "sites": SitesCmd(Years(120)); break;
     case "replay": ReplayCmd(Years(120)); break;
     case "harvest": HarvestCmd(Years(120)); break;
+    case "plague": PlagueCmd(Years(120)); break;
     case "paint": PaintCmd(Seed(7), Years(120)); break;
     default:
-        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine | save | sites | replay | harvest | paint");
+        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine | save | sites | replay | harvest | plague | paint");
         break;
 }
 return;
@@ -1400,6 +1401,145 @@ string HarvestCanon(World w)
           .Append('|').Append(r.InFamine ? 1 : 0).Append('|').Append(r.InBoom ? 1 : 0).Append('\n');
     foreach (var f in w.Config.Factions.Select(cf => w.Factions[cf.Id]))
         sb.Append(f.Id).Append('=').Append(f.Prosperity.ToString("R", System.Globalization.CultureInfo.InvariantCulture)).Append('\n');
+    return sb.ToString();
+}
+
+void PlagueCmd(int years)
+{
+    Console.WriteLine($"Plague gate ({years} yrs): per-region pestilence drives plague; faction InPlague");
+    Console.WriteLine("derives from its worst-stricken land; plague/plague_end anchor to land, not site;");
+    Console.WriteLine("contagion reads a frozen snapshot (order-independent) and the stream is deterministic.");
+    int failures = 0;
+    int suitePlagues = 0, suitePlagueEnds = 0, suiteSpreadEvidence = 0, suiteLandless = 0;
+
+    foreach (int seed in new[] { 1, 18, 42, 7 })
+    {
+        var (c1, n1) = Load();
+        var w = new World(seed, c1, n1); w.Run(years);
+        var bad = new List<string>();
+
+        // (1)+(2) Derivation + landless neutrality, faction by faction (final-tick state: the rollup
+        // ran last in Pestilence(), so faction flags must equal the worst-stricken controlled land).
+        foreach (var f in w.Config.Factions.Select(cf => w.Factions[cf.Id]))
+        {
+            var owned = f.ControlledRegions.Select(int.Parse).OrderBy(x => x).ToList();
+            if (owned.Count == 0)
+            {
+                suiteLandless++;
+                if (f.InPlague || f.PlagueEvent is not null)
+                    bad.Add($"landless {f.Id} not plague-neutral (plague={f.InPlague})");
+                continue;
+            }
+            Region? worst = null;
+            foreach (var rid in owned)
+            {
+                var r = w.Regions[rid];
+                if (r.InPlague && (worst is null || r.Pestilence > worst.Pestilence)) worst = r;
+            }
+            if (f.InPlague != (worst is not null))
+                bad.Add($"{f.Id} InPlague {f.InPlague} disagrees with its lands");
+            if (!ReferenceEquals(f.PlagueEvent, worst?.PlagueEvent))
+                bad.Add($"{f.Id} PlagueEvent is not its worst-stricken land's onset");
+        }
+
+        // (3)+(4)+(5) Event anchoring (RegionId valid, SiteId/HomeRegionId null, convention agrees
+        // none), plague_end pairs to a same-region earlier onset.
+        var plaguesByRegion = new Dictionary<int, List<Event>>();
+        int plagues = 0, plagueEnds = 0;
+        foreach (var e in w.Chronicle.Events)
+        {
+            if (e.Type is not ("plague" or "plague_end")) continue;
+            if (e.RegionId is not int rid || rid < 0 || rid >= w.Regions.Count)
+            { bad.Add($"{e.Type} #{e.Id} has no valid RegionId"); break; }
+            if (e.SiteId is not null)
+            { bad.Add($"{e.Type} #{e.Id} leaked a SiteId ({e.SiteId})"); break; }
+            if (e.HomeRegionId is not null)
+            { bad.Add($"{e.Type} #{e.Id} carries a home anchor (a plague is placed, not remembered)"); break; }
+            if (SiteAnchors.Expected(w, e.Type, e.Tags, e.RegionId) is int leak)
+            { bad.Add($"convention anchors {e.Type} #{e.Id} to site {leak} — expected none"); break; }
+            if (e.Type == "plague")
+            {
+                plagues++;
+                if (!plaguesByRegion.TryGetValue(rid, out var pl)) { pl = new(); plaguesByRegion[rid] = pl; }
+                pl.Add(e);
+            }
+            else
+            {
+                plagueEnds++;
+                var onset = e.Causes.Select(cid => w.Chronicle.Get(cid))
+                    .FirstOrDefault(c => c.Type == "plague" && c.RegionId == rid && c.Year <= e.Year);
+                if (onset is null)
+                { bad.Add($"plague_end #{e.Id} answers no earlier plague in region {rid}"); break; }
+            }
+        }
+        // Per region, recoveries never outnumber the outbreaks they answer.
+        foreach (var (rid, pl) in plaguesByRegion)
+        {
+            int ends = w.Chronicle.Events.Count(e => e.Type == "plague_end" && e.RegionId == rid);
+            if (ends > pl.Count)
+                bad.Add($"region {rid} has {ends} plague_end > {pl.Count} plague");
+        }
+        // (6) Plague deaths keep the home-memory channel: a plague death is caused by the outbreak,
+        // but the death itself stays home-anchored — RegionId/SiteId null (the four channels never mix).
+        foreach (var e in w.Chronicle.Events.Where(e => e.Type is "death" or "murder" or "birth"))
+            if (e.RegionId is not null || e.SiteId is not null)
+            { bad.Add($"life event #{e.Id} claims a literal place"); break; }
+        // A plague death's cause must actually be a plague onset (cause-link honesty).
+        foreach (var e in w.Chronicle.Events.Where(e => e.Type == "death" && e.Text.Contains("in the pestilence")))
+            if (!e.Causes.Select(cid => w.Chronicle.Get(cid)).Any(c => c.Type == "plague"))
+            { bad.Add($"pestilence death #{e.Id} is not cause-linked to a plague"); break; }
+
+        // (7) Snapshot contagion is deterministic: pestilence state (the order-sensitive part — a
+        // live-neighbour read would diverge here) is byte-identical across an independent run.
+        var (c2, n2) = Load();
+        var w2 = new World(seed, c2, n2); w2.Run(years);
+        if (PlagueCanon(w) != PlagueCanon(w2))
+            bad.Add("pestilence/plague state differs between identical runs (contagion not order-independent)");
+        // (8) Double-run determinism: the whole chronicle is byte-identical.
+        if (w.Chronicle.Render() != w2.Chronicle.Render())
+            bad.Add("chronicle differs between identical runs");
+
+        // Spread evidence (reporting + suite non-vacuity): outbreaks whose region had an adjacent
+        // region already infected the PRIOR year — contagion actually carried, not just sparked.
+        int spread = 0;
+        foreach (var (rid, pl) in plaguesByRegion)
+            foreach (var onset in pl)
+            {
+                bool neighbourInfectedPrior = w.Regions[rid].AdjacentRegionIds.Any(nid =>
+                    w.Chronicle.Events.Any(pe => pe.Type == "plague" && pe.RegionId == nid
+                        && pe.Year <= onset.Year
+                        && !w.Chronicle.Events.Any(pe2 => pe2.Type == "plague_end" && pe2.RegionId == nid
+                            && pe2.Year < onset.Year && pe2.Year >= pe.Year)));
+                if (neighbourInfectedPrior) { spread++; break; }
+            }
+
+        suitePlagues += plagues; suitePlagueEnds += plagueEnds; suiteSpreadEvidence += spread;
+        Console.WriteLine($"  seed {seed,3}: {(bad.Count == 0 ? "OK" : "FAIL")}  {plagues} outbreaks · {plagueEnds} burned out · {spread} region(s) lit by a plagued neighbour");
+        foreach (var b in bad.Take(5)) Console.WriteLine($"           {b}");
+        if (bad.Count > 0) failures++;
+    }
+
+    Console.WriteLine($"  suite: {suitePlagues} outbreaks, {suitePlagueEnds} recoveries, {suiteSpreadEvidence} contagion-spread cases, {suiteLandless} landless checks");
+
+    // (9) Non-vacuity: the engine must actually fire (else every contract above is vacuously true).
+    if (suitePlagues == 0)
+    {
+        Console.WriteLine("  SUITE FAIL: no plague ever broke out — the engine is inert, contracts vacuous");
+        failures++;
+    }
+
+    Console.WriteLine(failures == 0 ? "\nDISEASE & PLAGUE HOLDS." : $"\n{failures} SEED(S) FAILED.");
+    Environment.Exit(failures == 0 ? 0 : 1);
+}
+
+string PlagueCanon(World w)
+{
+    var sb = new System.Text.StringBuilder();
+    foreach (var r in w.Regions)
+        sb.Append(r.Id).Append('|').Append(r.Pestilence.ToString("R", System.Globalization.CultureInfo.InvariantCulture))
+          .Append('|').Append(r.InPlague ? 1 : 0).Append('\n');
+    foreach (var f in w.Config.Factions.Select(cf => w.Factions[cf.Id]))
+        sb.Append(f.Id).Append('=').Append(f.InPlague ? 1 : 0).Append('\n');
     return sb.ToString();
 }
 

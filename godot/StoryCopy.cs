@@ -22,6 +22,7 @@ public static class StoryCopy
             // grammar proved it before this file is allowed to say it.
             "death-despite-blessing" => "but even the old blessing could not hold them —",
             "famine-despite-protection" => "but even under the protection laid upon them —",
+            "plague-despite-protection" => "but even the protection laid upon them could not turn the sickness —",
             _ => link.GapYears >= 3 ? $"{link.GapYears} years on — but" : "but —",
         },
         _ => link.RuleId switch
@@ -32,6 +33,10 @@ public static class StoryCopy
             "curse-death" => "the curse found another life — therefore,",
             "famine-under-doom" => "the doom upon them bore down — therefore,",
             "famine-breaks" => "the hunger finally loosed its grip — therefore,",
+            "plague-from-famine" => "the starving land bred sickness — therefore,",
+            "plague-under-doom" => "the doom upon them festered into sickness — therefore,",
+            "plague-breaks" => "the pestilence at last burned itself out — therefore,",
+            "plague-death" => "the pestilence took them — therefore,",
             _ => link.GapYears >= 3 ? $"{link.GapYears} years passed — therefore," : "therefore —",
         },
     };

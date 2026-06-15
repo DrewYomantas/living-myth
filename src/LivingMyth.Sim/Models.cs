@@ -105,6 +105,13 @@ public sealed class Faction
     public bool InBoom { get; set; }                // any controlled region in boom
     public Event? FamineEvent { get; set; }         // worst region's famine onset event, for death cause-chains
 
+    // disease (Disease & Plague V1): like the economy rollups, InPlague/PlagueEvent are DERIVED
+    // each tick from this people's controlled regions (Pestilence(): InPlague = its WORST-stricken
+    // controlled region is in plague; PlagueEvent = that region's outbreak onset event). Landless
+    // peoples never plague. Deaths reads these to raise mortality and cause-link plague deaths.
+    public bool InPlague { get; set; }              // worst controlled region in plague — death pressure
+    public Event? PlagueEvent { get; set; }         // worst region's plague onset event, for death cause-chains
+
     // culture (M7): per-faction value axes (valor/piety/cunning/harmony) drift over time and
     // harden into named customs at threshold; customs drive clash (tension) and diffusion (peace).
     public Dictionary<string, double> Values { get; } = new();          // axis -> 0..1, seeded from culture baseline
@@ -197,6 +204,14 @@ public sealed class Region
     public Event? FamineEvent { get; set; }          // current famine's onset event, for death cause-chains
     public bool InBoom { get; set; }                 // above boom_threshold — event dedup
     public int LastBoomYear { get; set; }            // last "plenty continues" beat (sustained booms re-emit)
+
+    // Disease & Plague V1: Pestilence is the per-region disease level (0.0 healthy … 2.0 ravaged),
+    // a decaying level sparked by the one yearly draw and spread by CONTAGION from infected
+    // neighbours (read from a previous-year snapshot, never live). Crossing plague_threshold emits
+    // a plague onset; falling back below emits plague_end. Only a held region drives mortality.
+    public double Pestilence { get; set; }           // 0.0 healthy — disease level, decays toward 0
+    public bool InPlague { get; set; }               // above plague_threshold — event dedup
+    public Event? PlagueEvent { get; set; }          // current outbreak's onset event, for death cause-chains
 
     public Region(int id, string name, string terrainType, float x, float y)
     {
