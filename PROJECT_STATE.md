@@ -563,18 +563,66 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       The Long Pestilence echo already surfaces via the generic `Echoes.DetectAll` machinery (no
       per-echo wiring). Pure read-model — **verify held exactly 648/713/526/921**, all 10 gates
       green, Godot build clean (0 warnings). NOT yet live-F5-watched (the remaining step).
-- [ ] Later — **diorama art fidelity** (← NEXT: turn the Blender blockout props into hand-finished
+- [x] Migration V1 (2026-06-15, sim + read-models + gate — the FIFTH deliberate baseline move; the
+      last missing natural force, the Phase-2-forces opener): peoples now MOVE in response to the
+      land. New `Migration()` engine slots **Economy → Pestilence → Migration → ProcessWars** (reads
+      this tick's region famine/plague; territory settles before war plays out on the new map). Each
+      people gets exactly ONE draw/year (a fixed-cost `Rng.Chance` — Chance(0) still consumes its
+      ULong, the plague keystone — so consumption stays deterministic), deciding WHETHER it migrates;
+      its condition decides WHICH kind: a people whose worst land is in famine/plague **FLEES**
+      (relocate — abandon that stricken region, claim the best adjacent wilderness; flight takes
+      priority over growth), a thriving people at/over `migration_settle_min_pop` in a boom
+      **SETTLES** (expand — claim adjacent wilderness, keep its holds). Destination is ALWAYS adjacent
+      UNCLAIMED wilderness (contesting held land is war, out of scope), picked deterministically
+      (highest harvest, lowest-id tie — ZERO draws); a people never abandons its last region;
+      `HomeRegionId` is UNTOUCHED (lineage stays immutable, as under conquest). A people that fled is
+      re-derived out of this tick's death pressure (zero-Rng, the reward for moving). `migration`
+      events anchor **RegionId-only (the destination), never SiteId** (`SiteAnchors` NOT extended —
+      flight tagged `flight`+cause-linked to its famine/plague onset, settlement tagged `settlement`
+      and rootless like a boom). Read-models: StoryGrammar `migration-from-famine`/`-from-plague`
+      (+StoryCopy English); Scoring `migration`=40; Echo **The Promised Land** (a destination land
+      that drew the wandering ≥3 times in a 25-yr-gapped age — Barren-Years discipline). New
+      `migration` gate proves anchoring, flight-XOR-settlement tag discipline, flight-cause honesty,
+      settlement-rootlessness, end-state territory integrity (both control views agree), double-run
+      determinism, and BOTH-driver non-vacuity (14 flights / 4 settlements at 120 yr). **The balance
+      surprise (a GOOD one this time):** fleeing famine CUTS death pressure, so the reshuffle needed
+      NO tuning — 5000-yr **260/274/163/280 living, no extinction** (vs plague's birth_chance nudge).
+      Also future-proofed the `replay` gate's one fragile scenario (it now curses the OLDEST adult,
+      who reliably dies in-window, instead of the youngest-by-id whom the reshuffle outlived).
+      Deliberate baseline move: 648/713/526/921 → **1131/880/425/998**. All 11 gates green, both
+      builds clean. NO viewer payoff yet (movement arcs / the Promised Land on the map — next slice).
+- [ ] Later — **viewer payoff for migration** (← NEXT: surface movement on the atlas — a migration
+      mark/arc at the destination land, Region Lens "settled by the fleeing" / "a people spread here"
+      lines, the Promised Land echo, plague/migration F5 feel-test; viewer-only, must hold
+      1131/880/425/998); **diorama art fidelity** (turn the Blender blockout props into hand-finished
       illustrated assets: textured albedo, painterly canopies, roof/timber/stone detail — the 5→7+
       gap; or adopt licensed grounded-medieval assets per the asset-scout policy); seamless atlas→
       diorama zoom (retire the bridge button per its doctrine); person↔site anchoring (a home site,
       not just a home region); a map-table vignette/framing pass + marker outlines (sandbox/
       screenshot-verify each); relationship constellation; local site-scale view; memorial tableau
       upgrade; surface culture + gossip in the viewer; echo packs; timeline scrubbing; followed-faith
-      audit; migration / disease-V2 spread-chain echo / prejudice (Phase 2 forces); per-launch seed
+      audit; disease-V2 spread-chain echo / prejudice (remaining Phase 2 forces); per-launch seed
       choice (today seed is fixed at 7); still-unwatched Theater of War / Chronicle Replay /
-      persistence / Cast / Harvest / Plague F5 feel-tests. ← NEXT
+      persistence / Cast / Harvest / Plague / Migration F5 feel-tests.
 
 ## Session log
+- [2026-06-15] Session: Migration V1 (sim + read-models + gate, lead dev; design forks locked with
+  Drew before any code per the Disease cadence — push+pull driver, flight-relocates/growth-expands).
+  The fifth deliberate baseline move and the last missing natural force. New `Migration()` engine
+  after Pestilence: one fixed-cost draw/faction/year decides whether a people moves; famine/plague
+  → flight (relocate to best adjacent wilderness, cause-linked to the disaster), boom+population →
+  settlement (expand into wilderness, rootless). Destination always adjacent unclaimed wilderness
+  (zero-Rng pick); never abandons the last region; HomeRegionId untouched; migration anchors
+  RegionId-only (SiteAnchors not extended). Read-models: StoryGrammar migration-from-famine/-plague,
+  Scoring 40, Echo The Promised Land. New `migration` gate (anchoring, tag discipline, flight-cause
+  honesty, settlement-rootlessness, territory integrity, determinism, both-driver non-vacuity).
+  The balance surprise was a GOOD one: fleeing famine cuts death pressure, so the RNG reshuffle
+  needed NO tuning (5000-yr 260/274/163/280, no extinction) — unlike plague's birth_chance nudge.
+  One fragile `replay`-gate scenario was future-proofed (curse the oldest adult, not youngest-by-id,
+  so the divine-death chain always exists — root cause was the reshuffle outliving the young victim;
+  chronEqual=True proved determinism was never broken). Baseline 648/713/526/921 → 1131/880/425/998.
+  All 11 gates green, both builds clean. NO viewer payoff yet (next slice). Started the session by
+  shipping Plague Viewer Payoff V1 (below) and clearing a stray staged PNG.
 - [2026-06-15] Session: Plague Viewer Payoff V1 (viewer-only, lead dev). Closed the loop on the
   Disease & Plague V1 sim milestone by surfacing the pestilence in-game, mirroring the proven
   Harvest Memory Viewer Payoff pattern across 5 godot files + StoryCopy: plague/plague_end event
