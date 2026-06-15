@@ -80,7 +80,7 @@ public partial class MapView : Control
     // Famine scars are deliberately NOT in this ring (see _famineScars below): famines recur often,
     // so sharing these 4 slots let them evict the rare founding/war/battle marks. They keep their
     // own one-slot store now, so this ring is reserved for the rare, lasting marks again.
-    public enum MarkKind { FoundingStone, WarScar, AbandonCairn, CultureRibbon, Battle, FamineScar }
+    public enum MarkKind { FoundingStone, WarScar, AbandonCairn, CultureRibbon, Battle, FamineScar, Pestilence }
     private readonly Dictionary<int, List<(MarkKind kind, int year, int eventId)>> _placeMarks = new();
     private const int MarksPerRegion = 4;
     private static readonly float[] MarkAngles = { 3.6f, 5.5f, 1.1f, 2.4f };   // fixed slots ringing the centre
@@ -94,6 +94,15 @@ public partial class MapView : Control
 
     public void AddFamineScar(int regionId, int year, int eventId) => _famineScars[regionId] = (year, eventId);
     public bool HasFamineScar(int regionId) => _famineScars.ContainsKey(regionId);
+
+    // Plague scars: the disease twin of the famine scar — its OWN one-slot store for the same
+    // reason (outbreaks recur, so they'd evict the rare marks if they shared the ring). A sickly
+    // miasma stain in its own slot, distinct from the famine's ochre cracks (disease, not drought).
+    private readonly Dictionary<int, (int year, int eventId)> _plagueScars = new();
+    private const float PlagueScarAngle = 4.55f;   // its own slot, between MarkAngles' 3.6 and 5.5
+
+    public void AddPlagueScar(int regionId, int year, int eventId) => _plagueScars[regionId] = (year, eventId);
+    public bool HasPlagueScar(int regionId) => _plagueScars.ContainsKey(regionId);
 
     public void AddPlaceMark(int regionId, MarkKind kind, int year, int eventId)
     {
@@ -660,6 +669,20 @@ public partial class MapView : Control
             DrawMemoryMark(c, s, MarkKind.FamineScar, a);
         }
 
+        // Plague scars: same one-per-region treatment as famine, in their own slot. The miasma
+        // hangs over the land that knew sickness, fading like every other mark.
+        foreach (var (rid, scar) in _plagueScars)
+        {
+            if (rid < 0 || rid >= World!.Regions.Count) continue;
+            var r = World.Regions[rid];
+            var center = P(r.X, r.Y);
+            float s = Mathf.Clamp(regionR * 0.18f, 6.5f, 15f);
+            float age = World.Year - scar.year;
+            float a = Mathf.Lerp(0.85f, 0.34f, Mathf.Clamp(age / 250f, 0f, 1f));
+            var c = center + new Vector2(Mathf.Cos(PlagueScarAngle), Mathf.Sin(PlagueScarAngle)) * regionR * 0.5f;
+            DrawMemoryMark(c, s, MarkKind.Pestilence, a);
+        }
+
         // Memorial cairns sit at the rim of the home lands, farther out than the place marks —
         // a remembered life, never "it happened here".
         foreach (var (rid, marks) in _homeMarks)
@@ -767,6 +790,17 @@ public partial class MapView : Control
                 DrawLine(c + new Vector2(-s * 0.24f, s * 0.16f), c + new Vector2(-s * 0.33f, s * 0.52f), dry, fw * 0.8f);
                 DrawLine(c + new Vector2(0f, s * 0.16f), c + new Vector2(s * 0.06f, s * 0.56f), dry, fw * 0.8f);
                 DrawLine(c + new Vector2(s * 0.25f, s * 0.16f), c + new Vector2(s * 0.31f, s * 0.49f), dry, fw * 0.8f);
+                break;
+            }
+            case MarkKind.Pestilence:      // a sickly miasma — a bruised stain pocked with dark
+            {                              // spores; disease, not drought (apart from the ochre cracks)
+                var miasma = new Color("6d4f63");
+                DrawCircle(c, s * 0.6f, miasma with { A = a * 0.26f });            // the haze over the land
+                DrawCircle(c, s * 0.34f, miasma.Darkened(0.1f) with { A = a * 0.34f });
+                var spore = miasma.Darkened(0.35f) with { A = a };
+                DrawCircle(c + new Vector2(-s * 0.26f, -s * 0.1f), Mathf.Max(1.1f, s * 0.11f), spore);
+                DrawCircle(c + new Vector2(s * 0.2f, s * 0.16f), Mathf.Max(1.1f, s * 0.1f), spore);
+                DrawCircle(c + new Vector2(s * 0.04f, -s * 0.28f), Mathf.Max(1f, s * 0.09f), spore);
                 break;
             }
             case MarkKind.CultureRibbon:   // a custom took root (or faded, clashed, spread) here

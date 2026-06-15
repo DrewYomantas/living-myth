@@ -1774,6 +1774,8 @@ public partial class Main : Node
             {
                 if (events[i].Type == "famine")
                     _map.AddFamineScar(mrid, events[i].Year, events[i].Id);
+                else if (events[i].Type == "plague")
+                    _map.AddPlagueScar(mrid, events[i].Year, events[i].Id);
                 else if (ClassifyMark(events[i]) is MapView.MarkKind mk)
                     _map.AddPlaceMark(mrid, mk, events[i].Year, events[i].Id);
             }
@@ -1888,8 +1890,9 @@ public partial class Main : Node
         "territory" when e.Tags.Contains("abandonment") => MapView.MarkKind.AbandonCairn,
         "custom" => MapView.MarkKind.CultureRibbon,
         "battle" => MapView.MarkKind.Battle,
-        // Famine is handled apart (AddFamineScar — its own one-slot store, RegionId never SiteId);
-        // famine_end and boom don't scar — the parched ground is the memory, recovery doesn't mark.
+        // Famine and plague are handled apart (AddFamineScar/AddPlagueScar — their own one-slot
+        // stores, RegionId never SiteId); recovery/reprieve and boom don't scar — the parched
+        // ground and the lingering miasma are the memory; the land mending doesn't mark.
         _ => null,
     };
 
@@ -2998,6 +3001,7 @@ public partial class Main : Node
         sb.AppendLine($"[color=#{ember}][b]✕[/b][/color]  scorch & a snapped pole — land [b]seized in war[/b]");
         sb.AppendLine($"[b]∴[/b]  a scattered cairn — a land [b]abandoned[/b] when its people died out");
         sb.AppendLine($"[color=#b07a2e][b]▦[/b][/color]  cracked ochre earth — a [b]famine[/b] struck this land");
+        sb.AppendLine($"[color=#6d4f63][b]✷[/b][/color]  a bruised, spore-pocked stain — a [b]plague[/b] swept this land");
         sb.AppendLine($"[color=#{gold}][b]⊟[/b][/color]  stacked stones & a gold light — a [b]memorial cairn[/b], at the home of a remembered leader");
         sb.AppendLine($"[color=#{violet}][b]❧[/b][/color]  a violet ribbon — a [b]custom[/b] was born or faded here");
         sb.AppendLine($"[color=#{gold}][b]◆[/b][/color]  a gold diamond — a [b]turning point[/b]; click it to trace the chain");
@@ -3675,6 +3679,28 @@ public partial class Main : Node
         }
         sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]famine and plenty fall on the land itself — those who starved are remembered at their homeland, not here[/color]");
         sb.AppendLine();
+        // Pestilence (Disease & Plague V1 payoff): the land's own sickness. Reads Region.InPlague
+        // directly (sim ground truth, forced false for wilderness). Plague falls on the LAND
+        // (RegionId); those it took are remembered at their homeland, not here — channels never
+        // blur. Shown only when the land is sick now or has known plague, to stay quiet otherwise.
+        var plagueBeats = _regionActivity.RecentFor(regionId)
+            .Select(id => _world.Chronicle.Get(id))
+            .Where(e => e.Type is "plague" or "plague_end")
+            .ToList();
+        if (region.InPlague || plagueBeats.Count > 0)
+        {
+            sb.AppendLine(SectionCap("Pestilence"));
+            var plagueColor = region.InPlague ? Ui.Violet : Ui.Faded;
+            sb.AppendLine($"[color=#{Ui.Hex(plagueColor)}]{StoryCopy.PlagueConditionPhrase(region.InPlague)}[/color]");
+            for (int i = plagueBeats.Count - 1; i >= 0; i--)   // newest first
+            {
+                var pe = plagueBeats[i];
+                var pcls = Ui.ClassOf(pe.Type);
+                sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {pe.Year}[/color] [color=#{Ui.Hex(pcls.Color)}]{pcls.Glyph}[/color] {Link("e:" + pe.Id, pe.Text)}");
+            }
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]plague falls on the land itself — those it took are remembered at their homeland, not here[/color]");
+            sb.AppendLine();
+        }
         int homeTotal = _regionActivity.HomeTotalFor(regionId);
         sb.AppendLine(SectionCap("Lives rooted here")
             + (homeTotal > 0 ? $" [color=#{Ui.Hex(Ui.Faded)}]({homeTotal} remembered)[/color]" : ""));
@@ -3706,6 +3732,7 @@ public partial class Main : Node
         {
             var e = _world.Chronicle.Get(recent[i]);
             if (e.Type is "famine" or "famine_end" or "boom") continue;   // shown under Harvest memory
+            if (e.Type is "plague" or "plague_end") continue;             // shown under Pestilence
             var cls = Ui.ClassOf(e.Type);
             // The site suffix appears ONLY for a true Event.SiteId — the convention table's
             // anchor, never an inference from the region.

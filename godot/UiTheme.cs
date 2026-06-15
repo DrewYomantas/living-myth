@@ -179,6 +179,8 @@ public static class Ui
         ["boom"] = new("Plenty", new Color("4e7d43"), "✾"),
         ["famine"] = new("Famine", new Color("b06a2c"), "✺"),
         ["famine_end"] = new("Recovery", new Color("4e7d43"), "❀"),
+        ["plague"] = new("Plague", new Color("6d4f63"), "✷"),
+        ["plague_end"] = new("Reprieve", new Color("5f7d5a"), "✽"),
         ["divine"] = new("Divine", new Color("a8402c"), "✶"),
         ["prophet"] = new("Prophecy", new Color("7c5a9b"), "☾"),
         ["schism"] = new("Schism", new Color("6d5694"), "❖"),

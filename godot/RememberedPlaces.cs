@@ -28,8 +28,8 @@ public sealed partial class RememberedPlaces : Panel
 
     private static readonly (string key, string label)[] Filters =
     {
-        ("all", "all"), ("war", "war & land"), ("harvest", "harvest"), ("ways", "ways"),
-        ("divine", "divine"), ("terrain", "terrain"), ("memory", "memory"),
+        ("all", "all"), ("war", "war & land"), ("harvest", "harvest"), ("plague", "plague"),
+        ("ways", "ways"), ("divine", "divine"), ("terrain", "terrain"), ("memory", "memory"),
     };
 
     public void Setup(Func<World> world, RegionActivity activity, Action<string> onLink)
@@ -128,6 +128,8 @@ public sealed partial class RememberedPlaces : Panel
         "famine" => "harvest",
         "famine_end" => "harvest",
         "boom" => "harvest",
+        "plague" => "plague",
+        "plague_end" => "plague",
         "custom" => "ways",
         "divine" when e.Tags.Contains("terrain") => "terrain",
         "divine" => "divine",

@@ -155,6 +155,11 @@ public static class StoryCopy
         : inBoom  ? "A season of plenty"
         :           "Steady harvests";
 
+    // ---- plague: the live condition (Disease & Plague V1 payoff; reads Region.InPlague) ----
+    public static string PlagueConditionPhrase(bool inPlague) =>
+        inPlague ? "a sickness spreads here now — the land lies under plague"
+        :          "the land is free of plague now — but it remembers";
+
     // ---- player canon labels (the only five — docs/VISUAL_STYLE.md) ----
     public static string CanonLabel(CanonNoteType t) => t switch
     {
