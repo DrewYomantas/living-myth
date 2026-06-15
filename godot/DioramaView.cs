@@ -198,9 +198,7 @@ public partial class DioramaView : Control
         string? holderId = r.ControllingFactionId;
         Faction? holder = holderId != null && _world.Factions.TryGetValue(holderId, out var hh) ? hh : null;
         var sites = _world.Sites.ForRegion(_regionId);
-        string condition = r.InFamine ? "Famine grips the fields"
-            : r.InBoom ? "A season of plenty"
-            : "Steady harvests";
+        string condition = StoryCopy.HarvestConditionTerse(r.InFamine, r.InBoom);
 
         // A) Year plate — top-left
         var plate = new PanelContainer { Position = new Vector2(20, 18) };

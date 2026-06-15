@@ -144,6 +144,12 @@ public static class StoryCopy
         : inBoom  ? "the land is in plenty now — its harvest runs full"
         :           "the land's harvest holds steady";
 
+    // Terse variant for the diorama's tighter card (same state, header-like voice).
+    public static string HarvestConditionTerse(bool inFamine, bool inBoom) =>
+        inFamine ? "Famine grips the fields"
+        : inBoom  ? "A season of plenty"
+        :           "Steady harvests";
+
     // ---- player canon labels (the only five — docs/VISUAL_STYLE.md) ----
     public static string CanonLabel(CanonNoteType t) => t switch
     {
