@@ -202,14 +202,24 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   1.05→**1.2**, sim-inert here) and exposed a latent end-of-tick rollup-staleness bug (inert re-derive
   fix). Baseline 657/691/528/726 → **648/713/526/921**; 5000-yr 138/114/147/161, no extinction;
   plague is deadly (1.45×) + visibly contagious. All 10 gates green. No viewer payoff yet.
-- **Next** — **viewer payoff for terrain-typed harvest + plague** (surface biome behavior and the
-  pestilence in the Region Lens / map — both shipped sim-only); **diorama composition + canopy
-  authoring** (the 7.0→7.5+ gap) or **diorama art fidelity** (hand-finished/licensed assets) or
-  seamless atlas→diorama zoom (retire the bridge button per its doctrine); more code-only visual
-  treatment (territory boundary lines, elevation contours, marker outlines — sandbox/screenshot-verify
-  each); still-unwatched Theater of War / Chronicle Replay / persistence / Cast / Harvest / Plague F5
-  feel-tests; migration / disease-V2 spread-chain echo / prejudice (Phase 2 forces); person↔site
-  anchoring; timeline scrubbing; per-launch seed choice (today fixed at 7).
+- **Plague Viewer Payoff V1** (2026-06-15, viewer-only — Disease & Plague's deferred viewer half):
+  the land's sickness made visible, mirroring Harvest Memory Viewer Payoff. `plague`/`plague_end`
+  event classes (bruised-violet `✷` Plague / sage `✽` Reprieve, were "Tale ◆"); `MapView.MarkKind.
+  Pestilence` miasma scar (spore-pocked stain) in its OWN one-slot store like the famine scar (no
+  4-slot ring crowding, plague ONSET only, distinct from famine ochre cracks); Region Lens
+  **"Pestilence"** section (live `Region.InPlague` condition via `StoryCopy.PlagueConditionPhrase`
+  + recent plague/reprieve beats, shown only when sick-now-or-known, channel-honest — plague beats
+  excluded from "Tales anchored here"); Remembered Places **plague** filter chip (`FilterOf` →
+  region-anchored loop, never site/home); plague scar added to the Watcher's Guide legend. The Long
+  Pestilence echo already surfaces via generic `Echoes.DetectAll`. Pure read-model — **verify held
+  exactly 648/713/526/921**, all 10 gates green, both builds clean. Not yet live-F5-watched.
+- **Next** — **diorama art fidelity** (hand-finished/licensed assets — the 7.0→7.5+ gap) or
+  **diorama composition + canopy authoring**, or seamless atlas→diorama zoom (retire the bridge
+  button per its doctrine); more code-only visual treatment (territory boundary lines, elevation
+  contours, marker outlines — sandbox/screenshot-verify each); still-unwatched Theater of War /
+  Chronicle Replay / persistence / Cast / Harvest / Plague F5 feel-tests; migration / disease-V2
+  spread-chain echo / prejudice (Phase 2 forces); person↔site anchoring; timeline scrubbing;
+  per-launch seed choice (today fixed at 7).
 
 ## Commands
 ```bash
