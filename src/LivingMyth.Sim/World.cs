@@ -731,6 +731,28 @@ public sealed class World
 
     // ---------- economy (prosperity → famine / boom / trade) ----------
 
+    // Terrain-Typed Harvest V1: the harvest walk's volatility + mean-revert TARGET depend on the
+    // region's IMMUTABLE TerrainType — coast steady, plains fertile-but-swingy, highland harsh +
+    // volatile, forest the unchanged baseline. Pure param lookups: ZERO new Rng draws (the single
+    // RandInt(-1,1) per region per year is unchanged). Revert rate stays global.
+    private (double vol, double target, double rate) TerrainHarvestParams(string terrain) =>
+        terrain switch
+        {
+            "coast"    => (Params.GetValueOrDefault("harvest_vol_coast",    0.6),
+                           Params.GetValueOrDefault("harvest_target_coast",  1.0),
+                           Params["economy_prosperity_revert"]),
+            "plains"   => (Params.GetValueOrDefault("harvest_vol_plains",   1.4),
+                           Params.GetValueOrDefault("harvest_target_plains", 1.15),
+                           Params["economy_prosperity_revert"]),
+            "highland" => (Params.GetValueOrDefault("harvest_vol_highland", 1.3),
+                           Params.GetValueOrDefault("harvest_target_highland", 0.78),
+                           Params["economy_prosperity_revert"]),
+            "forest"   => (Params.GetValueOrDefault("harvest_vol_forest",   1.0),
+                           Params.GetValueOrDefault("harvest_target_forest", 1.0),
+                           Params["economy_prosperity_revert"]),
+            _          => throw new ArgumentException($"Unknown terrain type: {terrain}"),
+        };
+
     private void Economy()
     {
         // Harvest Economy V1: the harvest random-walk is per REGION (the economy's ground
@@ -741,8 +763,9 @@ public sealed class World
         foreach (var r in Regions)
         {
             int step = Rng.RandInt(-1, 1);
-            r.Harvest += step * Params["economy_prosperity_step"];
-            r.Harvest += (1.0 - r.Harvest) * Params["economy_prosperity_revert"];
+            var (vol, target, rate) = TerrainHarvestParams(r.TerrainType);
+            r.Harvest += step * Params["economy_prosperity_step"] * vol;
+            r.Harvest += (target - r.Harvest) * rate;
 
             var holder = r.ControllingFactionId is string hid ? Factions[hid] : null;
             // God-hand pressure biases the holder's lands — a flat bias on the SAME draw while

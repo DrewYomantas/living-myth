@@ -1222,10 +1222,32 @@ void HarvestCmd(int years)
     int failures = 0;
     int suiteAnchored = 0, suiteFamineEnds = 0, suiteLandless = 0;
 
+    // Terrain-Typed Harvest V1 non-vacuity, pooled across the WHOLE seed suite (single-seed
+    // snapshots of the small plains biome are too noisy): harvest values grouped by terrain, and
+    // cumulative famine counts grouped by the terrain of their region. Both robust over the full run.
+    var suiteHarvestByTerrain = new Dictionary<string, List<double>>();
+    var suiteFaminesByTerrain = new Dictionary<string, int>();
+
     foreach (int seed in new[] { 1, 18, 42, 7 })
     {
         var (c1, n1) = Load();
-        var w = new World(seed, c1, n1); w.Run(years);
+        var w = new World(seed, c1, n1);
+        // Run year-by-year so terrain-mean harvest is TIME-averaged over the whole run (the robust
+        // measure of where each terrain's walk centers, governed by its revert target) — an
+        // end-of-run snapshot of the high-volatility plains biome is too noisy to order reliably.
+        var seedHarvestByTerrain = new Dictionary<string, List<double>>();
+        w.SeedWorld();
+        for (int yr = 0; yr < years; yr++)
+        {
+            w.Tick();
+            foreach (var r in w.Regions)
+            {
+                if (!suiteHarvestByTerrain.TryGetValue(r.TerrainType, out var sl)) { sl = new(); suiteHarvestByTerrain[r.TerrainType] = sl; }
+                sl.Add(r.Harvest);
+                if (!seedHarvestByTerrain.TryGetValue(r.TerrainType, out var dl)) { dl = new(); seedHarvestByTerrain[r.TerrainType] = dl; }
+                dl.Add(r.Harvest);
+            }
+        }
         var bad = new List<string>();
 
         // (1)+(2) Derivation + landless neutrality, faction by faction.
@@ -1301,6 +1323,14 @@ void HarvestCmd(int years)
 
         suiteAnchored += anchored; suiteFamineEnds += famineEnds;
 
+        // (B) Pool famine counts by the terrain of their region (cumulative over the full run).
+        foreach (var e in w.Chronicle.Events)
+        {
+            if (e.Type != "famine" || e.RegionId is not int frid || frid < 0 || frid >= w.Regions.Count) continue;
+            string t = w.Regions[frid].TerrainType;
+            suiteFaminesByTerrain[t] = suiteFaminesByTerrain.GetValueOrDefault(t) + 1;
+        }
+
         // (6) Determinism: a second identical run yields byte-identical harvest state.
         var (c2, n2) = Load();
         var w2 = new World(seed, c2, n2); w2.Run(years);
@@ -1308,11 +1338,56 @@ void HarvestCmd(int years)
             bad.Add("harvest state differs between identical runs");
 
         Console.WriteLine($"  seed {seed,3}: {(bad.Count == 0 ? "OK" : "FAIL")}  {anchored} land-anchored economy events · {famineEnds} famine_end · {w.Regions.Count} regions");
+        string means = string.Join("  ", seedHarvestByTerrain.OrderBy(kv => kv.Key)
+            .Select(kv => $"{kv.Key}={kv.Value.Average():F3}(n{kv.Value.Count})"));
+        Console.WriteLine($"           terrain means: {means}");
         foreach (var b in bad.Take(5)) Console.WriteLine($"           {b}");
         if (bad.Count > 0) failures++;
     }
 
     Console.WriteLine($"  suite: {suiteAnchored} land-anchored economy events, {suiteFamineEnds} recoveries, {suiteLandless} landless-faction checks");
+
+    // (A) Suite-pooled terrain-MEAN ordering — proves the fertility lever (per-terrain revert
+    // target). Fertility is balance-constrained: a strong sub-1.0 highland mean dooms highland-heavy
+    // seeds (it chronically suppresses faction prosperity), so the balance-safe band keeps means in a
+    // TIGHT band. Plains-fertility is the one robust mean signal (target 1.05 well clear of forest);
+    // highland-poorer is real but small, asserted with a smaller margin. Coast-safety is proven by
+    // famine RATE in (B), not mean (at the safe band coast/highland means are near-equal by design).
+    var suiteBad = new List<string>();
+    const double plainsMargin = 0.02;     // plains is clearly more fertile
+    const double highlandMargin = 0.005;  // highland is poorer — small but a stable n>3000 suite mean
+    double? Mean(string t) => suiteHarvestByTerrain.TryGetValue(t, out var l) && l.Count > 0 ? l.Average() : (double?)null;
+    double? hi = Mean("highland"), fo = Mean("forest"), pl = Mean("plains");
+    Console.WriteLine($"  suite terrain means: " + string.Join("  ", suiteHarvestByTerrain.OrderBy(kv => kv.Key)
+        .Select(kv => $"{kv.Key}={kv.Value.Average():F3}(n{kv.Value.Count})")));
+    if (hi is double mh && fo is double mf1 && !(mf1 - mh > highlandMargin))
+        suiteBad.Add($"highland mean {mh:F3} not < forest mean {mf1:F3} by {highlandMargin} (terrain not harsher)");
+    if (pl is double mp && fo is double mf2 && !(mp - mf2 > plainsMargin))
+        suiteBad.Add($"plains mean {mp:F3} not > forest mean {mf2:F3} by {plainsMargin} (terrain not fertile)");
+
+    // (B) Famine-RATE concentration by terrain (the robust harshness/safety proof — integrates the
+    // volatility lever over the whole run, normalized per region·year so region-count can't skew it):
+    // highland must famine MORE than forest (harsher), coast must famine LESS than highland (safer/steady).
+    int hiFam = suiteFaminesByTerrain.GetValueOrDefault("highland");
+    int coFam = suiteFaminesByTerrain.GetValueOrDefault("coast");
+    int foFam = suiteFaminesByTerrain.GetValueOrDefault("forest");
+    int hiExposure = suiteHarvestByTerrain.GetValueOrDefault("highland")?.Count ?? 0;  // region·year samples
+    int coExposure = suiteHarvestByTerrain.GetValueOrDefault("coast")?.Count ?? 0;
+    int foExposure = suiteHarvestByTerrain.GetValueOrDefault("forest")?.Count ?? 0;
+    double hiFamRate = hiExposure > 0 ? (double)hiFam / hiExposure : 0;                 // famines per region·year
+    double coFamRate = coExposure > 0 ? (double)coFam / coExposure : 0;
+    double foFamRate = foExposure > 0 ? (double)foFam / foExposure : 0;
+    Console.WriteLine($"  suite famines by terrain: " + string.Join("  ", suiteFaminesByTerrain.OrderBy(kv => kv.Key).Select(kv => $"{kv.Key}={kv.Value}")));
+    if (hiExposure > 0 && hiFam == 0)
+        suiteBad.Add("highland regions exist but never famined (terrain volatility inert)");
+    if (foExposure > 0 && hiExposure > 0 && !(hiFamRate > foFamRate))
+        suiteBad.Add($"highland famine rate {hiFamRate:F4} not > forest {foFamRate:F4} (highland not harsher)");
+    if (coFamRate > hiFamRate)
+        suiteBad.Add($"coast famine rate {coFamRate:F4} > highland {hiFamRate:F4} (terrain risk inverted)");
+
+    foreach (var b in suiteBad) Console.WriteLine($"  SUITE FAIL: {b}");
+    if (suiteBad.Count > 0) failures++;
+
     Console.WriteLine(failures == 0 ? "\nHARVEST ECONOMY HOLDS." : $"\n{failures} SEED(S) FAILED.");
     Environment.Exit(failures == 0 ? 0 : 1);
 }
