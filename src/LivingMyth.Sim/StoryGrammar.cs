@@ -273,6 +273,14 @@ public static class StoryGrammar
         if (effect.Type == "death" && cause.Type == "plague")
             return (ConnectorKind.Therefore, "plague-death");
 
+        // Migration V1: a people driven from its land by famine or plague — the flight cause-links
+        // back to the disaster that drove it out (a settlement migration carries no cause and stays
+        // silent, like a boom). The edge exists only because FleeStrickenLand recorded the cause.
+        if (effect.Type == "migration" && cause.Type == "famine")
+            return (ConnectorKind.Therefore, "migration-from-famine");
+        if (effect.Type == "migration" && cause.Type == "plague")
+            return (ConnectorKind.Therefore, "migration-from-plague");
+
         if (effect.Type == "death" && cause.Type == "famine")
             return (ConnectorKind.Therefore, "famine-death");
         if (effect.Type == "death" && cause.Type == "battle")

@@ -11,7 +11,7 @@ public static class Scoring
     {
         ["founding"] = 60, ["divine"] = 80, ["war"] = 70, ["battle"] = 50, ["peace"] = 45,
         ["famine"] = 55, ["famine_end"] = 35, ["boom"] = 50, ["martyr"] = 50, ["murder"] = 40,
-        ["plague"] = 55, ["plague_end"] = 35,
+        ["plague"] = 55, ["plague_end"] = 35, ["migration"] = 40,
         ["prophet"] = 38, ["schism"] = 36, ["trade"] = 30, ["justice"] = 30,
         ["succession"] = 30, ["leadership"] = 25, ["custom"] = 28, ["scandal"] = 20, ["rumor"] = 20,
         ["romance"] = 16, ["friction"] = 12, ["marriage"] = 8, ["death"] = 5, ["birth"] = 3,

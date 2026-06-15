@@ -27,9 +27,10 @@ switch (cmd)
     case "replay": ReplayCmd(Years(120)); break;
     case "harvest": HarvestCmd(Years(120)); break;
     case "plague": PlagueCmd(Years(120)); break;
+    case "migration": MigrationCmd(Years(120)); break;
     case "paint": PaintCmd(Seed(7), Years(120)); break;
     default:
-        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine | save | sites | replay | harvest | plague | paint");
+        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine | save | sites | replay | harvest | plague | migration | paint");
         break;
 }
 return;
@@ -1543,6 +1544,104 @@ string PlagueCanon(World w)
     return sb.ToString();
 }
 
+void MigrationCmd(int years)
+{
+    Console.WriteLine($"Migration gate ({years} yrs): peoples flee famine/plague (relocate) and thriving peoples");
+    Console.WriteLine("settle wilderness (expand). Migrations anchor to the DESTINATION land, never a site; flight");
+    Console.WriteLine("cause-links to its disaster, settlement is rootless; territory stays consistent; deterministic.");
+    int failures = 0;
+    int suiteFlight = 0, suiteSettle = 0;
+
+    foreach (int seed in new[] { 1, 18, 42, 7 })
+    {
+        var (c1, n1) = Load();
+        var w = new World(seed, c1, n1); w.Run(years);
+        var bad = new List<string>();
+        int flight = 0, settle = 0;
+
+        foreach (var e in w.Chronicle.Events)
+        {
+            if (e.Type != "migration") continue;
+            // (1) Anchoring: a valid DESTINATION RegionId; no site/home leak; the convention agrees
+            // none (a migration is a movement onto a land, not at one place — SiteAnchors NOT extended).
+            if (e.RegionId is not int rid || rid < 0 || rid >= w.Regions.Count)
+            { bad.Add($"migration #{e.Id} has no valid RegionId"); break; }
+            if (e.SiteId is not null)
+            { bad.Add($"migration #{e.Id} leaked a SiteId ({e.SiteId})"); break; }
+            if (e.HomeRegionId is not null)
+            { bad.Add($"migration #{e.Id} carries a home anchor (a move is placed, not remembered)"); break; }
+            if (SiteAnchors.Expected(w, e.Type, e.Tags, e.RegionId) is int leak)
+            { bad.Add($"convention anchors migration #{e.Id} to site {leak} — expected none"); break; }
+
+            // (2) Tag discipline: exactly one driver — flight XOR settlement.
+            bool isFlight = e.Tags.Contains("flight");
+            bool isSettle = e.Tags.Contains("settlement");
+            if (isFlight == isSettle)
+            { bad.Add($"migration #{e.Id} is neither/both flight and settlement"); break; }
+
+            if (isFlight)
+            {
+                flight++;
+                // (3) Flight cause honesty: the move answers a real famine or plague (the disaster
+                // that drove the people out — the migration-from-famine/plague grammar edge).
+                if (!e.Causes.Select(cid => w.Chronicle.Get(cid)).Any(c => c.Type is "famine" or "plague"))
+                { bad.Add($"flight migration #{e.Id} is not cause-linked to any famine or plague"); break; }
+            }
+            else
+            {
+                settle++;
+                // (4) Settlement is rootless growth — it answers no disaster (silent, like a boom).
+                if (e.Causes.Count != 0)
+                { bad.Add($"settlement migration #{e.Id} carries {e.Causes.Count} cause(s) — growth is rootless"); break; }
+            }
+        }
+
+        // (5) Territory integrity (end state): the two views of control agree exactly — every held
+        // region names its holder, and every holder lists exactly the regions that name it. A
+        // migration bug (double-claim, orphaned source region) would surface here.
+        foreach (var r in w.Regions)
+            if (r.ControllingFactionId is string hid
+                && !w.Factions[hid].ControlledRegions.Contains(r.Id.ToString()))
+                bad.Add($"region {r.Id} held by {hid} but absent from its ControlledRegions");
+        foreach (var f in w.Config.Factions.Select(cf => w.Factions[cf.Id]))
+            foreach (var s in f.ControlledRegions)
+                if (w.Regions[int.Parse(s)].ControllingFactionId != f.Id)
+                    bad.Add($"{f.Id} lists region {s} it does not actually control");
+
+        // (6) Double-run determinism: the final holdings AND the whole chronicle are byte-identical
+        // (the per-faction migration draw and the zero-Rng destination pick stay deterministic).
+        var (c2, n2) = Load();
+        var w2 = new World(seed, c2, n2); w2.Run(years);
+        if (MigrationCanon(w) != MigrationCanon(w2))
+            bad.Add("territory/holdings differ between identical runs");
+        if (w.Chronicle.Render() != w2.Chronicle.Render())
+            bad.Add("chronicle differs between identical runs");
+
+        suiteFlight += flight; suiteSettle += settle;
+        Console.WriteLine($"  seed {seed,3}: {(bad.Count == 0 ? "OK" : "FAIL")}  {flight + settle} migrations · {flight} in flight · {settle} settling");
+        foreach (var b in bad.Take(5)) Console.WriteLine($"           {b}");
+        if (bad.Count > 0) failures++;
+    }
+
+    Console.WriteLine($"  suite: {suiteFlight} flights, {suiteSettle} settlements");
+
+    // (7) Non-vacuity: BOTH drivers must actually fire across the suite, or a flavor's whole contract
+    // above is vacuously true.
+    if (suiteFlight == 0) { Console.WriteLine("  SUITE FAIL: no flight migration ever fired — the push contract is vacuous"); failures++; }
+    if (suiteSettle == 0) { Console.WriteLine("  SUITE FAIL: no settlement migration ever fired — the pull contract is vacuous"); failures++; }
+
+    Console.WriteLine(failures == 0 ? "\nMIGRATION HOLDS." : $"\n{failures} CHECK(S) FAILED.");
+    Environment.Exit(failures == 0 ? 0 : 1);
+}
+
+string MigrationCanon(World w)
+{
+    var sb = new System.Text.StringBuilder();
+    foreach (var r in w.Regions)
+        sb.Append(r.Id).Append('=').Append(r.ControllingFactionId ?? "-").Append('\n');
+    return sb.ToString();
+}
+
 void VerifyCmd()
 {
     Console.WriteLine("Determinism gate: same seed must produce a byte-identical chronicle.");
@@ -1712,8 +1811,12 @@ void ReplayCmd(int years)
                 var (store, _) = PlayerWorldStore.LoadOrNew(path, 7);
                 if (record)
                 {
+                    // Curse the OLDEST adult: a cursed elder reliably dies within the window and
+                    // leaves a divine-caused death — so the chain this check needs always exists,
+                    // robust to RNG-stream reshuffles from future sim work (deterministic tie-break).
                     var victim = w.FactionMembers(w.Config.Factions[0].Id)
-                        .Where(p => p.Age(w.Year) >= 18).OrderBy(p => p.Id).First();
+                        .Where(p => p.Age(w.Year) >= 18)
+                        .OrderByDescending(p => p.Age(w.Year)).ThenBy(p => p.Id).First();
                     var ev = w.PlantCurse(victim);
                     store.RecordAct(w, w.DivinePressures.Last(p => p.SourceEventId == ev.Id));
                     store.ResumeYear = w.Year;

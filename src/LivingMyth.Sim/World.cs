@@ -1035,6 +1035,123 @@ public sealed class World
         f.PlagueEvent = worst?.PlagueEvent;
     }
 
+    // ---------- migration (the people move — flight & settlement) ----------
+
+    /// <summary>Migration V1: peoples move in response to the land. Each people gets exactly ONE
+    /// draw per year (a fixed-cost <see cref="Rng.Chance"/> — Chance(0) still consumes its ULong,
+    /// like the plague spark — so consumption stays deterministic regardless of who is eligible),
+    /// deciding WHETHER it migrates this year; its condition decides WHICH kind. A people whose
+    /// worst land lies in famine or plague FLEES (relocate: abandon that stricken region, settle
+    /// the best adjacent wilderness); a thriving, populous people SETTLES (expand: claim adjacent
+    /// wilderness, keep its holds). Flight takes priority — crisis over growth. The destination is
+    /// ALWAYS adjacent UNCLAIMED wilderness (contesting held land is war, out of scope), chosen
+    /// deterministically (highest harvest, lowest-id tie — zero draws). A people never abandons its
+    /// last region; HomeRegionId is untouched (lineage stays immutable, as under conquest). Runs
+    /// after Pestilence (so it reads this tick's region famine/plague) and before Deaths — a people
+    /// that fled the famine this year is re-derived out of its death pressure (the reward for
+    /// moving). Migration events anchor to the DESTINATION RegionId, never SiteId (a migration is a
+    /// movement onto a land, not at one place — SiteAnchors is NOT extended).</summary>
+    private void Migration()
+    {
+        foreach (var fid in FactionsSorted())
+        {
+            var fac = Factions[fid];
+            // Eligibility decides the probability; the DRAW happens regardless (fixed cost).
+            bool flightEligible = (fac.InFamine || fac.InPlague) && fac.ControlledRegions.Count > 1;
+            bool settleEligible = fac.InBoom && fac.Members.Count >= (int)Params["migration_settle_min_pop"];
+            double chance = flightEligible ? Params["migration_flight_chance"]
+                          : settleEligible ? Params["migration_settle_chance"]
+                          : 0.0;
+            if (!Rng.Chance(chance)) continue;
+
+            bool moved = flightEligible ? FleeStrickenLand(fac)
+                       : settleEligible ? SettleNewLand(fac)
+                       : false;
+            // A people that just moved escapes (or enters) this tick's pressure: re-derive its
+            // land-mood off the new holdings so Deaths reads the truth. Zero RNG — pure aggregation,
+            // the same idempotent re-derive trade uses. Skipped when nothing moved.
+            if (moved)
+            {
+                DeriveProsperity(fac);
+                DerivePestilence(fac);
+            }
+        }
+    }
+
+    /// <summary>Flight: abandon the worst stricken controlled region (lowest harvest among its
+    /// famine/plague lands, lowest-id tie) and settle the best adjacent wilderness. No-op (the draw
+    /// still spent) when nothing is stricken or no peaceful land borders it. Returns whether it
+    /// moved.</summary>
+    private bool FleeStrickenLand(Faction fac)
+    {
+        Region? src = null;
+        foreach (var rid in fac.ControlledRegions.Select(int.Parse).OrderBy(x => x))
+        {
+            var r = Regions[rid];
+            if (!r.InFamine && !r.InPlague) continue;
+            if (src is null || r.Harvest < src.Harvest) src = r;
+        }
+        if (src is null) return false;
+        var dest = BestAdjacentWilderness(src);
+        if (dest is null) return false;   // nowhere peaceful to go — they endure
+
+        fac.ControlledRegions.Remove(src.Id.ToString());
+        src.ControllingFactionId = null;
+        Claim(dest, fac);
+
+        var causes = new List<int>();
+        string reason;
+        if (src.InPlague && src.PlagueEvent is Event pe) { causes.Add(pe.Id); reason = "the pestilence"; }
+        else if (src.InFamine && src.FamineEvent is Event fe) { causes.Add(fe.Id); reason = "the famine"; }
+        else reason = src.InPlague ? "the pestilence" : "the famine";
+        var tags = new List<string> { "migration", "flight" };
+        Chronicle.Record(Year, "migration",
+            $"{fac.Name} abandon {src.Name}, fleeing {reason}, and settle {dest.Name}.",
+            participants: fac.LeaderId is int l ? new() { l } : null,
+            causes: causes.Count > 0 ? causes : null,
+            tags: tags, regionId: dest.Id);
+        return true;
+    }
+
+    /// <summary>Settlement: a thriving people claims the best unclaimed wilderness bordering ANY of
+    /// its holds (frontier spread), keeping its land. No-op when boxed in. Returns whether it
+    /// moved.</summary>
+    private bool SettleNewLand(Faction fac)
+    {
+        Region? dest = null;
+        foreach (var rid in fac.ControlledRegions.Select(int.Parse).OrderBy(x => x))
+        {
+            var cand = BestAdjacentWilderness(Regions[rid]);
+            if (cand is not null && (dest is null || cand.Harvest > dest.Harvest))
+                dest = cand;
+        }
+        if (dest is null) return false;
+
+        Claim(dest, fac);
+        var tags = new List<string> { "migration", "settlement" };
+        Chronicle.Record(Year, "migration",
+            $"{fac.Name} spread into {dest.Name}, thriving and many.",
+            participants: fac.LeaderId is int l ? new() { l } : null,
+            tags: tags, regionId: dest.Id);
+        return true;
+    }
+
+    /// <summary>The best unclaimed wilderness adjacent to a region: highest harvest, lowest-id tie
+    /// (the adjacency list is sorted ascending, so first-wins on a strict greater-than keeps the
+    /// lowest id). Zero RNG — a pure deterministic read over the map.</summary>
+    private Region? BestAdjacentWilderness(Region from)
+    {
+        Region? best = null;
+        foreach (var nid in from.AdjacentRegionIds)
+        {
+            if (nid < 0 || nid >= Regions.Count) continue;
+            var n = Regions[nid];
+            if (n.ControllingFactionId is not null) continue;   // unclaimed only — never war
+            if (best is null || n.Harvest > best.Harvest) best = n;
+        }
+        return best;
+    }
+
     // ---------- culture (values → customs → clash / diffusion) ----------
 
     private int? PrimaryRegion(Faction f)
@@ -1281,6 +1398,7 @@ public sealed class World
         Year += 1;
         Economy();
         Pestilence();
+        Migration();
         ProcessWars();
         Deaths();
         Crime();

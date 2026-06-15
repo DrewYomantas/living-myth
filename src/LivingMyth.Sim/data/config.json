@@ -72,6 +72,9 @@
     "doom_prosperity_drag": 0.02,
     "protect_duration_years": 50,
     "doom_duration_years": 50,
-    "omen_duration_years": 40
+    "omen_duration_years": 40,
+    "migration_flight_chance": 0.18,
+    "migration_settle_chance": 0.10,
+    "migration_settle_min_pop": 30
   }
 }

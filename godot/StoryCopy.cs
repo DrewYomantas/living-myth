@@ -37,6 +37,8 @@ public static class StoryCopy
             "plague-under-doom" => "the doom upon them festered into sickness — therefore,",
             "plague-breaks" => "the pestilence at last burned itself out — therefore,",
             "plague-death" => "the pestilence took them — therefore,",
+            "migration-from-famine" => "the hunger drove them from their land — therefore,",
+            "migration-from-plague" => "the sickness drove them from their land — therefore,",
             _ => link.GapYears >= 3 ? $"{link.GapYears} years passed — therefore," : "therefore —",
         },
     };

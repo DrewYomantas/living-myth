@@ -419,6 +419,40 @@ public static class Echoes
         return echoes;
     }
 
+    /// <summary>One land that peoples fled to again and again — a refuge the wandering sought out,
+    /// remembered as the promised land. The migration echo keyed on the DESTINATION place
+    /// (Event.RegionId — where each migration settled), the same bounded/clustered discipline as
+    /// The Barren Years (≥3 arrivals within a 25-year-gapped age).</summary>
+    public static List<Echo> DetectPromisedLand(World world)
+    {
+        var byRegion = new Dictionary<int, List<Event>>();
+        foreach (var e in world.Chronicle.Events)
+            if (e.Type == "migration" && e.RegionId is int rid)
+            {
+                if (!byRegion.TryGetValue(rid, out var list)) { list = new(); byRegion[rid] = list; }
+                list.Add(e);
+            }
+        var echoes = new List<Echo>();
+        foreach (var rid in byRegion.Keys.OrderBy(k => k))
+        {
+            var ages = new List<List<Event>>();
+            List<Event>? age = null;
+            foreach (var me in byRegion[rid].OrderBy(e => e.Year))
+            {
+                if (age is null || me.Year - age[^1].Year > 25) { age = new(); ages.Add(age); }
+                age.Add(me);
+            }
+            foreach (var g in ages.Where(g => g.Count >= 3))
+            {
+                var span = (g[0].Year, g[^1].Year);
+                string name = world.RegionName(rid) ?? "a lost land";
+                string label = $"{name} drew the wandering {g.Count} times {SpanPhrase(span.Item1, span.Item2)} — the promised land.";
+                echoes.Add(new Echo("The Promised Land", label, g.Select(e => e.Id).ToList(), span));
+            }
+        }
+        return echoes;
+    }
+
     public static List<Echo> DetectAll(World world)
     {
         var echoes = new List<Echo>();
@@ -438,6 +472,7 @@ public static class Echoes
         echoes.AddRange(DetectFieldOfBones(world));
         echoes.AddRange(DetectBarrenYears(world));
         echoes.AddRange(DetectLongPestilence(world));
+        echoes.AddRange(DetectPromisedLand(world));
 
         var seen = new HashSet<(string, string)>();
         var unique = new List<Echo>();
