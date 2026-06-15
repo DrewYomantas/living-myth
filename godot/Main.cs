@@ -3660,11 +3660,9 @@ public partial class Main : Node
         // false for wilderness, so it never lies. Famine/plenty fall on the LAND (RegionId);
         // those who starved are remembered at their homeland, not here — the channels never blur.
         sb.AppendLine(SectionCap("Harvest memory"));
-        sb.AppendLine(region.InFamine
-            ? $"[color=#{Ui.Hex(Ui.Ochre)}]the land goes hungry now — its harvest has failed[/color]"
-            : region.InBoom
-                ? $"[color=#{Ui.Hex(Ui.Moss)}]the land is in plenty now — its harvest runs full[/color]"
-                : $"[color=#{Ui.Hex(Ui.Faded)}]the land's harvest holds steady[/color]");
+        sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]{StoryCopy.TerrainHarvestCharacter(region.TerrainType)}[/color]");
+        var conditionColor = region.InFamine ? Ui.Ochre : region.InBoom ? Ui.Moss : Ui.Faded;
+        sb.AppendLine($"[color=#{Ui.Hex(conditionColor)}]{StoryCopy.HarvestConditionPhrase(region.InFamine, region.InBoom)}[/color]");
         var harvest = _regionActivity.RecentFor(regionId)
             .Select(id => _world.Chronicle.Get(id))
             .Where(e => e.Type is "famine" or "famine_end" or "boom")

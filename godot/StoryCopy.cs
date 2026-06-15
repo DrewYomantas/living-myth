@@ -123,6 +123,27 @@ public static class StoryCopy
         _ => count > 1 ? $"{count} recorded {kind}s" : $"a recorded {kind}",
     };
 
+    // ---- harvest: the land's enduring character (terrain-typed harvest, shipped) ----
+    // What KIND of harvest land this terrain is — chronicle knowledge, never changing per region.
+    // Qualitative, no numbers; must match the sim: coast steady, plains rich-but-swingy, highland
+    // harsh/hungry-prone, forest the even middle. Distinct from the live condition below.
+    public static string TerrainHarvestCharacter(string terrain) => terrain switch
+    {
+        "coast"    => "a shore land — its harvests are rarely ruinous and rarely glorious; the coast feeds its people with a quiet constancy",
+        "plains"   => "fertile ground — the plains can yield richly, but they swing between plenty and want, and neither lasts long here",
+        "highland" => "a hard land — the highlands are slow to yield, and when the harvest fails here, it fails completely",
+        "forest"   => "sheltered ground — the forest neither starves nor overflows, holding an even course between the extremes",
+        _          => "land of an unrecorded character",
+    };
+
+    // ---- harvest: the live condition (current tick state — changes as the sim runs) ----
+    // Extracted from Main.cs to keep all copy single-sourced here. Caller resolves the colour
+    // (Ochre / Moss / Faded); this returns text only.
+    public static string HarvestConditionPhrase(bool inFamine, bool inBoom) =>
+        inFamine ? "the land goes hungry now — its harvest has failed"
+        : inBoom  ? "the land is in plenty now — its harvest runs full"
+        :           "the land's harvest holds steady";
+
     // ---- player canon labels (the only five — docs/VISUAL_STYLE.md) ----
     public static string CanonLabel(CanonNoteType t) => t switch
     {

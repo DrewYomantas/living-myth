@@ -9,7 +9,7 @@ models it. Future Claude Code sessions doing visual work start here.
 
 Everything in this file is **viewer-only**. Nothing here may touch `src/LivingMyth.Sim/`
 or move the verify baseline (`dotnet run --project src/LivingMyth.Console -- verify`,
-currently 823/559/910/632 for seeds 1/18/42/7).
+currently 657/691/528/726 for seeds 1/18/42/7).
 
 ## Visual thesis
 
@@ -396,7 +396,7 @@ Star, **stylized semi-realistic fantasy pixel diorama, a living atlas**. Binding
   (`DrawGroundShadow`) so it reads as a diorama piece resting on the ground, not a flat icon.
 
 All of it is a deterministic function of cell coordinates + surface data — zero Rng, viewer-only,
-`verify` unmoved at 823/559/910/632. Tunables live at the top of `SurfacePainter.Paint`
+`verify` unmoved at 657/691/528/726. Tunables live at the top of `SurfacePainter.Paint`
 (`ContourStep`, relief strength, mottle/grain amplitudes, depth radius).
 
 ## Lens heraldry (Inspect mode, 2026-06-13, binding)
@@ -530,6 +530,36 @@ Life events (births, deaths, murders) carry `Event.HomeRegionId` — where the l
 - Place Memory map marks read `RegionId` only. Home anchors mark the land solely
   through the visually distinct **memorial cairn** channel (shipped 2026-06-11,
   above) — never through the place-mark store, never with place-event language.
+
+### Harvest memory copy (Terrain-Typed Harvest V1, 2026-06-15 — binding)
+
+Region Lens "Harvest memory" section. All English single-sourced in `godot/StoryCopy.cs`.
+Two lines, enduring above live: the land's terrain CHARACTER, then its present condition.
+Qualitative, no numbers. Verify baseline **657/691/528/726** (viewer-only, must not move).
+
+**Terrain character** — `StoryCopy.TerrainHarvestCharacter(string terrain)`, rendered in
+`Ui.Faded` (enduring context, subordinate to the live line). Never changes for a region:
+
+| terrain | character line |
+|---|---|
+| `coast` | "a shore land — its harvests are rarely ruinous and rarely glorious; the coast feeds its people with a quiet constancy" |
+| `plains` | "fertile ground — the plains can yield richly, but they swing between plenty and want, and neither lasts long here" |
+| `highland` | "a hard land — the highlands are slow to yield, and when the harvest fails here, it fails completely" |
+| `forest` | "sheltered ground — the forest neither starves nor overflows, holding an even course between the extremes" |
+
+**Live condition** — `StoryCopy.HarvestConditionPhrase(bool inFamine, bool inBoom)`, rendered
+below the character line; colour resolved in `Main.cs`:
+
+| state | copy | colour |
+|---|---|---|
+| `InFamine` | "the land goes hungry now — its harvest has failed" | `Ui.Ochre` |
+| `InBoom` | "the land is in plenty now — its harvest runs full" | `Ui.Moss` |
+| neither | "the land's harvest holds steady" | `Ui.Faded` |
+
+The terrain is NOT re-labeled here — it already appears in the lens subtitle and the
+"terrain: {TerrainType}" line. The character line voices what that terrain MEANS for the
+harvest, not its name. Wilderness reads "holds steady" (sim forces InFamine/InBoom false),
+which is honest; the character line still renders (the land's nature is holder-independent).
 
 ## Causal story language (Myth Authorship V1 — SHIPPED 2026-06-11)
 
