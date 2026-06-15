@@ -247,6 +247,9 @@ public partial class DioramaView : Control
         holderRow.AddChild(Lab(holder != null ? $"Held by {holder.Name}" : "Unclaimed wilderland", _serif, 16, Ink));
         cv.AddChild(holderRow);
         cv.AddChild(Lab(condition, _serif, 15, r.InFamine ? Ember : InkSoft));
+        var character = Lab(StoryCopy.TerrainHarvestCharacter(r.TerrainType), _serif, 13, InkSoft, wrap: true);
+        character.CustomMinimumSize = new Vector2(284, 0);
+        cv.AddChild(character);
         cv.AddChild(MakeRule());
 
         cv.AddChild(Lab("KNOWN PLACES", _sc, 12, Gold));
