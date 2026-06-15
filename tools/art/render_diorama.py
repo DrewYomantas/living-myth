@@ -1,9 +1,3 @@
-# NEXT SESSION (2026-06-14 checkpoint): close the 7.0→7.5+ blocker #1 — broadleaf macro-massing.
-#   Replace the sphere-cluster crown in canopy()/broadleaf() with real trunk+branch structure +
-#   a non-spherical canopy mass, so a DENSE WOOD stops reading as clustered balls at region zoom.
-#   (Same pipeline: edit forms → blender render → kritarunner paintover → Godot capture. Keep
-#    deterministic + palette-locked; verify must stay 823/559/910/632.) See BIOME_SILHOUETTE_V1.md.
-#
 # Living Myth — North Star Diorama asset renderer (Prototype Pass V1).
 #
 # A serious step up from tools/art/render_assets.py (the flat low-poly spike): clustered,
