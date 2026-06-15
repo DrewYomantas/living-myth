@@ -548,19 +548,43 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       genuinely deadly — 1.45× — and visibly spreads: seed 42 saw a 22-region contagion cascade).
       All 9 gates green + the new plague gate, both builds clean (0 warnings). NO viewer payoff yet
       (the plague map/lens surfacing is the next slice).
-- [ ] Later — **viewer carding of terrain-typed harvest** (← NEXT: surface the new biome behavior
-      in-game — Region Lens "hard country / a breadbasket / a steady shore" condition language off
-      `Region.TerrainType` + its harvest state, terrain-aware famine/plenty framing, deepen `The
-      Barren Years`; viewer-only, must hold 657/691/528/726); **diorama art fidelity** (turn the
-      Blender blockout props into hand-finished illustrated assets: textured albedo, painterly
-      canopies, roof/timber/stone detail — the 5→7+ gap; or adopt licensed grounded-medieval assets
-      per the asset-scout policy); person↔site anchoring (a home site, not just a home region);
-      a map-table vignette/framing pass + marker outlines (sandbox/screenshot-verify each); relationship
-      constellation; local site-scale view; memorial tableau upgrade; surface culture + gossip in the
-      viewer; echo packs; timeline scrubbing; followed-faith audit; per-launch seed choice
-      (today seed is fixed at 7). ← NEXT
+- [x] Plague Viewer Payoff V1 (2026-06-15, viewer-only — the Disease & Plague V1 deferred viewer
+      half): the land's sickness made visible, mirroring the Harvest Memory Viewer Payoff pattern.
+      `plague`/`plague_end` event classes (bruised-violet `✷` Plague / sage `✽` Reprieve — were
+      falling back to "Tale ◆"); `MapView.MarkKind.Pestilence` — a sickly miasma stain pocked with
+      dark spores, drawn from its OWN one-slot-per-region store (`_plagueScars`, like the famine
+      scar) so recurring outbreaks never crowd the 4-slot rare-mark ring, triggered on `plague`
+      ONSET only (distinct from famine's ochre cracks, war swords, cairns); Region Lens
+      **"Pestilence"** section (live `Region.InPlague` condition line via `StoryCopy.
+      PlagueConditionPhrase` + recent plague/reprieve beats, shown ONLY when sick now or has known
+      plague, channel-honest footer — plague/plague_end excluded from "Tales anchored here");
+      Remembered Places **plague** filter chip (`FilterOf` routes plague/plague_end through the
+      region-anchored loop, never site/home); Watcher's Guide map legend gained the plague scar.
+      The Long Pestilence echo already surfaces via the generic `Echoes.DetectAll` machinery (no
+      per-echo wiring). Pure read-model — **verify held exactly 648/713/526/921**, all 10 gates
+      green, Godot build clean (0 warnings). NOT yet live-F5-watched (the remaining step).
+- [ ] Later — **diorama art fidelity** (← NEXT: turn the Blender blockout props into hand-finished
+      illustrated assets: textured albedo, painterly canopies, roof/timber/stone detail — the 5→7+
+      gap; or adopt licensed grounded-medieval assets per the asset-scout policy); seamless atlas→
+      diorama zoom (retire the bridge button per its doctrine); person↔site anchoring (a home site,
+      not just a home region); a map-table vignette/framing pass + marker outlines (sandbox/
+      screenshot-verify each); relationship constellation; local site-scale view; memorial tableau
+      upgrade; surface culture + gossip in the viewer; echo packs; timeline scrubbing; followed-faith
+      audit; migration / disease-V2 spread-chain echo / prejudice (Phase 2 forces); per-launch seed
+      choice (today seed is fixed at 7); still-unwatched Theater of War / Chronicle Replay /
+      persistence / Cast / Harvest / Plague F5 feel-tests. ← NEXT
 
 ## Session log
+- [2026-06-15] Session: Plague Viewer Payoff V1 (viewer-only, lead dev). Closed the loop on the
+  Disease & Plague V1 sim milestone by surfacing the pestilence in-game, mirroring the proven
+  Harvest Memory Viewer Payoff pattern across 5 godot files + StoryCopy: plague/plague_end event
+  classes (✷ Plague / ✽ Reprieve), a `MapView.MarkKind.Pestilence` miasma scar in its own one-slot
+  store (no 4-slot ring crowding, onset-only), a Region Lens "Pestilence" section (live
+  Region.InPlague condition + recent beats, channel-honest, shown only when relevant), a Remembered
+  Places plague filter chip (region-anchored loop, never site/home), and the plague scar added to
+  the Watcher's Guide legend. The Long Pestilence echo already surfaces via the generic echo
+  machinery. Pure read-model — verify held exactly 648/713/526/921, all 10 gates green, both builds
+  clean. Cleared a stray staged `docs/spike_offon_compare.png` at the start. NOT yet live-F5-watched.
 - [2026-06-15] Session: Disease & Plague V1 (lead dev + an Explore agent mapping the famine pattern
   source-precise; design locked with Drew before any code). The roadmap's one missing natural force,
   built as an epidemic-shaped famine clone: a decaying per-region `Pestilence` sparked by one
