@@ -733,11 +733,13 @@ public partial class GreymarketCanvas : Control
         }
 
         AddWell(draws, 11, 11);
+        int stallIdx = 0;
         foreach (var (sx, sy) in _stalls)
         {
             int fx = sx, fy = sy;
+            string skey = (stallIdx++ % 2 == 0) ? "stall_a" : "stall_b";
             var p = Iso(sx, sy);
-            draws.Add((p.Y, () => DrawStall(fx, fy)));
+            draws.Add((p.Y, () => Billboard(skey, fx, fy, 1.7f, KeyLight(fx, fy))));
         }
 
         foreach (var (gx, gy) in new (float, float)[] { (9.5f, 10f), (12.5f, 12f) })
@@ -751,7 +753,7 @@ public partial class GreymarketCanvas : Control
         {
             float fgx = gx, fgy = gy; int fv = variant;
             var p = Iso(gx, gy);
-            draws.Add((p.Y, () => DrawPerson(fgx, fgy, fv)));
+            draws.Add((p.Y, () => DrawFigure(fgx, fgy, fv)));
         }
 
         foreach (var d in draws.OrderBy(d => d.sortY)) d.draw();
@@ -911,6 +913,23 @@ public partial class GreymarketCanvas : Control
         DrawSetTransform(Vector2.Zero, 0, Vector2.One);
         var rect = new Rect2(p.X - sz / 2f, p.Y - sz * 0.82f, sz, sz);
         DrawTextureRect(tex, rect, false, mod);
+    }
+
+    // billboard a tiny cloaked diorama figure (Blender asset), cloak re-tinted per variant so the
+    // crowd reads as differently-robed folk — a stronger silhouette than the old drawn ball+rect.
+    private void DrawFigure(float gx, float gy, int variant)
+    {
+        string key = variant == 2 ? "figure_staff" : "figure";
+        // mods may exceed 1.0 — they LIFT the mid-tone tan cloak texture into a vivid robe while
+        // the multiply keeps the baked ink outline/shading. Three robes for a lively, varied crowd.
+        var cloak = variant switch
+        {
+            0 => new Color(1.85f, 1.05f, 0.52f),   // warm ochre robe
+            1 => new Color(0.70f, 1.25f, 1.12f),   // cool teal traveller
+            _ => new Color(1.70f, 0.70f, 0.48f),   // rust-red cloak
+        };
+        var tint = cloak * KeyLight(gx, gy);
+        Billboard(key, gx, gy, 0.82f, tint);
     }
 
     private void DrawPerson(float gx, float gy, int variant)

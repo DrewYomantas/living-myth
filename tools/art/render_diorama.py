@@ -23,9 +23,13 @@ PAL = {
     "rock": "8b8a82", "rock_dark": "6f6e66", "rock_warm": "9a9384",
     "timber": "73583a", "timber_dark": "5b4429", "thatch": "b08a4a", "thatch_dark": "8f6f38",
     "slate": "6a6f74", "slate_dark": "53585d", "stone": "9a9388", "stone_old": "857f72",
-    "plaster": "c8b48a", "door": "3f2f1c", "field_gold": "9c853f", "field_green": "6f7e3a",
+    "plaster": "d8c39a", "plaster_warm": "e3cda0",
+    "tile": "9a4f31", "tile_dark": "7a3d26", "tile_warm": "b0603a",
+    "door": "3f2f1c", "field_gold": "9c853f", "field_green": "6f7e3a",
     "water": "5b8f96", "water_deep": "4a7d84", "cloth": "d8d2c2", "ink": "2a2012",
     "ember": "c7702e", "soil": "6e5638",
+    # cloaked-figure tones (Godot re-tints the cloak per soul; head/staff stay neutral)
+    "cloak": "8a6a44", "cloak_dark": "5e482e", "skin": "caa074", "staff": "6a4f2a",
 }
 
 def _srgb_to_linear(c):
@@ -266,35 +270,89 @@ def build_crag():
             loc=(sx*0.42, -0.3, 0.1), scale=(0.16, 0.13, 0.12),
             rot=(rng.uniform(-0.3, 0.3), 0, rng.uniform(0, 3.14)), smooth=False, bevel=0.01)
 
-def _house(x, y, w, d, wall, roof, rng, ang=0.0):
-    bh = w * 0.95
+def _beam(x, y, z, sx, sy, sz, ang, tone="timber_dark"):
+    add("primitive_cube_add", rgba(tone), loc=(x, y, z), scale=(sx, sy, sz), rot=(0, 0, ang),
+        bevel=0.004)
+
+def _house(x, y, w, d, wall, roof, rng, ang=0.0, roof_pitch=0.86, eave=1.42, tall=1.0):
+    """A richer dwelling, not a toy box: a STONE BASE COURSE grounds it, the walls carry exposed
+    TIMBER FRAMING (corner posts, top plate, sill, a brace), a HEAVY OVERHANGING pitched roof with
+    a ridge beam crowns it, plus a stone CHIMNEY and a recessed door + window. Proportions are
+    jittered per call so a terrace never reads as repeated stamps."""
+    ca, sa = math.cos(ang), math.sin(ang)
+    base_h = w * 0.26
+    wall_h = w * 1.34 * tall          # tall enough that base + framing read beneath the roof
+    wz0 = base_h
+    wtop = wz0 + wall_h
+    # 1) STONE BASE COURSE — a wider, short plinth of weathered stone
+    add("primitive_cube_add", rgba("stone_old", jitter=0.06, rng=rng),
+        loc=(x, y, base_h*0.5), scale=(w*1.07, d*1.07, base_h*0.5), rot=(0, 0, ang), bevel=0.02)
+    # 2) MAIN WALL — warm plaster/timber infill
     add("primitive_cube_add", rgba(wall, jitter=0.06, rng=rng),
-        loc=(x, y, bh*0.5), scale=(w, d, bh*0.5), rot=(0, 0, ang), bevel=0.015)
-    # pitched roof: a cube rotated 45° on its long axis, scaled to a ridge
-    rz = bh + d*0.62
+        loc=(x, y, wz0 + wall_h*0.5), scale=(w, d, wall_h*0.5), rot=(0, 0, ang), bevel=0.01)
+    # 3) TIMBER FRAMING on the two camera-facing walls — reads as half-timber.
+    #    nx=1 → +X long wall (tangent = local Y, run = d); ny=1 → +Y end wall (tangent = X, run = w).
+    def to_world(lx, ly):
+        return (x + lx*ca - ly*sa, y + lx*sa + ly*ca)
+    def face(nx, ny, run):
+        # corner posts at the two wall ends
+        for s in (-1, 1):
+            lx = w if nx else s*run
+            ly = d if ny else s*run
+            px, py = to_world(lx, ly)
+            _beam(px, py, wz0 + wall_h*0.5, 0.045, 0.045, wall_h*0.5, ang)
+        # top plate + sill run ALONG the wall (plate long-axis = the tangent)
+        cx, cy = to_world(w if nx else 0, d if ny else 0)
+        plate_ang = ang + (1.5708 if nx else 0)   # long wall runs along Y
+        for zz in (wz0 + wall_h*0.94, wz0 + wall_h*0.10):
+            _beam(cx, cy, zz, run, 0.05, 0.05, plate_ang)
+        # a diagonal brace for the crafted read
+        _beam(cx, cy, wz0 + wall_h*0.5, run*0.85, 0.045, 0.045, plate_ang + 0.5)
+    face(1, 0, d)   # +X long wall
+    face(0, 1, w)   # +Y end wall
+    # 4) PITCHED ROOF — a 45°-rotated cube reads as a closed ridge prism (gables capped). Sized so
+    #    its bottom vertex sits just BELOW the wall top: eaves overhang the walls a little, the roof
+    #    CAPS the dwelling instead of engulfing it. `eave` widens the diamond (deeper eaves), `pitch`
+    #    raises the ridge. The gable end stays solid (cube faces), so no open peak.
+    yz = d * eave                      # diamond half-size in the depth/height plane
+    rz = wtop + yz*0.50                # centre so the lower vertex tucks just under the eaves line
     add("primitive_cube_add", rgba(roof, jitter=0.05, rng=rng),
-        loc=(x, y, rz), scale=(w*1.12, d*0.92, d*0.92), rot=(0.785, 0, ang), bevel=0.01)
-    # door
+        loc=(x, y, rz), scale=(w*1.16, yz, yz*roof_pitch), rot=(0.785, 0, ang), bevel=0.008)
+    # ridge beam along the peak
+    ridge_z = rz + yz*1.04*roof_pitch
+    _beam(x, y, ridge_z, w*1.18, 0.05, 0.05, ang, "timber")
+    # 5) CHIMNEY — stone, rear corner, with a darker cap
+    chx = x + (-w*0.55*ca - d*0.4*sa)
+    chy = y + (-w*0.55*sa + d*0.4*ca)
+    add("primitive_cube_add", rgba("stone_old", jitter=0.05, rng=rng),
+        loc=(chx, chy, wtop + yz*0.6), scale=(0.075, 0.075, yz*0.7 + 0.12), rot=(0, 0, ang), bevel=0.01)
+    add("primitive_cube_add", rgba("ink"),
+        loc=(chx, chy, wtop + yz*1.35 + 0.12), scale=(0.092, 0.092, 0.035), rot=(0, 0, ang))
+    # 6) DOOR + window on the +X face, recessed dark
+    dx = x + (w + 0.012)*ca
+    dy = y + (w + 0.012)*sa
     add("primitive_cube_add", rgba("door"),
-        loc=(x + math.cos(ang)*(w+0.01), y + math.sin(ang)*(w+0.01), bh*0.32),
-        scale=(0.02, d*0.22, bh*0.32), rot=(0, 0, ang))
+        loc=(dx, dy, wz0 + wall_h*0.30), scale=(0.02, d*0.20, wall_h*0.30), rot=(0, 0, ang))
+    wx = x + (w + 0.012)*ca - d*0.42*sa
+    wy = y + (w + 0.012)*sa + d*0.42*ca
+    add("primitive_cube_add", rgba("ink"),
+        loc=(wx, wy, wz0 + wall_h*0.58), scale=(0.02, d*0.16, wall_h*0.18), rot=(0, 0, ang))
 
 def build_house_a():
+    # a thatched cottage — smaller, STEEP warm-thatch roof, plaster + dark timber
     rng = random.Random(505)
-    _house(0, 0, 0.42, 0.34, "timber", "thatch", rng)
-    # chimney
-    add("primitive_cube_add", rgba("stone_old"), loc=(0.22, -0.18, 0.62),
-        scale=(0.07, 0.07, 0.34), bevel=0.012)
+    _house(0, 0, 0.40, 0.32, "plaster", "thatch", rng, roof_pitch=1.05, eave=0.82, tall=0.92)
 
 def build_house_b():
+    # a larger timber hall — lower-pitch WARM TILE roof (not cold slate), a lean-to porch off the side
     rng = random.Random(606)
-    _house(0, 0, 0.62, 0.46, "plaster", "slate", rng)
-    add("primitive_cube_add", rgba("stone_old"), loc=(0.3, -0.26, 0.82),
-        scale=(0.08, 0.08, 0.4), bevel=0.012)
-    # timber posts at corners
+    _house(0, 0, 0.58, 0.42, "plaster_warm", "tile", rng, roof_pitch=0.72, eave=0.74, tall=1.06)
+    # lean-to / porch roof off the +Y end — a single sloped panel on two posts
+    add("primitive_cube_add", rgba("tile_dark", jitter=0.05, rng=rng), loc=(0, 0.62, 0.66),
+        scale=(0.5, 0.2, 0.03), rot=(0.5, 0, 0), bevel=0.006)
     for sx in (-1, 1):
-        add("primitive_cube_add", rgba("timber_dark"), loc=(sx*0.58, 0, 0.55),
-            scale=(0.04, 0.04, 0.55))
+        add("primitive_cylinder_add", rgba("timber_dark"), loc=(sx*0.42, 0.74, 0.28),
+            scale=(0.03, 0.03, 1), vertices=6, radius=1, depth=0.56)
 
 def build_keep():
     rng = random.Random(707)
@@ -418,6 +476,84 @@ def build_field():
         add("primitive_cylinder_add", rgba("timber_dark"), loc=(-0.9, -0.7 + i*0.45, 0.1),
             scale=(0.02, 0.02, 1), vertices=5, radius=1, depth=0.22)
 
+def _stall(seed, awnA, awnB):
+    """A scene-DEFINING market stall (not tiny clutter): four timber posts, a heavy plank counter
+    laden with goods, barrels beneath, and a big PEAKED STRIPED CANVAS AWNING with deep overhang
+    and a scalloped front valance. Two awning colours per call so the market reads varied."""
+    rng = random.Random(seed)
+    w, d = 0.46, 0.40
+    postH = 0.66
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            add("primitive_cylinder_add", rgba("timber_dark", jitter=0.06, rng=rng),
+                loc=(sx*w*0.82, sy*d*0.82, postH*0.5), scale=(0.028, 0.028, 1),
+                vertices=6, radius=1, depth=postH)
+    # heavy plank counter along the front (+Y), with a couple of trestle legs
+    add("primitive_cube_add", rgba("timber", jitter=0.05, rng=rng), loc=(0, d*0.78, 0.36),
+        scale=(w*0.96, 0.07, 0.045), bevel=0.008)
+    # goods on the counter — mounded produce + a stacked crate
+    for (gx, tone) in [(-0.26, "field_gold"), (-0.05, "ember"), (0.18, "leaf_mid")]:
+        add("primitive_ico_sphere_add", rgba(tone, jitter=0.12, rng=rng),
+            loc=(gx, d*0.78, 0.45), scale=(0.07, 0.07, 0.05), subdivisions=2, radius=1, smooth=True)
+    add("primitive_cube_add", rgba("timber", jitter=0.08, rng=rng), loc=(0.28, d*0.62, 0.46),
+        scale=(0.06, 0.06, 0.06), rot=(0, 0, 0.4), bevel=0.006)
+    # barrels beneath the counter
+    for bx in (-0.24, 0.0):
+        add("primitive_cylinder_add", rgba("timber_dark", jitter=0.07, rng=rng),
+            loc=(bx, d*0.5, 0.12), scale=(0.075, 0.075, 1), vertices=12, radius=1, depth=0.24)
+    # hanging sack from a front post
+    add("primitive_ico_sphere_add", rgba("cloth", jitter=0.05, rng=rng),
+        loc=(-w*0.82, d*0.7, 0.5), scale=(0.06, 0.06, 0.08), subdivisions=2, radius=1, smooth=True)
+    # PEAKED STRIPED AWNING — a ridge prism (awnA) with awnB stripes running down both slopes
+    az = postH + 0.04
+    aw, ad = w*1.34, d*1.5
+    add("primitive_cube_add", rgba(awnA, jitter=0.04, rng=rng), loc=(0, 0, az + ad*0.32),
+        scale=(aw, ad*0.62, ad*0.62), rot=(0.785, 0, 0), bevel=0.004)
+    for i in range(-2, 3):
+        add("primitive_cube_add", rgba(awnB, jitter=0.04, rng=rng), loc=(i*0.155, 0, az + ad*0.325),
+            scale=(0.05, ad*0.625, ad*0.625), rot=(0.785, 0, 0))
+    # scalloped valance hanging off the front eave
+    for i in range(-3, 4):
+        add("primitive_cube_add", rgba(awnA if i % 2 else awnB, jitter=0.04, rng=rng),
+            loc=(i*0.12, d*0.92, az + 0.02), scale=(0.05, 0.015, 0.055), bevel=0.004)
+
+def build_stall_a():
+    _stall(160, "tile_warm", "cloth")     # warm red + cream
+
+def build_stall_b():
+    _stall(170, "water_deep", "cloth")    # teal + cream
+
+def _figure(seed, staff=False):
+    """A tiny mythic diorama FIGURE: a strong cloaked-body silhouette (tapered cloak cone + hood +
+    a peeking face), optionally bearing a staff. Cloak baked warm-neutral — Godot re-tints per soul.
+    Read at sprite size it is a person, not a dot."""
+    rng = random.Random(seed)
+    lean = rng.uniform(-0.06, 0.06)
+    # cloak — a tapered cone, wide hem to narrow shoulders
+    add("primitive_cone_add", rgba("cloak", jitter=0.05, rng=rng), loc=(0, 0, 0.30),
+        scale=(0.19, 0.16, 1), vertices=14, radius1=1, radius2=0.42, depth=0.60,
+        rot=(lean, 0, rng.uniform(0, 3.14)), smooth=True)
+    # a darker fold down the front for depth
+    add("primitive_cube_add", rgba("cloak_dark", jitter=0.06, rng=rng), loc=(0, 0.07, 0.30),
+        scale=(0.03, 0.02, 0.26), rot=(lean, 0, 0))
+    # shoulders cap
+    add("primitive_ico_sphere_add", rgba("cloak", jitter=0.05, rng=rng), loc=(0, 0, 0.60),
+        scale=(0.13, 0.12, 0.09), subdivisions=2, radius=1, smooth=True)
+    # hood + peeking face
+    add("primitive_ico_sphere_add", rgba("cloak_dark", jitter=0.04, rng=rng), loc=(0, -0.01, 0.74),
+        scale=(0.085, 0.085, 0.10), subdivisions=2, radius=1, smooth=True)
+    add("primitive_ico_sphere_add", rgba("skin", jitter=0.05, rng=rng), loc=(0, 0.05, 0.73),
+        scale=(0.055, 0.05, 0.06), subdivisions=2, radius=1, smooth=True)
+    if staff:
+        add("primitive_cylinder_add", rgba("staff", jitter=0.05, rng=rng), loc=(0.16, 0.02, 0.42),
+            scale=(0.016, 0.016, 1), vertices=6, radius=1, depth=0.84, rot=(0.04, 0.02, 0))
+
+def build_figure():
+    _figure(180)
+
+def build_figure_staff():
+    _figure(190, staff=True)
+
 def build_banner():
     rng = random.Random(140)
     # taller pole + brass finial; a fuller, clearer flag with a triangular pennant above it so
@@ -464,6 +600,10 @@ BUILDERS = {
     "crag": build_crag,
     "house_a": build_house_a,
     "house_b": build_house_b,
+    "stall_a": build_stall_a,
+    "stall_b": build_stall_b,
+    "figure": build_figure,
+    "figure_staff": build_figure_staff,
     "keep": build_keep,
     "watchtower": build_watchtower,
     "standing_stones": build_standing_stones,
@@ -654,16 +794,25 @@ def main():
     cam = make_camera(scene)
     setup_lights(scene)
 
+    # LM_ONLY="house_a,stall_a" renders just those props (fast iteration); else render all.
+    only = [s for s in os.environ.get("LM_ONLY", "").split(",") if s]
+
     done = []
     for name, builder in BUILDERS.items():
-        clear_meshes()
-        add_shadow_catcher()
-        builder()
-        frame_camera(cam)
-        scene.render.filepath = os.path.join(outdir, name + ".png")
-        bpy.ops.render.render(write_still=True)
-        done.append(name)
-        print(f"[diorama] rendered {name}.png")
+        if only and name not in only:
+            continue
+        try:
+            clear_meshes()
+            add_shadow_catcher()
+            builder()
+            frame_camera(cam)
+            scene.render.filepath = os.path.join(outdir, name + ".png")
+            bpy.ops.render.render(write_still=True)
+            done.append(name)
+            print(f"[diorama] rendered {name}.png")
+        except Exception as ex:
+            print(f"[diorama] FAILED {name}: {ex}")
+            import traceback; traceback.print_exc()
 
     # ---- second pass: top-down OPAQUE ground swatches (different camera + flat even light) -------
     bpy.ops.object.select_all(action="SELECT")
@@ -684,6 +833,8 @@ def main():
     go.rotation_euler = (math.radians(8), 0, math.radians(-30))
     scene.world.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.95
     for name, builder in GROUNDS.items():
+        if only and name not in only:
+            continue
         clear_meshes()
         builder()
         scene.render.filepath = os.path.join(outdir, name + ".png")
