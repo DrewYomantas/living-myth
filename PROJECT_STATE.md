@@ -591,6 +591,38 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       who reliably dies in-window, instead of the youngest-by-id whom the reshuffle outlived).
       Deliberate baseline move: 648/713/526/921 → **1131/880/425/998**. All 11 gates green, both
       builds clean. NO viewer payoff yet (movement arcs / the Promised Land on the map — next slice).
+- [x] Prejudice V1 (2026-06-15, sim + read-models + gate — the SIXTH deliberate baseline move; the
+      Phase-2 social-force capstone the migration arc set up): an ESTABLISHED people scapegoats a
+      NEWCOMER neighbour of different stock — ORIGIN prejudice, distinct from the faith-keyed
+      `Persecution()`. New `Migration()` sets `Faction.LastMigrationYear` on every move (a people is a
+      "newcomer" for `prejudice_newcomer_window` 40 yr). New `Prejudice()` slots **Culture → Gossip →
+      Prejudice → MaybeDeclareWars** (after the year's whispers, before war declaration so a scorn can
+      tip a pair into war the same tick). Each people gets exactly ONE draw/year (a fixed-cost
+      `Rng.Chance` — Chance(0) still consumes its ULong, the plague/migration keystone — so consumption
+      stays deterministic); eligibility (established ≥ `prejudice_established_window` 15 yr settled +
+      `prejudice_min_pop`, with its own famine/plague sharpening the odds 0.14→0.30) sets the
+      probability, NEVER whether the draw happens. On a hit it finds a different-culture people that
+      moved within the window and shares a border (deterministic — sorted order, first match, zero
+      further Rng) and records a `scorn`: a `prejudice` event anchored to the **BORDER region (RegionId-
+      only, never SiteId** — a feeling on a frontier, `SiteAnchors` NOT extended), tension toward the
+      newcomers (feeding the existing war machinery, like gossip), and a darkened standing for their
+      leader (the group stigma on its figurehead, reusing the gossip Reputation scale). It invents NO
+      new killing — scorn stokes war through tension, the death payoff the sim already balances. The
+      event carries `by-{id}`+`target-{id}` tags so the echo/gate can name both sides. Read-models:
+      StoryGrammar `prejudice-from-famine`/`-from-plague` (Therefore — a stress-driven scorn cause-
+      links to the disaster; a plain scorn is rootless, motive-in-text), Scoring `prejudice`=45 +
+      `scorn` tag=12, Echo **The Unwelcome** (one people named unwelcome ≥3 times in a 25-yr-gapped age
+      — target-faction-keyed, Barren-Years discipline). New `prejudice` gate proves border-RegionId
+      anchoring (no site/home leak, `SiteAnchors.Expected`==null), cross-stock targeting (real, distinct,
+      different-culture peoples), cause honesty (a scorn with causes answers a real famine/plague),
+      double-run determinism, and non-vacuity (37 scorns / 9 disaster-driven across the suite at 120 yr).
+      **Balance keystone (the plague inverse, NOT migration's free lunch):** the per-faction draw
+      reshuffles the whole stream, and seed 42 — which fires ZERO scorns — STILL extincted at 5000 yr,
+      so the extinction was the RESHUFFLE, not prejudice lethality; NO prejudice param fixed it. A
+      global `birth_chance` 0.26→**0.27** absorbed it (the same move plague made at 0.24→0.26). 5000-yr
+      **151/267/294/317 living, no extinction**. Deliberate baseline move: 1131/880/425/998 →
+      **598/751/809/1065**. All 12 gates green, both builds clean. NO viewer payoff yet (scorn marks /
+      The Unwelcome on the atlas — a future slice).
 - [ ] Later — **viewer payoff for migration** (← NEXT: surface movement on the atlas — a migration
       mark/arc at the destination land, Region Lens "settled by the fleeing" / "a people spread here"
       lines, the Promised Land echo, plague/migration F5 feel-test; viewer-only, must hold
@@ -601,9 +633,11 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       not just a home region); a map-table vignette/framing pass + marker outlines (sandbox/
       screenshot-verify each); relationship constellation; local site-scale view; memorial tableau
       upgrade; surface culture + gossip in the viewer; echo packs; timeline scrubbing; followed-faith
-      audit; disease-V2 spread-chain echo / prejudice (remaining Phase 2 forces); per-launch seed
-      choice (today seed is fixed at 7); still-unwatched Theater of War / Chronicle Replay /
-      persistence / Cast / Harvest / Plague / Migration F5 feel-tests.
+      audit; **prejudice viewer payoff** (scorn marks on the border / The Unwelcome on the atlas /
+      Region Lens "named the newcomers unwelcome" — must hold 598/751/809/1065); disease-V2 spread-
+      chain echo (the last remaining Phase 2 force); per-launch seed choice (today seed is fixed at 7);
+      still-unwatched Theater of War / Chronicle Replay / persistence / Cast / Harvest / Plague /
+      Migration / Prejudice F5 feel-tests.
 
 ## Session log
 - [2026-06-15] Session: Migration V1 (sim + read-models + gate, lead dev; design forks locked with
