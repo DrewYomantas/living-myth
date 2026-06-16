@@ -28,6 +28,9 @@ PAL = {
     "door": "3f2f1c", "field_gold": "9c853f", "field_green": "6f7e3a",
     "water": "5b8f96", "water_deep": "4a7d84", "cloth": "d8d2c2", "ink": "2a2012",
     "ember": "c7702e", "soil": "6e5638",
+    # broad terrain-zone tones (painted ground swatches — meadow / worn dirt / packed plaza)
+    "meadow": "6f8240", "meadow_dark": "566a32", "meadow_dry": "8a8a46",
+    "path": "7a5c38", "path_pale": "977548", "earth": "8a6e44", "earth_dark": "6e5634",
     # cloaked-figure tones (Godot re-tints the cloak per soul; head/staff stay neutral)
     "cloak": "8a6a44", "cloak_dark": "5e482e", "skin": "caa074", "staff": "6a4f2a",
 }
@@ -201,12 +204,18 @@ def conifer(x, y, scale, rng):
 
 # ---- builders ----------------------------------------------------------------------------------
 def _cluster(seed, kind):
+    # a denser, deliberately OVERLAPPING copse: more stems pulled tighter together with a tall
+    # dominant at the back so the cluster reads as one layered canopy MASS (a forest-edge clump),
+    # not a few separated toy puffs. A back-to-front size gradient gives the clump real depth.
     rng = random.Random(seed)
-    n = rng.randint(3, 5)
+    n = rng.randint(5, 7)
+    fn = broadleaf if kind == "b" else conifer
+    # the dominant anchor tree at the back, taller — the silhouette the clump is read by
+    fn(rng.uniform(-0.18, 0.18), rng.uniform(0.12, 0.34), rng.uniform(1.05, 1.30), rng)
     for _ in range(n):
-        x, y = rng.uniform(-0.5, 0.5), rng.uniform(-0.5, 0.5)
-        s = rng.uniform(0.6, 1.0)
-        (broadleaf if kind == "b" else conifer)(x, y, s, rng)
+        x, y = rng.uniform(-0.62, 0.62), rng.uniform(-0.55, 0.30)
+        s = rng.uniform(0.62, 1.02)
+        fn(x, y, s, rng)
 
 def build_tree_broadleaf_cluster():
     _cluster(101, "b")
@@ -688,6 +697,11 @@ GROUNDS = {
     "ground_highland": lambda: _ground(["rock", "rock_dark", "rock_warm", "moss"], scale=5.5),
     "ground_water":    lambda: _ground(["water_deep", "water", "water_deep"], scale=4.0,
                                        foam=(0.86, 0.92, 0.92, 1.0)),
+    # broad painted terrain zones (the village's living ground): green meadow, worn dirt lanes,
+    # and a trodden packed-earth plaza. Bigger noise scale → broad masses, not fine speckle.
+    "ground_grass":    lambda: _ground(["meadow", "meadow_dark", "meadow_dry", "moss"], scale=4.2),
+    "ground_dirt":     lambda: _ground(["path", "soil", "path_pale", "earth_dark"], scale=4.8),
+    "ground_plaza":    lambda: _ground(["earth", "path_pale", "grass_dry", "earth_dark"], scale=4.5),
 }
 
 # ---- scene / camera / lights -------------------------------------------------------------------
