@@ -227,14 +227,41 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   pressure, so the reshuffle needed NO tuning (5000-yr **260/274/163/280**, no extinction). Baseline
   648/713/526/921 → **1131/880/425/998**. All 11 gates green; future-proofed the `replay` gate's one
   fragile scenario (curse the oldest adult). No viewer payoff yet.
+- **Prejudice V1** (2026-06-15, sim + read-models + gate — SIXTH deliberate baseline move; the Phase-2
+  social-force capstone the migration arc set up): an ESTABLISHED people scapegoats a NEWCOMER
+  neighbour of different stock — ORIGIN prejudice, distinct from the faith-keyed `Persecution()`.
+  `Migration()` now stamps `Faction.LastMigrationYear` on every move (newcomer for
+  `prejudice_newcomer_window` 40 yr). New `Prejudice()` engine (Culture → Gossip → **Prejudice** →
+  MaybeDeclareWars — after the whispers, before war declaration so a scorn tips a pair the same tick):
+  one fixed-cost `Rng.Chance` draw per faction per year (Chance(0) still consumes — the plague/migration
+  keystone); eligibility (established ≥ `prejudice_established_window` 15 yr + `prejudice_min_pop`, own
+  famine/plague sharpening 0.14→0.30) sets the probability, never WHETHER it draws. On a hit it finds a
+  different-culture people that moved within the window and shares a border (deterministic — sorted
+  order, first match, zero further Rng) and records a `scorn`: a `prejudice` event anchored to the
+  **BORDER region (RegionId-only, never SiteId** — SiteAnchors NOT extended), tension toward the
+  newcomers (feeds the existing war machinery, like gossip), and a darkened standing for their leader
+  (group stigma on the figurehead, reusing the gossip Reputation scale). It invents NO new killing —
+  scorn stokes war through tension, the death payoff the sim already balances; `by-{id}`+`target-{id}`
+  tags name both sides. Read-models: StoryGrammar `prejudice-from-famine`/`-from-plague` (Therefore;
+  plain scorn rootless, motive-in-text), Scoring `prejudice`=45 + `scorn`=12, Echo **The Unwelcome**
+  (one people named unwelcome ≥3× in a 25-yr-gapped age — target-faction-keyed, Barren-Years discipline).
+  New `prejudice` gate (border-RegionId anchoring, cross-stock targeting, cause honesty, determinism,
+  non-vacuity). **Balance keystone (the plague inverse, NOT migration's free lunch):** the per-faction
+  draw reshuffles the stream, and seed 42 — which fires ZERO scorns — STILL extincted at 5000 yr, so the
+  extinction was the RESHUFFLE not lethality; no prejudice param fixed it. Global `birth_chance`
+  0.26→**0.27** absorbed it (the plague move repeated). 5000-yr **151/267/294/317**, no extinction.
+  Baseline 1131/880/425/998 → **598/751/809/1065**. All 12 gates green, both builds clean. No viewer
+  payoff yet.
 - **Next** — **viewer payoff for migration** (movement arcs / a migration mark at the destination,
   Region Lens "settled by the fleeing / a people spread here", the Promised Land echo — viewer-only,
-  must hold 1131/880/425/998); **diorama art fidelity** (hand-finished/licensed assets — the 7.0→7.5+
-  gap) or seamless atlas→diorama zoom (retire the bridge button per its doctrine); more code-only
-  visual treatment (territory boundary lines, elevation contours, marker outlines — sandbox/
-  screenshot-verify each); still-unwatched Theater of War / Chronicle Replay / persistence / Cast /
-  Harvest / Plague / Migration F5 feel-tests; disease-V2 spread-chain echo / prejudice (remaining
-  Phase 2 forces); person↔site anchoring; timeline scrubbing; per-launch seed choice (today fixed at 7).
+  must hold 598/751/809/1065); **prejudice viewer payoff** (scorn marks on the border / The Unwelcome
+  on the atlas / Region Lens "named the newcomers unwelcome"); **diorama art fidelity** (hand-finished/
+  licensed assets — the 7.0→7.5+ gap) or seamless atlas→diorama zoom (retire the bridge button per its
+  doctrine); more code-only visual treatment (territory boundary lines, elevation contours, marker
+  outlines — sandbox/screenshot-verify each); still-unwatched Theater of War / Chronicle Replay /
+  persistence / Cast / Harvest / Plague / Migration / Prejudice F5 feel-tests; disease-V2 spread-chain
+  echo (the last remaining Phase 2 force); person↔site anchoring; timeline scrubbing; per-launch seed
+  choice (today fixed at 7).
 
 ## Commands
 ```bash
@@ -250,6 +277,7 @@ dotnet run --project src/LivingMyth.Console -- replay          # chronicle-repla
 dotnet run --project src/LivingMyth.Console -- harvest         # per-region harvest economy gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- plague          # disease & plague contract gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- migration       # migration (flight & settlement) contract gate (must pass; --years N)
+dotnet run --project src/LivingMyth.Console -- prejudice        # prejudice (the outsider force) contract gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- run --seed 42
 dotnet run --project src/LivingMyth.Console -- divergence --seed 18
 dotnet run --project src/LivingMyth.Console -- surface --seed 1
@@ -262,10 +290,13 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 ## Gotchas
 - **The yearly tick is a fixed engine order** (`World.Tick`): Economy → **Pestilence** →
   **Migration** → ProcessWars → Deaths → Crime → ForbiddenRomance → Marriages → Births → DoReligion
-  → Culture → Gossip → MaybeDeclareWars → DecayTension → ReleaseExtinctLands → **(re-derive land-mood
-  rollups)**. New pressure engines slot into this order; where they sit changes RNG consumption (and
-  the verify baseline), so placement is a deliberate choice. Pestilence sits after Economy (reads
-  this tick's `InFamine`) and before Deaths (sets `InPlague` for mortality). Migration sits after
+  → Culture → Gossip → **Prejudice** → MaybeDeclareWars → DecayTension → ReleaseExtinctLands →
+  **(re-derive land-mood rollups)**. New pressure engines slot into this order; where they sit changes
+  RNG consumption (and the verify baseline), so placement is a deliberate choice. Pestilence sits after
+  Economy (reads this tick's `InFamine`) and before Deaths (sets `InPlague` for mortality). Prejudice
+  sits after Gossip (the year's whispers are in) and before MaybeDeclareWars (so a scorn's tension can
+  tip a pair into war the same tick — its only mechanical payoff is through the existing war path).
+  Migration sits after
   Pestilence (reads this tick's region famine/plague to decide who flees) and before ProcessWars
   (territory settles before war plays out on the new map); a fled people is re-derived out of its
   death pressure on the spot (zero-Rng). The final re-derive of
@@ -303,8 +334,9 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
   "remembered in / of / rooted in {X}" — never "died/born/murdered in {X}", never bare "in {X}".
   Keep the stores/sections separate end to end (RegionActivity, MapView marks, Region Lens).
 - **Population balance is the `carrying_capacity` param** (config.json, currently 300):
-  logistic births → plateau. Too low (~120) drifts to extinction. With the Harvest Economy on,
-  verified stable ~150–310 living over 5000 yrs at 300 across seeds 1/18/42/7 (168/157/306/150).
+  logistic births → plateau. Too low (~120) drifts to extinction. With the natural forces all on,
+  verified stable ~150–320 living over 5000 yrs at 300 across seeds 1/18/42/7 (151/267/294/317,
+  Prejudice V1 — `birth_chance` 0.27 absorbing the prejudice reshuffle).
   `curse_death_multiplier` (2.5) and `famine_death_multiplier` (1.4) + `famine_threshold` (0.45)
   tune how deadly curses and collapse are. The economy is a net population suppressor (famine adds
   deaths, booms only help births), so raising multipliers drifts low seeds toward extinction.
@@ -313,17 +345,18 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
   to extinction by shifting the trade-guard RNG stream — derive BEFORE trade (guard reads fresh
   mean) + re-derive the two traders after each trade (zero Rng) is the balance-safe order.
 - **The verify baseline moves whenever sim RNG consumption changes — OR a new event type is
-  recorded.** Current `verify` counts (120 yr, cap 300): **1131/880/425/998** (seeds 1/18/42/7,
-  Migration V1 baseline — `Migration()` adds one `Rng.Chance` draw per faction per year + reshapes
-  territory, reshuffling the whole downstream stream). Prior baselines: Disease & Plague
-  648/713/526/921, Terrain-Typed Harvest 657/691/528/726, Harvest Economy 823/559/910/632, Battle
-  Sites 894/705/574/715, M8 gossip 884/699/567/706, M7 culture 814/594/525/652. The determinism gate
-  is self-consistency (same seed → byte-identical run), so it stays green regardless of feature work;
-  these numbers are just the recorded expectation. NOTE: adding a recorded event with NO new Rng (the
-  Battle Sites trick) moves the count but not the stream — but Harvest Economy, Disease & Plague, and
-  Migration are genuine new-Rng contracts, so re-run the 5000-yr balance probe (no extinction) when
-  touching them. Current 5000-yr balance: **260/274/163/280** (Migration helped — fleeing famine cuts
-  death pressure, so it needed no tuning, unlike plague's birth_chance nudge).
+  recorded.** Current `verify` counts (120 yr, cap 300): **598/751/809/1065** (seeds 1/18/42/7,
+  Prejudice V1 baseline — `Prejudice()` adds one `Rng.Chance` draw per faction per year + the
+  `birth_chance` 0.26→0.27 absorber, reshuffling the whole downstream stream). Prior baselines:
+  Migration 1131/880/425/998, Disease & Plague 648/713/526/921, Terrain-Typed Harvest 657/691/528/726,
+  Harvest Economy 823/559/910/632, Battle Sites 894/705/574/715, M8 gossip 884/699/567/706, M7 culture
+  814/594/525/652. The determinism gate is self-consistency (same seed → byte-identical run), so it
+  stays green regardless of feature work; these numbers are just the recorded expectation. NOTE: adding
+  a recorded event with NO new Rng (the Battle Sites trick) moves the count but not the stream — but
+  Harvest Economy, Disease & Plague, Migration, and Prejudice are genuine new-Rng contracts, so re-run
+  the 5000-yr balance probe (no extinction) when touching them. Current 5000-yr balance:
+  **151/267/294/317** (Prejudice needed the birth_chance nudge — its reshuffle extincted seed 42 even
+  with zero scorns, the plague trap not migration's free lunch).
 - **Battle Sites are zero-Rng by construction.** `World.RecordBattle` records a `battle` event
   but draws NO Rng; the war's casualties are the same `Rng.RandInt(0,2)`/`Pick` rolls as before,
   just cause-linked to the battle. `FrontRegion` (the border region a war is fought over) is a
@@ -395,6 +428,30 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
   ALWAYS re-run the 5000-yr probe + the `migration` gate (both-driver non-vacuity) when touching
   migration params or the tick position. Echo **The Promised Land** is destination-RegionId-keyed
   (≥3 arrivals in a 25-yr-gapped age, Barren-Years discipline).
+- **Prejudice is ORIGIN scapegoating, NOT the faith-keyed `Persecution()` — and its balance trap is
+  the plague one, not migration's free lunch.** `Prejudice()` (after Gossip, before MaybeDeclareWars)
+  is the social capstone the migration arc set up: exactly ONE `Rng.Chance` draw per faction per year
+  (fixed ULong cost — Chance(0) still consumes it, so an ineligible/ unestablished people still draws
+  and the stream never forks), deciding WHETHER an ESTABLISHED people scorns. Eligibility (settled ≥
+  `prejudice_established_window` since its OWN last move + `prejudice_min_pop`, its own famine/plague
+  sharpening 0.14→0.30) sets the probability, never WHETHER it draws. The target is a different-culture
+  people that moved within `prejudice_newcomer_window` (set by `Migration()` via `Faction.
+  LastMigrationYear` — territory move ≠ lineage, `HomeRegionId` untouched) AND shares a border —
+  `FindNewcomerNeighbour` picks it in sorted order, first match, ZERO further Rng. A `scorn` records a
+  `prejudice` event anchored to the **BORDER region (RegionId-only, never SiteId** — `SiteAnchors` NOT
+  extended, the `prejudice` gate proves Expected==null), raises tension toward the newcomers (its ONLY
+  mechanical payoff — it feeds the existing war path, inventing no new killing), and darkens the
+  newcomers' leader's `Reputation` (group stigma on the figurehead, the gossip scale). `by-{id}`+
+  `target-{id}` tags name both sides (the echo keys on `target-`). StoryGrammar `prejudice-from-famine`/
+  `-from-plague` are Therefore (a stress-driven scorn cause-links to the disaster; a plain scorn is
+  rootless, motive-in-text → `RecordedMotive`). **The balance keystone is the PLAGUE trap, NOT
+  migration's:** the per-faction draw reshuffles the stream and seed 42 — which fires ZERO scorns —
+  STILL extincted at 5000 yr, so the extinction is the RESHUFFLE not lethality; no prejudice param
+  fixes it. The fix was the same move plague made: global `birth_chance` 0.26→**0.27** (5000-yr
+  151/267/294/317, no extinction). ALWAYS re-run the 5000-yr probe + the `prejudice` gate (non-vacuity:
+  scorn must fire across the suite) when touching prejudice params or the tick position. Echo **The
+  Unwelcome** is target-faction-keyed (≥3 scorns of one people in a 25-yr-gapped age, Barren-Years
+  discipline).
 - **M8 gossip tuning note.** `Gossip()` watches `[_lastGossipEventCount, count)` each year (no all-
   history scan), gates on importance (≥`gossip_min_importance` 42, which is why low-key events like
   plain scandals never reach the mill), and never gossips a `rumor` (no recursion). `The Blackened
