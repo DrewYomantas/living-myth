@@ -281,6 +281,16 @@ public static class StoryGrammar
         if (effect.Type == "migration" && cause.Type == "plague")
             return (ConnectorKind.Therefore, "migration-from-plague");
 
+        // Prejudice V1: a people that scapegoats a newcomer neighbour while its own land starves or
+        // sickens — the scorn cause-links to the disaster that sharpened it (the prejudice-from-
+        // famine/plague edge). A scorn with no disaster cause carries none and stays silent (its
+        // motive — newcomer status — is in the text). The edge exists only because ScornNewcomers
+        // recorded the cause.
+        if (effect.Type == "prejudice" && cause.Type == "famine")
+            return (ConnectorKind.Therefore, "prejudice-from-famine");
+        if (effect.Type == "prejudice" && cause.Type == "plague")
+            return (ConnectorKind.Therefore, "prejudice-from-plague");
+
         if (effect.Type == "death" && cause.Type == "famine")
             return (ConnectorKind.Therefore, "famine-death");
         if (effect.Type == "death" && cause.Type == "battle")
@@ -327,6 +337,7 @@ public static class StoryGrammar
             case "friction":      // "over the worship of X and Y" — motive stated
             case "death":         // manner stated ("of a fever", "of old age at N")
             case "murder":        // motive in text ("in a grasp for power", "for the heresy of…")
+            case "prejudice":     // "name X unwelcome newcomers" — the motive (outsider stock) is stated
                 return new OriginInfo(OriginKind.RecordedMotive);
 
             case "famine":        // harvest crossed the famine threshold

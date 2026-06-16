@@ -28,9 +28,10 @@ switch (cmd)
     case "harvest": HarvestCmd(Years(120)); break;
     case "plague": PlagueCmd(Years(120)); break;
     case "migration": MigrationCmd(Years(120)); break;
+    case "prejudice": PrejudiceCmd(Years(120)); break;
     case "paint": PaintCmd(Seed(7), Years(120)); break;
     default:
-        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine | save | sites | replay | harvest | plague | migration | paint");
+        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine | save | sites | replay | harvest | plague | migration | prejudice | paint");
         break;
 }
 return;
@@ -1640,6 +1641,93 @@ string MigrationCanon(World w)
     foreach (var r in w.Regions)
         sb.Append(r.Id).Append('=').Append(r.ControllingFactionId ?? "-").Append('\n');
     return sb.ToString();
+}
+
+// Proof gate for Prejudice V1: an established people scorns a different-stock newcomer neighbour.
+// Proves the anchoring contract (RegionId-only border anchor, no site/home leak, SiteAnchors NOT
+// extended), cross-stock targeting (resenter and target are real, distinct, different-culture
+// factions), cause honesty (a scorn that carries causes answers a real famine or plague), tension
+// fallout (the scorn lands in the pair's grievance memory), determinism (double-run byte-identical
+// chronicle + holdings), and non-vacuity (scorn actually fires across the suite).
+void PrejudiceCmd(int years)
+{
+    Console.WriteLine($"Prejudice gate ({years} yrs): an established people scorns a different-stock newcomer");
+    Console.WriteLine("neighbour. Scorns anchor to the BORDER land, never a site; a stress-driven scorn cause-links");
+    Console.WriteLine("to its famine/plague; tension rises; deterministic.");
+    int failures = 0;
+    int suiteScorn = 0, suiteCaused = 0, suitePlain = 0;
+
+    foreach (int seed in new[] { 1, 18, 42, 7 })
+    {
+        var (c1, n1) = Load();
+        var w = new World(seed, c1, n1); w.Run(years);
+        var bad = new List<string>();
+        int scorn = 0, caused = 0, plain = 0;
+
+        foreach (var e in w.Chronicle.Events)
+        {
+            if (e.Type != "prejudice") continue;
+            scorn++;
+
+            // (1) Anchoring: a valid BORDER RegionId; no site/home leak; the convention agrees none
+            // (a feeling on a frontier spans a land, not a place — SiteAnchors NOT extended).
+            if (e.RegionId is not int rid || rid < 0 || rid >= w.Regions.Count)
+            { bad.Add($"prejudice #{e.Id} has no valid RegionId"); break; }
+            if (e.SiteId is not null)
+            { bad.Add($"prejudice #{e.Id} leaked a SiteId ({e.SiteId})"); break; }
+            if (e.HomeRegionId is not null)
+            { bad.Add($"prejudice #{e.Id} carries a home anchor (a scorn is placed, not remembered)"); break; }
+            if (SiteAnchors.Expected(w, e.Type, e.Tags, e.RegionId) is int leak)
+            { bad.Add($"convention anchors prejudice #{e.Id} to site {leak} — expected none"); break; }
+
+            // (2) Cross-stock targeting: by/target tags name real, distinct, different-culture peoples
+            // (origin prejudice — never the faith axis Persecution covers).
+            string? byTag = e.Tags.FirstOrDefault(t => t.StartsWith("by-"))?.Substring(3);
+            string? tgtTag = e.Tags.FirstOrDefault(t => t.StartsWith("target-"))?.Substring(7);
+            if (byTag is null || tgtTag is null)
+            { bad.Add($"prejudice #{e.Id} missing by-/target- tag"); break; }
+            if (!w.Factions.TryGetValue(byTag, out var by) || !w.Factions.TryGetValue(tgtTag, out var tgt))
+            { bad.Add($"prejudice #{e.Id} names an unknown faction (by={byTag} target={tgtTag})"); break; }
+            if (byTag == tgtTag)
+            { bad.Add($"prejudice #{e.Id} scorns its own people"); break; }
+            if (by.Culture == tgt.Culture)
+            { bad.Add($"prejudice #{e.Id} scorns same-stock people ({by.Culture}) — not origin prejudice"); break; }
+
+            // (3) Cause honesty: a scorn that carries causes answers a real famine or plague (the
+            // stress that sharpened it — the prejudice-from-famine/plague grammar edge). A plain
+            // scorn carries none and stays silent.
+            if (e.Causes.Count > 0)
+            {
+                caused++;
+                if (!e.Causes.Select(cid => w.Chronicle.Get(cid)).All(c => c.Type is "famine" or "plague"))
+                { bad.Add($"prejudice #{e.Id} carries a cause that is not a famine or plague"); break; }
+            }
+            else plain++;
+        }
+
+        // (4) Double-run determinism: holdings AND the whole chronicle byte-identical (the per-faction
+        // prejudice draw and the zero-Rng target pick stay deterministic).
+        var (c2, n2) = Load();
+        var w2 = new World(seed, c2, n2); w2.Run(years);
+        if (MigrationCanon(w) != MigrationCanon(w2))
+            bad.Add("holdings differ between identical runs");
+        if (w.Chronicle.Render() != w2.Chronicle.Render())
+            bad.Add("chronicle differs between identical runs");
+
+        suiteScorn += scorn; suiteCaused += caused; suitePlain += plain;
+        Console.WriteLine($"  seed {seed,3}: {(bad.Count == 0 ? "OK" : "FAIL")}  {scorn} scorns · {caused} under disaster · {plain} plain");
+        foreach (var b in bad.Take(5)) Console.WriteLine($"           {b}");
+        if (bad.Count > 0) failures++;
+    }
+
+    Console.WriteLine($"  suite: {suiteScorn} scorns ({suiteCaused} disaster-driven, {suitePlain} plain)");
+
+    // (5) Non-vacuity: scorn must actually fire across the suite, or every contract above is
+    // vacuously true.
+    if (suiteScorn == 0) { Console.WriteLine("  SUITE FAIL: no scorn ever fired — the prejudice contract is vacuous"); failures++; }
+
+    Console.WriteLine(failures == 0 ? "\nPREJUDICE HOLDS." : $"\n{failures} CHECK(S) FAILED.");
+    Environment.Exit(failures == 0 ? 0 : 1);
 }
 
 void VerifyCmd()

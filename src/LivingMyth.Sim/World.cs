@@ -1098,6 +1098,7 @@ public sealed class World
         fac.ControlledRegions.Remove(src.Id.ToString());
         src.ControllingFactionId = null;
         Claim(dest, fac);
+        fac.LastMigrationYear = Year;   // newcomers on a new land — a window of vulnerability to scorn
 
         var causes = new List<int>();
         string reason;
@@ -1128,6 +1129,7 @@ public sealed class World
         if (dest is null) return false;
 
         Claim(dest, fac);
+        fac.LastMigrationYear = Year;   // a freshly spread people are newcomers on the frontier too
         var tags = new List<string> { "migration", "settlement" };
         Chronicle.Record(Year, "migration",
             $"{fac.Name} spread into {dest.Name}, thriving and many.",
@@ -1150,6 +1152,104 @@ public sealed class World
             if (best is null || n.Harvest > best.Harvest) best = n;
         }
         return best;
+    }
+
+    // ---------- prejudice (the outsider force) ----------
+
+    /// <summary>Prejudice V1: the social force the migration arc set up. An ESTABLISHED people
+    /// (rooted, not itself a recent newcomer) turns on a NEWCOMER neighbour of different stock —
+    /// origin prejudice, distinct from the faith-keyed <see cref="Persecution"/>. Each people gets
+    /// exactly ONE draw per year (a fixed-cost <see cref="Rng.Chance"/> — Chance(0) still consumes
+    /// its ULong, like the plague spark and the migration draw — so consumption stays deterministic
+    /// regardless of who is eligible); eligibility (established, and stress sharpening the odds)
+    /// decides the probability, never WHETHER the draw happens. On a hit it finds a different-culture
+    /// people that migrated within the window and shares a border (deterministic — sorted faction
+    /// order, first match, zero further Rng), records a `scorn` event anchored to the BORDER region
+    /// (RegionId-only — a feeling on a frontier, never a site; SiteAnchors is NOT extended), raises
+    /// tension toward the newcomers (feeding the existing war machinery, like gossip), and darkens
+    /// the newcomers' figurehead's standing (the group stigma surfaced on its leader, reusing the
+    /// gossip Reputation scale). It invents no new killing — scorn stokes war through tension, the
+    /// payoff the sim already balances. Runs after Gossip (so the year's whispers are in) and before
+    /// MaybeDeclareWars (so a scorn can tip a pair into war the same tick).</summary>
+    private void Prejudice()
+    {
+        foreach (var fid in FactionsSorted())
+        {
+            var e = Factions[fid];
+            // Established = present in force AND settled long enough to be no recent newcomer itself.
+            // Stress (its own famine/plague) sharpens scapegoating. The DRAW happens regardless (fixed
+            // cost), so consumption never depends on who is eligible.
+            bool established = e.Members.Count >= (int)Params["prejudice_min_pop"]
+                && Year - e.LastMigrationYear >= (int)Params["prejudice_established_window"];
+            double chance = established
+                ? ((e.InFamine || e.InPlague) ? Params["prejudice_chance_stressed"]
+                                              : Params["prejudice_chance_per_year"])
+                : 0.0;
+            if (!Rng.Chance(chance)) continue;
+
+            var target = FindNewcomerNeighbour(e);
+            if (target is null) continue;   // the draw is spent; nobody to scorn this year
+            ScornNewcomers(e, target);
+        }
+    }
+
+    /// <summary>The newcomer a people would resent: a different-culture neighbour that moved within
+    /// the window and shares a border. Sorted faction order, first match — zero Rng. Null when none
+    /// qualifies.</summary>
+    private Faction? FindNewcomerNeighbour(Faction e)
+    {
+        int window = (int)Params["prejudice_newcomer_window"];
+        foreach (var oid in FactionsSorted())
+        {
+            if (oid == e.Id) continue;
+            var o = Factions[oid];
+            if (o.Members.Count == 0) continue;
+            if (Year - o.LastMigrationYear >= window) continue;   // not a newcomer anymore
+            if (o.Culture == e.Culture) continue;                 // origin prejudice = different stock
+            if (!SharesBorder(e, o)) continue;
+            return o;
+        }
+        return null;
+    }
+
+    /// <summary>Whether any region one people holds is adjacent to a region the other holds. Pure
+    /// read over control + the fixed adjacency graph — zero Rng.</summary>
+    private bool SharesBorder(Faction a, Faction b)
+    {
+        foreach (var rid in a.ControlledRegions.Select(int.Parse).OrderBy(x => x))
+            foreach (var nid in Regions[rid].AdjacentRegionIds)
+                if (nid >= 0 && nid < Regions.Count && Regions[nid].ControllingFactionId == b.Id)
+                    return true;
+        return false;
+    }
+
+    /// <summary>Record one scorn: a `prejudice` event anchored to the resenter's border holding,
+    /// tension toward the newcomers, and a darkened standing for their leader. The target faction is
+    /// carried in a `target-{id}` tag so The Unwelcome echo can key on it. Zero Rng.</summary>
+    private void ScornNewcomers(Faction e, Faction target)
+    {
+        int? borderRegion = null;
+        foreach (var rid in e.ControlledRegions.Select(int.Parse).OrderBy(x => x))
+            if (Regions[rid].AdjacentRegionIds.Any(n =>
+                    n >= 0 && n < Regions.Count && Regions[n].ControllingFactionId == target.Id))
+            { borderRegion = rid; break; }
+
+        var causes = new List<int>();
+        string when;
+        if (e.InPlague && e.PlagueEvent is Event pe) { causes.Add(pe.Id); when = ", as the pestilence gnaws,"; }
+        else if (e.InFamine && e.FamineEvent is Event fe) { causes.Add(fe.Id); when = ", in the hungry years,"; }
+        else when = "";
+
+        var tags = new List<string> { "prejudice", "scorn", "cross-faction", $"by-{e.Id}", $"target-{target.Id}" };
+        var ev = Chronicle.Record(Year, "prejudice",
+            $"{e.Name}{when} name {target.Name} unwelcome newcomers and turn against them.",
+            participants: WarLeaders(e.Id, target.Id),
+            causes: causes.Count > 0 ? causes : null,
+            tags: tags, regionId: borderRegion);
+        AddTension(e.Id, target.Id, Params["prejudice_tension"], ev);
+        // The group stigma falls on the newcomers' figurehead — reuses the gossip standing scale.
+        if (target.LeaderId is int tl && People.TryGetValue(tl, out var lead) && lead.Alive)
+            lead.Reputation = Math.Clamp(lead.Reputation - (int)Params["prejudice_reputation_step"], -5, 5);
     }
 
     // ---------- culture (values → customs → clash / diffusion) ----------
@@ -1408,6 +1508,7 @@ public sealed class World
         DoReligion();
         Culture();
         Gossip();
+        Prejudice();
         MaybeDeclareWars();
         DecayTension();
         ReleaseExtinctLands();

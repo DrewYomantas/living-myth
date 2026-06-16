@@ -11,7 +11,7 @@ public static class Scoring
     {
         ["founding"] = 60, ["divine"] = 80, ["war"] = 70, ["battle"] = 50, ["peace"] = 45,
         ["famine"] = 55, ["famine_end"] = 35, ["boom"] = 50, ["martyr"] = 50, ["murder"] = 40,
-        ["plague"] = 55, ["plague_end"] = 35, ["migration"] = 40,
+        ["plague"] = 55, ["plague_end"] = 35, ["migration"] = 40, ["prejudice"] = 45,
         ["prophet"] = 38, ["schism"] = 36, ["trade"] = 30, ["justice"] = 30,
         ["succession"] = 30, ["leadership"] = 25, ["custom"] = 28, ["scandal"] = 20, ["rumor"] = 20,
         ["romance"] = 16, ["friction"] = 12, ["marriage"] = 8, ["death"] = 5, ["birth"] = 3,
@@ -23,7 +23,7 @@ public static class Scoring
         ["tragedy"] = 22, ["schism"] = 20, ["heresy"] = 18, ["forbidden"] = 16,
         ["revenge"] = 15, ["prophet"] = 14, ["persecution"] = 12, ["cross-faction"] = 10,
         ["peace"] = 8, ["religion"] = 5, ["scarcity"] = 15, ["recovery"] = 10, ["battle"] = 10,
-        ["pestilence"] = 15,
+        ["pestilence"] = 15, ["scorn"] = 12,
         ["clash"] = 14, ["fade"] = 8, ["culture"] = 6, ["diffusion"] = 6,
         ["reputation"] = 8, ["rumor"] = 6, ["negative"] = 6, ["positive"] = 4,
     };

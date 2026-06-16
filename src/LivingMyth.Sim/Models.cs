@@ -112,6 +112,13 @@ public sealed class Faction
     public bool InPlague { get; set; }              // worst controlled region in plague — death pressure
     public Event? PlagueEvent { get; set; }         // worst region's plague onset event, for death cause-chains
 
+    // prejudice (Prejudice V1): the year this people last MOVED (fled or settled new land), set in
+    // Migration(). A people is a "newcomer" — a target for an established neighbour's scorn — for
+    // prejudice_settled_window years after. Default int.MinValue ⇒ never moved (rooted, never a
+    // newcomer). Written only by Migration(); read only by Prejudice(); never feeds an Rng draw on
+    // its own (it only tilts the fixed-cost prejudice probability).
+    public int LastMigrationYear { get; set; } = int.MinValue;
+
     // culture (M7): per-faction value axes (valor/piety/cunning/harmony) drift over time and
     // harden into named customs at threshold; customs drive clash (tension) and diffusion (peace).
     public Dictionary<string, double> Values { get; } = new();          // axis -> 0..1, seeded from culture baseline

@@ -453,6 +453,45 @@ public static class Echoes
         return echoes;
     }
 
+    /// <summary>One people scorned again and again as unwelcome newcomers — the chronicle remembers
+    /// them as the unwelcome. The prejudice echo keyed on the TARGET faction (carried in the
+    /// `target-{id}` tag of each scorn), the same bounded/clustered discipline as The Barren Years
+    /// (≥3 scorns within a 25-year-gapped age) — so it names one age of resentment, not every slight
+    /// a people ever met.</summary>
+    public static List<Echo> DetectTheUnwelcome(World world)
+    {
+        const string prefix = "target-";
+        var byTarget = new Dictionary<string, List<Event>>();
+        foreach (var e in world.Chronicle.Events)
+        {
+            if (e.Type != "prejudice") continue;
+            var tag = e.Tags.FirstOrDefault(t => t.StartsWith(prefix));
+            if (tag is null) continue;
+            string fac = tag.Substring(prefix.Length);
+            if (!byTarget.TryGetValue(fac, out var list)) { list = new(); byTarget[fac] = list; }
+            list.Add(e);
+        }
+        var echoes = new List<Echo>();
+        foreach (var fac in byTarget.Keys.OrderBy(k => k, StringComparer.Ordinal))
+        {
+            var ages = new List<List<Event>>();
+            List<Event>? age = null;
+            foreach (var se in byTarget[fac].OrderBy(e => e.Year))
+            {
+                if (age is null || se.Year - age[^1].Year > 25) { age = new(); ages.Add(age); }
+                age.Add(se);
+            }
+            foreach (var g in ages.Where(g => g.Count >= 3))
+            {
+                var span = (g[0].Year, g[^1].Year);
+                string name = world.Factions.TryGetValue(fac, out var f) ? f.Name : "A people";
+                string label = $"{name} were named unwelcome {g.Count} times {SpanPhrase(span.Item1, span.Item2)} — the unwelcome.";
+                echoes.Add(new Echo("The Unwelcome", label, g.Select(e => e.Id).ToList(), span));
+            }
+        }
+        return echoes;
+    }
+
     public static List<Echo> DetectAll(World world)
     {
         var echoes = new List<Echo>();
@@ -473,6 +512,7 @@ public static class Echoes
         echoes.AddRange(DetectBarrenYears(world));
         echoes.AddRange(DetectLongPestilence(world));
         echoes.AddRange(DetectPromisedLand(world));
+        echoes.AddRange(DetectTheUnwelcome(world));
 
         var seen = new HashSet<(string, string)>();
         var unique = new List<Echo>();
