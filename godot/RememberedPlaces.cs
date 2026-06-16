@@ -29,6 +29,7 @@ public sealed partial class RememberedPlaces : Panel
     private static readonly (string key, string label)[] Filters =
     {
         ("all", "all"), ("war", "war & land"), ("harvest", "harvest"), ("plague", "plague"),
+        ("movement", "movement"), ("discord", "discord"),
         ("ways", "ways"), ("divine", "divine"), ("terrain", "terrain"), ("memory", "memory"),
     };
 
@@ -76,8 +77,9 @@ public sealed partial class RememberedPlaces : Panel
         close.Pressed += () => Visible = false;
         hb.AddChild(close);
 
-        var chipRow = new HBoxContainer();
-        chipRow.AddThemeConstantOverride("separation", 4);
+        var chipRow = new HFlowContainer();   // wraps to a second line when the chips outgrow the width
+        chipRow.AddThemeConstantOverride("h_separation", 4);
+        chipRow.AddThemeConstantOverride("v_separation", 4);
         vb.AddChild(chipRow);
         foreach (var (key, label) in Filters)
         {
@@ -130,6 +132,8 @@ public sealed partial class RememberedPlaces : Panel
         "boom" => "harvest",
         "plague" => "plague",
         "plague_end" => "plague",
+        "migration" => "movement",
+        "prejudice" => "discord",
         "custom" => "ways",
         "divine" when e.Tags.Contains("terrain") => "terrain",
         "divine" => "divine",

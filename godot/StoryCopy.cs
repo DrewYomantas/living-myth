@@ -39,6 +39,8 @@ public static class StoryCopy
             "plague-death" => "the pestilence took them — therefore,",
             "migration-from-famine" => "the hunger drove them from their land — therefore,",
             "migration-from-plague" => "the sickness drove them from their land — therefore,",
+            "prejudice-from-famine" => "the hunger sharpened their scorn — therefore,",
+            "prejudice-from-plague" => "the sickness turned them bitter — therefore,",
             _ => link.GapYears >= 3 ? $"{link.GapYears} years passed — therefore," : "therefore —",
         },
     };
@@ -161,6 +163,31 @@ public static class StoryCopy
     public static string PlagueConditionPhrase(bool inPlague) =>
         inPlague ? "a sickness spreads here now — the land lies under plague"
         :          "the land is free of plague now — but it remembers";
+
+    // ---- migration memory (Migration V1 viewer payoff) ----
+    // One line per recorded "migration" event anchored to THIS land (the destination).
+    // Flight names the abandoned source (read from the event text by the sim, already in
+    // e.Text); settlement is rootless. RegionId-only — a people moving here, never a claim
+    // about where anyone was born or died. The caller passes whether this beat was a flight.
+    public static string MigrationLine(bool flight) =>
+        flight ? "a fleeing people settled here, driven from their own land by hunger or sickness"
+        :        "a people spread into this land, growing out from their holds";
+
+    // Section condition line — shown when the land has known any arrival.
+    public static string MovementConditionPhrase(bool anyFlight, bool anySettlement) =>
+        anyFlight && anySettlement ? "this ground has drawn both the fleeing and the spreading"
+        : anyFlight ? "this ground gave refuge to a people in flight"
+        : anySettlement ? "a growing people reached into this land"
+        : "no people have moved into this land within memory";
+
+    // ---- prejudice memory (Prejudice V1 viewer payoff) ----
+    // One line per recorded "prejudice" event anchored to THIS border land. The scorn is the
+    // established holder's act against newcomers of different stock — the motive is in e.Text.
+    public static string PrejudiceLine() =>
+        "the people here named newcomers unwelcome and turned against them";
+
+    public static string FrontierConditionPhrase() =>
+        "this is a frontier of the heart — a people here have scorned outsiders who settled near";
 
     // ---- player canon labels (the only five — docs/VISUAL_STYLE.md) ----
     public static string CanonLabel(CanonNoteType t) => t switch

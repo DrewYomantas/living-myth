@@ -181,6 +181,8 @@ public static class Ui
         ["famine_end"] = new("Recovery", new Color("4e7d43"), "❀"),
         ["plague"] = new("Plague", new Color("6d4f63"), "✷"),
         ["plague_end"] = new("Reprieve", new Color("5f7d5a"), "✽"),
+        ["migration"] = new("Migration", new Color("3f6e92"), "⇉"),
+        ["prejudice"] = new("Scorn", new Color("8a4a52"), "⊘"),
         ["divine"] = new("Divine", new Color("a8402c"), "✶"),
         ["prophet"] = new("Prophecy", new Color("7c5a9b"), "☾"),
         ["schism"] = new("Schism", new Color("6d5694"), "❖"),

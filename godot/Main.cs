@@ -64,6 +64,15 @@ public partial class Main : Node
     private Button _omenBtn = null!;
     private Button _forestBtn = null!;
     private Button _springBtn = null!;
+    // Play Surface V1 — the persistent divine-hand palette: the same seven real verbs, but
+    // armed once and aimed straight at the map (the inspector buttons stay as a contextual
+    // shortcut). Arming a verb tints valid targets on the atlas; a map click applies it.
+    private enum HandVerb { None, Bless, Curse, Protect, Doom, Omen, Forest, Spring }
+    private HandVerb _armedVerb = HandVerb.None;
+    private readonly List<(HandVerb verb, Button btn)> _handBtns = new();
+    private PanelContainer _actToast = null!;     // brief "the hand acted" confirmation
+    private Label _actToastLabel = null!;
+    private Tween? _actToastTween;
     private FateLedger _fateLedger = null!;
     private RememberedPlaces _places = null!;
     // Chronicle Replay (viewer-only over Replay.ChainFor): the focal event's cause chain
@@ -97,6 +106,23 @@ public partial class Main : Node
     private readonly HashSet<int> _followedSouls = new();   // souls followed as individuals — never expanded into kin
     private readonly HashSet<int> _followedRegions = new(); // lands watched as places — tales anchored here and lives remembered here are YOURS
     private Button _regionBtn = null!;
+    // Play Surface V1 — Focus: a TEMPORARY attention lens, distinct from Follow. One target
+    // (a soul, a land, or a people), no bloodline expansion, no persistence, no "Yours"
+    // boost — it simply quiets every feed row that isn't about the focused thing, so the
+    // map carries the read. Cleared by ✕, Esc, or focusing something else.
+    private enum FocusKind { None, Soul, Region, People }
+    private FocusKind _focusKind = FocusKind.None;
+    private int _focusId = -1;
+    private string? _focusFaction;
+    private PanelContainer _focusBanner = null!;
+    private Label _focusBannerLabel = null!;
+    private Button _focusBtn = null!;                       // inspector affordance: focus this selection
+    // The feed recedes to secondary during focused play (the map is primary) — collapsed to a
+    // reopen chip while focused, restored to the player's prior choice when focus is released.
+    private PanelContainer _feedPanel = null!;
+    private Button _feedReopenChip = null!;
+    private bool _feedCollapsed;
+    private bool _feedAutoCollapsed;                        // collapse was driven by focus, restore on release
     private Button _dioramaBtn = null!;                     // Region Lens → open the diorama bridge
     private DioramaView? _diorama;                          // the diorama overlay, when open (read-only)
     private bool _dioramaWasRunning;                        // time-state to restore when the diorama closes
@@ -304,6 +330,12 @@ public partial class Main : Node
     {
         if (e is InputEventKey { Pressed: true, Keycode: Key.F3 } && _diorama == null)
             OpenDiorama(_map.SelectedRegionId >= 0 ? _map.SelectedRegionId : MostBuiltRegion());
+        // Esc steps back the play surface, one layer at a time: disarm the hand, else release focus.
+        else if (e is InputEventKey { Pressed: true, Keycode: Key.Escape } && _diorama == null)
+        {
+            if (_armedVerb != HandVerb.None) ArmVerb(_armedVerb);   // re-press disarms
+            else if (Focused) ClearFocus();
+        }
     }
 
     // Open the diorama as a read-only overlay over the live world (never a scene swap — the
@@ -630,7 +662,69 @@ public partial class Main : Node
         BuildRecap(root);
         BuildHelp(root);        // the Guide — opened by the player (Chronicle Mode reading surface)
         BuildGuardCard(root);   // last: the guard card (and its return chip) sits above everything
+        BuildFocusChrome(root); // focus banner, act toast, feed reopen chip (Play Surface V1)
         BuildCanonPanel(root);  // very last: the player's writing desk outranks every card while open
+    }
+
+    // Play Surface V1 chrome: the focus banner (names what you're focused on, ✕ to release),
+    // the divine-act confirmation toast, and the feed reopen chip shown while the feed is folded.
+    private void BuildFocusChrome(Control root)
+    {
+        // Focus banner — top-centre, below the year card's reach, clear of the guard toast slot.
+        _focusBanner = new PanelContainer { Visible = false };
+        root.AddChild(_focusBanner);
+        _focusBanner.AnchorLeft = 0.5f; _focusBanner.AnchorRight = 0.5f;
+        _focusBanner.AnchorTop = 0; _focusBanner.AnchorBottom = 0;
+        _focusBanner.OffsetLeft = -220; _focusBanner.OffsetRight = 220;
+        _focusBanner.OffsetTop = 56; _focusBanner.OffsetBottom = 90;
+        var fbox = Ui.PanelBox(10);
+        fbox.BorderColor = Ui.Gold;
+        _focusBanner.AddThemeStyleboxOverride("panel", fbox);
+        var fmargin = new MarginContainer();
+        foreach (var s in new[] { "left", "right" }) fmargin.AddThemeConstantOverride($"margin_{s}", 12);
+        foreach (var s in new[] { "top", "bottom" }) fmargin.AddThemeConstantOverride($"margin_{s}", 5);
+        _focusBanner.AddChild(fmargin);
+        var fhb = new HBoxContainer();
+        fhb.AddThemeConstantOverride("separation", 10);
+        fmargin.AddChild(fhb);
+        _focusBannerLabel = new Label { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _focusBannerLabel.AddThemeColorOverride("font_color", Ui.InkDeep);
+        _focusBannerLabel.AddThemeFontSizeOverride("font_size", 13);
+        fhb.AddChild(_focusBannerLabel);
+        var frelease = new Button { Text = "release ✕", TooltipText = "Release focus (Esc)" };
+        Ui.StyleButton(frelease);
+        frelease.AddThemeFontSizeOverride("font_size", 11);
+        frelease.Pressed += ClearFocus;
+        fhb.AddChild(frelease);
+
+        // The act toast — brief confirmation that the hand acted (the feed may be folded).
+        _actToast = new PanelContainer { Visible = false };
+        root.AddChild(_actToast);
+        _actToast.AnchorLeft = 0.5f; _actToast.AnchorRight = 0.5f;
+        _actToast.AnchorTop = 0; _actToast.AnchorBottom = 0;
+        _actToast.OffsetLeft = -200; _actToast.OffsetRight = 200;
+        _actToast.OffsetTop = 96; _actToast.OffsetBottom = 126;
+        var abox = Ui.PanelBox(10);
+        abox.BorderColor = Ui.Gold;
+        _actToast.AddThemeStyleboxOverride("panel", abox);
+        var amargin = new MarginContainer();
+        foreach (var s in new[] { "left", "right" }) amargin.AddThemeConstantOverride($"margin_{s}", 12);
+        foreach (var s in new[] { "top", "bottom" }) amargin.AddThemeConstantOverride($"margin_{s}", 5);
+        _actToast.AddChild(amargin);
+        _actToastLabel = new Label { HorizontalAlignment = HorizontalAlignment.Center };
+        _actToastLabel.AddThemeColorOverride("font_color", Ui.InkDeep);
+        _actToastLabel.AddThemeFontSizeOverride("font_size", 13);
+        amargin.AddChild(_actToastLabel);
+
+        // The feed reopen chip — appears top-right where the feed sat, while the feed is folded.
+        _feedReopenChip = new Button { Text = "≡ Saga", Visible = false, TooltipText = "Reopen the Saga feed" };
+        root.AddChild(_feedReopenChip);
+        _feedReopenChip.AnchorLeft = 1; _feedReopenChip.AnchorRight = 1;
+        _feedReopenChip.AnchorTop = 0; _feedReopenChip.AnchorBottom = 0;
+        _feedReopenChip.OffsetLeft = -86; _feedReopenChip.OffsetRight = -8;
+        _feedReopenChip.OffsetTop = 10; _feedReopenChip.OffsetBottom = 40;
+        Ui.StyleButton(_feedReopenChip);
+        _feedReopenChip.Pressed += () => SetFeedCollapsed(false, auto: false);
     }
 
     private void BuildCanonPanel(Control root)
@@ -852,6 +946,7 @@ public partial class Main : Node
     {
         var panel = new PanelContainer();
         root.AddChild(panel);
+        _feedPanel = panel;
         panel.AnchorLeft = 1; panel.AnchorRight = 1; panel.AnchorTop = 0; panel.AnchorBottom = 1;
         panel.OffsetLeft = -FeedWidth; panel.OffsetRight = -8; panel.OffsetTop = 10; panel.OffsetBottom = -BottomH - 6;
         panel.AddThemeStyleboxOverride("panel", Ui.PanelBox());
@@ -876,6 +971,11 @@ public partial class Main : Node
         var scope = Ui.SectionLabel("what's rising");
         scope.SizeFlagsVertical = Control.SizeFlags.ShrinkEnd;
         hdrRow.AddChild(scope);
+        var collapseChip = new Button { Text = "⟩", CustomMinimumSize = new Vector2(28, 0),
+            TooltipText = "Fold the feed — the map carries the read" };
+        Ui.StyleButton(collapseChip);
+        collapseChip.Pressed += () => SetFeedCollapsed(true, auto: false);
+        hdrRow.AddChild(collapseChip);
 
         var rule = new HSeparator();
         rule.AddThemeStyleboxOverride("separator", new StyleBoxFlat { BgColor = Ui.RowBorder, ContentMarginTop = 1 });
@@ -1025,6 +1125,9 @@ public partial class Main : Node
         };
         fateRow.AddChild(placesBtn);
 
+        // --- Hand group: the persistent divine-hand palette (Play Surface V1) ---
+        BuildHandPalette(hb);
+
         // --- Chronicle group: chattiness threshold ---
         var chronRow = DockGroup(hb, "Chronicle");
         _chatLabel = new Label();
@@ -1075,6 +1178,260 @@ public partial class Main : Node
     {
         foreach (var (btn, sp) in _speedBtns)
             Ui.StyleButton(btn, Mathf.IsEqualApprox(sp, _speed));
+    }
+
+    // The persistent divine-hand palette: arm a verb, then aim it at the map. Seven buttons,
+    // the same seven real verbs already on the inspector — no new mechanics. Curse/Doom wear
+    // the ember warning face like their inspector twins.
+    private static readonly (HandVerb verb, string glyph, string label, string tip, bool ember)[] HandVerbs =
+    {
+        (HandVerb.Bless,   "✦", "Bless",   "Arm Bless — then click a living soul. Fate eases their death roll.", false),
+        (HandVerb.Curse,   "✳", "Curse",   "Arm Curse — then click a soul. A god's mark lies on their bloodline.", true),
+        (HandVerb.Protect, "❧", "Protect", "Arm Protect — then click a people's land. Famine weighs lighter on them for a season.", false),
+        (HandVerb.Doom,    "☄", "Doom",    "Arm Doom — then click a people's land. Their fortunes run thin for a season.", true),
+        (HandVerb.Omen,    "✶", "Omen",    "Arm Omen — then click a land. Its tales surface louder while the omen hangs.", false),
+        (HandVerb.Forest,  "✿", "Forest",  "Arm Seed Forest — then click a land. Real terrain (rock and water refuse it).", false),
+        (HandVerb.Spring,  "≈", "Spring",  "Arm Call Spring — then click a land. Water rises from the earth.", false),
+    };
+
+    private void BuildHandPalette(HBoxContainer hb)
+    {
+        var row = DockGroup(hb, "Hand");
+        foreach (var (verb, glyph, label, tip, ember) in HandVerbs)
+        {
+            // Compact glyph strip (the name + effect live in the tooltip) so the palette stays
+            // narrow on the bottom bar; the inspector keeps the full-labelled verb buttons.
+            var b = new Button { Text = glyph, CustomMinimumSize = new Vector2(32, 0), TooltipText = $"{label} — {tip}" };
+            b.AddThemeFontSizeOverride("font_size", 16);
+            Ui.StyleButton(b);
+            var v = verb;
+            b.Pressed += () => ArmVerb(v);
+            row.AddChild(b);
+            _handBtns.Add((verb, b));
+        }
+    }
+
+    private static MapView.AimKind AimOf(HandVerb v) => v switch
+    {
+        HandVerb.Bless or HandVerb.Curse => MapView.AimKind.Person,
+        HandVerb.Protect or HandVerb.Doom => MapView.AimKind.Faction,
+        HandVerb.Omen or HandVerb.Forest or HandVerb.Spring => MapView.AimKind.Region,
+        _ => MapView.AimKind.None,
+    };
+
+    // Arm (or disarm, if re-pressed) a verb. Arming wires the map's aim + validity hooks; the
+    // hand stays armed across casts so the player can bless or doom several targets in a row.
+    private void ArmVerb(HandVerb v)
+    {
+        _armedVerb = _armedVerb == v ? HandVerb.None : v;
+        _map.AimValid = _armedVerb == HandVerb.None ? null : AimValidFor;
+        _map.ArmedApply = _armedVerb == HandVerb.None ? null : OnArmedApply;
+        _map.SetArmed(AimOf(_armedVerb));
+        RestyleHandPalette();
+    }
+
+    private void RestyleHandPalette()
+    {
+        foreach (var (verb, btn) in _handBtns)
+        {
+            bool on = verb == _armedVerb;
+            bool ember = verb is HandVerb.Curse or HandVerb.Doom;
+            Ui.StyleButton(btn, on, on && ember ? Ui.Ember : (Color?)null);
+            if (on && ember)
+            {
+                btn.AddThemeColorOverride("font_color", new Color("f2e9d2"));
+                btn.AddThemeColorOverride("font_hover_color", new Color("f2e9d2"));
+                btn.AddThemeColorOverride("font_pressed_color", new Color("f2e9d2"));
+            }
+            else
+            {
+                btn.RemoveThemeColorOverride("font_color");
+                btn.RemoveThemeColorOverride("font_hover_color");
+                btn.RemoveThemeColorOverride("font_pressed_color");
+            }
+        }
+    }
+
+    // Would the armed verb land on this id (a person id for Person aim, a region id otherwise)?
+    // The same gates the inspector buttons use, so the highlight never promises an illegal cast.
+    private bool AimValidFor(int id)
+    {
+        switch (_armedVerb)
+        {
+            case HandVerb.Bless: return _world.People.TryGetValue(id, out var bp) && bp.Alive && !bp.Blessed;
+            case HandVerb.Curse: return _world.People.TryGetValue(id, out var cp) && cp.Alive && !cp.Cursed;
+            case HandVerb.Protect:
+            case HandVerb.Doom:
+            {
+                if (id < 0 || id >= _world.Regions.Count) return false;
+                if (_world.Regions[id].ControllingFactionId is not string fid) return false;
+                var fac = _world.Factions[fid];
+                return _world.FactionMembers(fid).Count > 0
+                    && (_armedVerb == HandVerb.Protect ? fac.ProtectUntilYear : fac.DoomUntilYear) <= _world.Year;
+            }
+            case HandVerb.Omen: return id >= 0 && id < _world.Regions.Count && !OmenActive(id);
+            case HandVerb.Forest:
+            case HandVerb.Spring: return id >= 0 && id < _world.Regions.Count;   // land may still refuse, said honestly on apply
+            default: return false;
+        }
+    }
+
+    // A click while a verb is armed: apply it straight from the map. Same World verbs the
+    // inspector buttons call → RecordDivine journals + the Fate Ledger updates automatically.
+    private void OnArmedApply(int id)
+    {
+        if (!AimValidFor(id)) return;   // an illegal target is a no-op (the highlight already warned)
+        Event? ev = null;
+        int pulseRegion = -1;
+        string what = "";
+        switch (_armedVerb)
+        {
+            case HandVerb.Bless:
+                if (_world.People.TryGetValue(id, out var bp)) { ev = _world.BlessPerson(bp); what = $"✦ a blessing laid upon {bp.Name}"; _map.PulseSoul(id); }
+                break;
+            case HandVerb.Curse:
+                if (_world.People.TryGetValue(id, out var cp)) { ev = _world.PlantCurse(cp); what = $"✳ a curse laid upon {cp.Name}"; _map.PulseSoul(id); }
+                break;
+            case HandVerb.Protect:
+                if (_world.Regions[id].ControllingFactionId is string pfid)
+                { ev = _world.ProtectFaction(pfid); what = $"❧ {_world.Factions[pfid].Name} placed under protection"; pulseRegion = id; }
+                break;
+            case HandVerb.Doom:
+                if (_world.Regions[id].ControllingFactionId is string dfid)
+                { ev = _world.DoomFaction(dfid); what = $"☄ a doom pronounced on {_world.Factions[dfid].Name}"; pulseRegion = id; }
+                break;
+            case HandVerb.Omen:
+                ev = _world.SeedOmen(id); what = $"✶ an omen seeded over {_world.Regions[id].Name}"; pulseRegion = id;
+                break;
+            case HandVerb.Forest:
+                ev = _world.SeedForest(id); pulseRegion = id;
+                what = ev is null ? "✿ the land refused the forest" : $"✿ a forest raised across {_world.Regions[id].Name}";
+                break;
+            case HandVerb.Spring:
+                ev = _world.CallSpring(id); pulseRegion = id;
+                what = ev is null ? "≈ the land refused the spring" : $"≈ a spring called in {_world.Regions[id].Name}";
+                break;
+        }
+        if (ev is not null)
+        {
+            RecordDivine(ev);
+            if (pulseRegion >= 0) _map.PulseRegion(pulseRegion);
+        }
+        ShowActToast(what);   // confirm even a refusal — the feed may be collapsed during focused play
+    }
+
+    private void ShowActToast(string text)
+    {
+        _actToastLabel.Text = text;
+        _actToastTween?.Kill();
+        _actToast.Modulate = Colors.White;
+        _actToast.Visible = true;
+        _actToastTween = _actToast.CreateTween();
+        _actToastTween.TweenInterval(1.8);
+        _actToastTween.TweenProperty(_actToast, "modulate:a", 0f, 1.0f);
+        _actToastTween.TweenCallback(Callable.From(() => { _actToast.Visible = false; _actToast.Modulate = Colors.White; }));
+    }
+
+    // ---------------------------------------------------- Focus (the attention lens)
+
+    private bool Focused => _focusKind != FocusKind.None;
+
+    private void SetFocusSoul(int id)
+    {
+        if (!_world.People.TryGetValue(id, out var p)) return;
+        _focusKind = FocusKind.Soul; _focusId = id; _focusFaction = null;
+        _map.FocusPerson(id);
+        ApplyFocus($"◎ Focused on {p.Name}");
+    }
+
+    private void SetFocusRegion(int rid)
+    {
+        if (rid < 0 || rid >= _world.Regions.Count) return;
+        _focusKind = FocusKind.Region; _focusId = rid; _focusFaction = null;
+        _map.FocusRegion(rid);
+        ApplyFocus($"◎ Focused on {_world.Regions[rid].Name}");
+    }
+
+    private void SetFocusPeople(string fid)
+    {
+        if (!_world.Factions.TryGetValue(fid, out var fac)) return;
+        _focusKind = FocusKind.People; _focusId = -1; _focusFaction = fid;
+        ApplyFocus($"◎ Focused on {fac.Name}");
+    }
+
+    private void ApplyFocus(string label)
+    {
+        _focusBannerLabel.Text = label + "  —  the world recedes; only this gets full voice";
+        _focusBanner.Visible = true;
+        SetFeedCollapsed(true, auto: true);   // map carries the read while focused
+        RefreshFocusButton();
+    }
+
+    private void ClearFocus()
+    {
+        if (!Focused) return;
+        _focusKind = FocusKind.None; _focusId = -1; _focusFaction = null;
+        _focusBanner.Visible = false;
+        if (_feedAutoCollapsed) SetFeedCollapsed(false, auto: true);   // restore the prior feed state
+        RefreshFocusButton();
+    }
+
+    // Does this beat concern the focused entity? Soul = a participant; Region = anchored or
+    // remembered here (the two honest channels); People = any participant of that faction.
+    private bool FocusRelevant(Event e)
+    {
+        switch (_focusKind)
+        {
+            case FocusKind.Soul: return e.Participants.Contains(_focusId);
+            case FocusKind.Region: return e.RegionId == _focusId || e.HomeRegionId == _focusId;
+            case FocusKind.People:
+                foreach (var pid in e.Participants)
+                    if (_world.People.TryGetValue(pid, out var p) && p.FactionId == _focusFaction) return true;
+                return false;
+            default: return true;
+        }
+    }
+
+    // The inspector's "focus this" affordance, retargeted to the current selection.
+    private void RefreshFocusButton()
+    {
+        bool already =
+            (_focusKind == FocusKind.Soul && _selectedPersonId == _focusId)
+            || (_focusKind == FocusKind.People && _selectedFactionId == _focusFaction)
+            || (_focusKind == FocusKind.Region && _map.SelectedRegionId == _focusId && _selectedPersonId is null && _selectedFactionId is null);
+        _focusBtn.Text = already ? "◎ Focused — release" : "◎ Focus";
+        Ui.StyleButton(_focusBtn, already);
+    }
+
+    private void OnFocusPressed()
+    {
+        if (_selectedPersonId is int pid)
+        {
+            if (_focusKind == FocusKind.Soul && _focusId == pid) ClearFocus(); else SetFocusSoul(pid);
+        }
+        else if (_selectedFactionId is string fid)
+        {
+            if (_focusKind == FocusKind.People && _focusFaction == fid) ClearFocus(); else SetFocusPeople(fid);
+        }
+        else if (_map.SelectedRegionId >= 0)
+        {
+            int rid = _map.SelectedRegionId;
+            if (_focusKind == FocusKind.Region && _focusId == rid) ClearFocus(); else SetFocusRegion(rid);
+        }
+        RefreshFocusButton();
+    }
+
+    // ---------------------------------------------------- feed collapse (map-first)
+
+    private void SetFeedCollapsed(bool collapsed, bool auto)
+    {
+        // An auto-collapse (focus) only "owns" the restore if it actually folded an open feed —
+        // if the player had already folded it by hand, releasing focus leaves it folded.
+        if (collapsed && auto && !_feedCollapsed) _feedAutoCollapsed = true;
+        if (!collapsed) _feedAutoCollapsed = false;
+        _feedCollapsed = collapsed;
+        _feedPanel.Visible = !collapsed;
+        _feedReopenChip.Visible = collapsed;
     }
 
     private void BuildInspector(Control parent)
@@ -1149,6 +1506,14 @@ public partial class Main : Node
         Ui.StyleButton(_lensFactionBtn);
         _lensFactionBtn.Pressed += () => { if (_lensFactionId is string fid) OnFactionPicked(fid); };
         vb.AddChild(_lensFactionBtn);
+
+        // Focus (Play Surface V1): a temporary attention lens on this selection — distinct from
+        // Follow (no persistence, no bloodline, no Yours boost), it just quiets the rest.
+        _focusBtn = new Button { Text = "◎ Focus", Visible = false,
+            TooltipText = "Focus on this — the feed recedes and only this gets full voice (Esc releases)" };
+        Ui.StyleButton(_focusBtn);
+        _focusBtn.Pressed += OnFocusPressed;
+        vb.AddChild(_focusBtn);
 
         _regionBtn = new Button { Text = "☆ Follow this land", Visible = false,
             TooltipText = "Watch this place — tales anchored here and lives remembered here surface as yours" };
@@ -1776,6 +2141,23 @@ public partial class Main : Node
                     _map.AddFamineScar(mrid, events[i].Year, events[i].Id);
                 else if (events[i].Type == "plague")
                     _map.AddPlagueScar(mrid, events[i].Year, events[i].Id);
+                else if (events[i].Type == "migration")
+                {
+                    // Destination mark; for FLIGHT, an arc from the abandoned land (its source is the
+                    // famine/plague cause event's region — settlement carries no cause, so no arc).
+                    bool flight = events[i].Tags.Contains("flight");
+                    _map.AddMigrationMark(mrid, events[i].Year, events[i].Id, flight);
+                    if (flight)
+                        foreach (int cid in events[i].Causes)
+                        {
+                            var ce = _world.Chronicle.Get(cid);
+                            if (ce.Type is "famine" or "plague" && ce.RegionId is int srid && srid != mrid)
+                            { var s = _world.Regions[srid]; var d = _world.Regions[mrid];
+                              _map.AddMigrationArc(s.X, s.Y, d.X, d.Y, events[i].Year); break; }
+                        }
+                }
+                else if (events[i].Type == "prejudice")
+                    _map.AddScornMark(mrid, events[i].Year, events[i].Id);
                 else if (ClassifyMark(events[i]) is MapView.MarkKind mk)
                     _map.AddPlaceMark(mrid, mk, events[i].Year, events[i].Id);
             }
@@ -2014,13 +2396,19 @@ public partial class Main : Node
         year.AddThemeColorOverride("font_color", Ui.Faded);
         header.AddChild(year);
 
+        // Two receding regimes. A FOCUS lens (temporary, one target) is the stronger filter:
+        // while focused, only beats about the focused thing keep full voice; everything else
+        // recedes hard so the map carries the read. Otherwise the gentler follow-dim applies.
+        bool focusDim = Focused && !FocusRelevant(e) && imp < NotableBar;
+        bool followDim = !Focused && !yours && FollowingAnything() && imp < NotableBar;
+
         var text = new Label
         {
             Text = e.Text,
             AutowrapMode = TextServer.AutowrapMode.WordSmart,
-            // While you're focused on follows, the world compresses to one line per tale
-            // unless it's genuinely loud — quieter weather, same honesty.
-            MaxLinesVisible = !yours && FollowingAnything() && imp < NotableBar ? 1 : 2,
+            // While you're focused (or following), the world compresses to one line per quiet
+            // tale unless it's genuinely loud — quieter weather, same honesty.
+            MaxLinesVisible = focusDim || followDim ? 1 : 2,
             TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
             MouseFilter = Control.MouseFilterEnum.Ignore,
         };
@@ -2028,11 +2416,10 @@ public partial class Main : Node
         text.AddThemeColorOverride("font_color", Ui.Ink);
         body.AddChild(text);
 
-        // While focused, the world's quiet rows recede a step — they stay readable but never
-        // compete with your story. Loud rows (NotableBar+) keep full presence; only notable
-        // rows ever get the pulse tween, so the dim is never overwritten.
-        if (!yours && FollowingAnything() && imp < NotableBar)
-            row.Modulate = new Color(1, 1, 1, 0.78f);
+        // The quiet rows recede a step (focus harder than follow). Loud rows (NotableBar+) keep
+        // full presence; only notable rows ever get the pulse tween, so the dim is never overwritten.
+        if (focusDim) row.Modulate = new Color(1, 1, 1, 0.30f);
+        else if (followDim) row.Modulate = new Color(1, 1, 1, 0.78f);
 
         return row;
     }
@@ -3395,6 +3782,8 @@ public partial class Main : Node
         _followBtn.Visible = true;
         _followBtn.Text = _seedPeople.Contains(id) ? "★ Following bloodline — unfollow" : "☆ Follow this bloodline";
         Ui.StyleButton(_followBtn, _seedPeople.Contains(id));
+        _focusBtn.Visible = true;
+        RefreshFocusButton();
         var fac = _world.Factions[p.FactionId];
         string faith = p.ReligionId is int r && _world.Religions.TryGetValue(r, out var rr) ? rr.Name : "—";
         string spouse = p.SpouseId is int s && _world.People.TryGetValue(s, out var sp) ? sp.Name : "—";
@@ -3604,6 +3993,8 @@ public partial class Main : Node
         _regionBtn.Text = landFollowed ? "★ Following this land — unfollow" : "☆ Follow this land";
         Ui.StyleButton(_regionBtn, landFollowed);
         _dioramaBtn.Visible = true;
+        _focusBtn.Visible = true;
+        RefreshFocusButton();
 
         _inspectorAccent.Color = FactionTint(holder?.Id);
         _inspectorTitle.Text = region.Name;
@@ -3701,6 +4092,46 @@ public partial class Main : Node
             sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]plague falls on the land itself — those it took are remembered at their homeland, not here[/color]");
             sb.AppendLine();
         }
+        // Movement (Migration V1 payoff): peoples who MOVED into this land — flight (driven out by
+        // hunger/sickness) or settlement (growth). RegionId is the DESTINATION; this is a present-
+        // tense move, never a claim about where anyone was born — heritage stays at the homeland.
+        var moves = _regionActivity.RecentFor(regionId)
+            .Select(id => _world.Chronicle.Get(id))
+            .Where(e => e.Type == "migration")
+            .ToList();
+        if (moves.Count > 0)
+        {
+            bool anyFlight = moves.Any(e => e.Tags.Contains("flight"));
+            bool anySettle = moves.Any(e => e.Tags.Contains("settlement"));
+            sb.AppendLine(SectionCap("Movement"));
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Slate)}]{StoryCopy.MovementConditionPhrase(anyFlight, anySettle)}[/color]");
+            for (int i = moves.Count - 1; i >= 0; i--)   // newest first
+            {
+                var me = moves[i];
+                var mcls = Ui.ClassOf(me.Type);
+                sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {me.Year}[/color] [color=#{Ui.Hex(mcls.Color)}]{mcls.Glyph}[/color] {Link("e:" + me.Id, me.Text)}");
+            }
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]a move settles new ground — a people's homeland and heritage stay where they began[/color]");
+            sb.AppendLine();
+        }
+        // Frontier (Prejudice V1 payoff): scorn against newcomers, anchored to the border land
+        // where the established holders turned against settlers of different stock. RegionId-only.
+        var scorns = _regionActivity.RecentFor(regionId)
+            .Select(id => _world.Chronicle.Get(id))
+            .Where(e => e.Type == "prejudice")
+            .ToList();
+        if (scorns.Count > 0)
+        {
+            sb.AppendLine(SectionCap("Frontier"));
+            sb.AppendLine($"[color=#{Ui.Hex(Ui.Ember)}]{StoryCopy.FrontierConditionPhrase()}[/color]");
+            for (int i = scorns.Count - 1; i >= 0; i--)   // newest first
+            {
+                var se = scorns[i];
+                var scls = Ui.ClassOf(se.Type);
+                sb.AppendLine($"[color=#{Ui.Hex(Ui.Faded)}]Yr {se.Year}[/color] [color=#{Ui.Hex(scls.Color)}]{scls.Glyph}[/color] {Link("e:" + se.Id, se.Text)}");
+            }
+            sb.AppendLine();
+        }
         int homeTotal = _regionActivity.HomeTotalFor(regionId);
         sb.AppendLine(SectionCap("Lives rooted here")
             + (homeTotal > 0 ? $" [color=#{Ui.Hex(Ui.Faded)}]({homeTotal} remembered)[/color]" : ""));
@@ -3733,6 +4164,8 @@ public partial class Main : Node
             var e = _world.Chronicle.Get(recent[i]);
             if (e.Type is "famine" or "famine_end" or "boom") continue;   // shown under Harvest memory
             if (e.Type is "plague" or "plague_end") continue;             // shown under Pestilence
+            if (e.Type is "migration") continue;                          // shown under Movement
+            if (e.Type is "prejudice") continue;                          // shown under Frontier
             var cls = Ui.ClassOf(e.Type);
             // The site suffix appears ONLY for a true Event.SiteId — the convention table's
             // anchor, never an inference from the region.
@@ -3779,6 +4212,7 @@ public partial class Main : Node
         _followBtn.Visible = false;
         _soulBtn.Visible = false;
         _regionBtn.Visible = false;
+        _focusBtn.Visible = false;    // focus targets a soul/land/people, not a single site
         _dioramaBtn.Visible = true;   // site picks still scope to a region — offer its diorama
         _lensFactionId = null;
         _lensFactionBtn.Visible = false;
@@ -3898,6 +4332,8 @@ public partial class Main : Node
         _followBtn.Visible = true;
         _followBtn.Text = _markedFactions.Contains(fid) ? "★ Following — unfollow" : "☆ Follow this people";
         Ui.StyleButton(_followBtn, _markedFactions.Contains(fid));
+        _focusBtn.Visible = true;
+        RefreshFocusButton();
         var fac = _world.Factions[fid];
         var members = _world.FactionMembers(fid);
         string leader = fac.LeaderId is int lid ? _world.People[lid].Name : "(none)";

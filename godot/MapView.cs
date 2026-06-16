@@ -22,6 +22,23 @@ public partial class MapView : Control
     public Action<int>? ReplayBeatPicked;   // a numbered replay mark clicked — Main scrubs to that beat
     public Action<int>? TurningPicked;      // a turning-point mark clicked — Main opens its thread
 
+    // Divine-hand aiming (Play Surface V1): when a verb is armed in the palette, a map click
+    // applies it directly instead of opening an inspector. AimKind names what a click resolves
+    // to (a soul dot, or the land under the cursor → its holder/region); ArmedApply hands Main
+    // the resolved id (person id for Person, region id for Faction/Region). AimValid tints the
+    // hover green (valid) or red (invalid) so the player sees a legal target before clicking.
+    public enum AimKind { None, Person, Faction, Region }
+    public AimKind Armed = AimKind.None;
+    public Action<int>? ArmedApply;
+    public Func<int, bool>? AimValid;       // id under cursor → may the armed verb land here?
+
+    public void SetArmed(AimKind kind)
+    {
+        Armed = kind;
+        MouseDefaultCursorShape = kind == AimKind.None ? CursorShape.Arrow : CursorShape.PointingHand;
+        QueueRedraw();
+    }
+
     // Chronicle Replay overlay (viewer-only): Main feeds ONLY honestly anchored beats here —
     // a beat with no SiteId/RegionId never gets a mark (it lives in the side rail instead).
     // Edges are real recorded cause links between anchored beats; the spine is the proximate-
@@ -80,7 +97,7 @@ public partial class MapView : Control
     // Famine scars are deliberately NOT in this ring (see _famineScars below): famines recur often,
     // so sharing these 4 slots let them evict the rare founding/war/battle marks. They keep their
     // own one-slot store now, so this ring is reserved for the rare, lasting marks again.
-    public enum MarkKind { FoundingStone, WarScar, AbandonCairn, CultureRibbon, Battle, FamineScar, Pestilence }
+    public enum MarkKind { FoundingStone, WarScar, AbandonCairn, CultureRibbon, Battle, FamineScar, Pestilence, Migration, Scorn }
     private readonly Dictionary<int, List<(MarkKind kind, int year, int eventId)>> _placeMarks = new();
     private const int MarksPerRegion = 4;
     private static readonly float[] MarkAngles = { 3.6f, 5.5f, 1.1f, 2.4f };   // fixed slots ringing the centre
@@ -103,6 +120,34 @@ public partial class MapView : Control
 
     public void AddPlagueScar(int regionId, int year, int eventId) => _plagueScars[regionId] = (year, eventId);
     public bool HasPlagueScar(int regionId) => _plagueScars.ContainsKey(regionId);
+
+    // Migration marks (Migration V1 payoff): one per DESTINATION region — a people moved here.
+    // Its own one-slot store (arrivals recur, like famine/plague), tinted by flight vs settlement.
+    private readonly Dictionary<int, (int year, int eventId, bool flight)> _migrationMarks = new();
+    private const float MigrationMarkAngle = 0.9f;   // a free slot between MarkAngles' 0.35-rim and 1.1
+
+    public void AddMigrationMark(int regionId, int year, int eventId, bool flight)
+        => _migrationMarks[regionId] = (year, eventId, flight);
+    public bool HasMigrationMark(int regionId) => _migrationMarks.ContainsKey(regionId);
+
+    // Flight arcs: a faint directional sweep from the abandoned land to the new one. Capped and
+    // aged by sim year like the turning constellation — only FLIGHT migrations have a source.
+    private readonly List<(float sx, float sy, float dx, float dy, int year)> _migrationArcs = new();
+    private const int MigrationArcsKept = 12;
+
+    public void AddMigrationArc(float sx, float sy, float dx, float dy, int year)
+    {
+        _migrationArcs.Add((sx, sy, dx, dy, year));
+        if (_migrationArcs.Count > MigrationArcsKept) _migrationArcs.RemoveAt(0);
+    }
+
+    // Scorn marks (Prejudice V1 payoff): one per BORDER region where a people named newcomers
+    // unwelcome. Its own one-slot store, distinct ember-rose stain (discord, not disease/drought).
+    private readonly Dictionary<int, (int year, int eventId)> _scornMarks = new();
+    private const float ScornMarkAngle = 5.95f;   // its own slot past the plague slot (4.55)
+
+    public void AddScornMark(int regionId, int year, int eventId) => _scornMarks[regionId] = (year, eventId);
+    public bool HasScornMark(int regionId) => _scornMarks.ContainsKey(regionId);
 
     public void AddPlaceMark(int regionId, MarkKind kind, int year, int eventId)
     {
@@ -426,6 +471,7 @@ public partial class MapView : Control
         DrawSites(P, regionR);                                              // 5. Sites V1 markers
         DrawPeople(P, regionR, font);                                       // 6+7. people + highlights
         if (SpikeAssetsEnabled) DrawSpikeAssets(P, regionR);                // SPIKE: opt-in asset overlay
+        if (Armed != AimKind.None) DrawArmedHighlight(P, regionR);          // divine-hand valid targets
 
         // 7b. region lens ring — the inspected place, ringed gold beneath the labels.
         if (SelectedRegionId >= 0 && SelectedRegionId < World.Regions.Count)
@@ -466,6 +512,7 @@ public partial class MapView : Control
         }
 
         DrawTurningMarks(P);                                                // 7e. turning points
+        DrawMigrationArcs(P);                                               // 7f. migration flight arcs
 
         var placed = DrawFactionLabels(P, font);                            // 8. labels
         DrawPlaceTags(P, regionR, placed);
@@ -683,6 +730,33 @@ public partial class MapView : Control
             DrawMemoryMark(c, s, MarkKind.Pestilence, a);
         }
 
+        // Migration marks: one per destination region — footsteps of a people who moved here.
+        // Flight (driven out by hunger/sickness) reads amber-slate; settlement (growth) reads green.
+        foreach (var (rid, mark) in _migrationMarks)
+        {
+            if (rid < 0 || rid >= World!.Regions.Count) continue;
+            var r = World.Regions[rid];
+            var center = P(r.X, r.Y);
+            float s = Mathf.Clamp(regionR * 0.18f, 6.5f, 15f);
+            float age = World.Year - mark.year;
+            float a = Mathf.Lerp(0.85f, 0.34f, Mathf.Clamp(age / 250f, 0f, 1f));
+            var c = center + new Vector2(Mathf.Cos(MigrationMarkAngle), Mathf.Sin(MigrationMarkAngle)) * regionR * 0.5f;
+            DrawMigrationMark(c, s, mark.flight, a);
+        }
+
+        // Scorn marks: one per border region — a people named newcomers unwelcome here.
+        foreach (var (rid, scar) in _scornMarks)
+        {
+            if (rid < 0 || rid >= World!.Regions.Count) continue;
+            var r = World.Regions[rid];
+            var center = P(r.X, r.Y);
+            float s = Mathf.Clamp(regionR * 0.18f, 6.5f, 15f);
+            float age = World.Year - scar.year;
+            float a = Mathf.Lerp(0.85f, 0.34f, Mathf.Clamp(age / 250f, 0f, 1f));
+            var c = center + new Vector2(Mathf.Cos(ScornMarkAngle), Mathf.Sin(ScornMarkAngle)) * regionR * 0.5f;
+            DrawMemoryMark(c, s, MarkKind.Scorn, a);
+        }
+
         // Memorial cairns sit at the rim of the home lands, farther out than the place marks —
         // a remembered life, never "it happened here".
         foreach (var (rid, marks) in _homeMarks)
@@ -803,6 +877,14 @@ public partial class MapView : Control
                 DrawCircle(c + new Vector2(s * 0.04f, -s * 0.28f), Mathf.Max(1f, s * 0.09f), spore);
                 break;
             }
+            case MarkKind.Scorn:           // a people named newcomers unwelcome — an averted/barred
+            {                              // mark in ember-rose: a closed door, neither war nor plague
+                var rose = new Color("8a4a52");
+                DrawArc(c, s * 0.5f, 0, Mathf.Tau, 24, rose with { A = a }, Mathf.Max(1.3f, s * 0.13f));
+                DrawLine(c + new Vector2(-s * 0.36f, s * 0.36f), c + new Vector2(s * 0.36f, -s * 0.36f),
+                         rose.Darkened(0.15f) with { A = a }, Mathf.Max(1.3f, s * 0.14f));   // the bar across
+                break;
+            }
             case MarkKind.CultureRibbon:   // a custom took root (or faded, clashed, spread) here
                 DrawPolyline(new[]
                 {
@@ -812,6 +894,77 @@ public partial class MapView : Control
                     c + new Vector2(s * 0.45f, -s * 0.3f),
                 }, Ui.Violet with { A = a }, Mathf.Max(1.2f, s * 0.16f), true);
                 break;
+        }
+    }
+
+    // Divine-hand targeting overlay: while a verb is armed, show where it may land. Person verbs
+    // ring every valid soul faintly green; land/people verbs tint the hovered region green (valid)
+    // or red (refused). Pure rendering over the existing dots/hover — no new picking precision.
+    private void DrawArmedHighlight(Func<float, float, Vector2> P, float regionR)
+    {
+        var valid = new Color("4e7d43");      // moss green — a legal target
+        var invalid = new Color("9c3b2e");    // ember red — refused
+        if (Armed == AimKind.Person)
+        {
+            foreach (var d in _dots)
+            {
+                bool ok = AimValid?.Invoke(d.id) ?? true;
+                if (!ok) continue;            // only light the souls the verb can actually touch
+                float pulse = 0.4f + 0.25f * Mathf.Sin(_breath * 2f + d.id);
+                DrawArc(d.pos, d.r + 4f, 0, Mathf.Tau, 20, valid with { A = pulse }, 1.8f);
+            }
+        }
+        else if (_hoverRegion >= 0 && _hoverRegion < World!.Regions.Count)
+        {
+            bool ok = AimValid?.Invoke(_hoverRegion) ?? true;
+            var hr = World.Regions[_hoverRegion];
+            DrawArc(P(hr.X, hr.Y), regionR + 2f, 0, Mathf.Tau, 48, (ok ? valid : invalid) with { A = 0.85f }, 3f);
+        }
+    }
+
+    // A migration mark: a short trail of footfalls with a leading arrow — a people arrived here.
+    // Flight (driven by disaster) reads slate-amber; settlement (growth) reads mossy green.
+    private void DrawMigrationMark(Vector2 c, float s, bool flight, float a)
+    {
+        var col = (flight ? new Color("6f7e58") : Ui.Moss) with { A = a };
+        // a few footfalls leading up to the arrow
+        DrawCircle(c + new Vector2(-s * 0.42f, s * 0.22f), Mathf.Max(1f, s * 0.1f), col);
+        DrawCircle(c + new Vector2(-s * 0.16f, s * 0.04f), Mathf.Max(1f, s * 0.1f), col);
+        // the arrowhead (pointing in/up — they settled here)
+        var tip = c + new Vector2(s * 0.34f, -s * 0.2f);
+        DrawColoredPolygon(new[]
+        {
+            tip, tip + new Vector2(-s * 0.34f, s * 0.12f), tip + new Vector2(-s * 0.12f, s * 0.34f),
+        }, col);
+    }
+
+    // Flight arcs: a faint curved sweep from an abandoned land to the new one. Aged by sim year.
+    private void DrawMigrationArcs(Func<float, float, Vector2> P)
+    {
+        if (ReplayActive) return;
+        foreach (var (sx, sy, dx, dy, year) in _migrationArcs)
+        {
+            float age = World!.Year - year;
+            float a = Mathf.Lerp(0.55f, 0.12f, Mathf.Clamp(age / 120f, 0f, 1f));
+            var src = P(sx, sy);
+            var dst = P(dx, dy);
+            var mid = (src + dst) / 2f;
+            // bow the line so several arcs over the same lands don't overlap into one smear
+            var perp = (dst - src).Orthogonal().Normalized();
+            var ctrl = mid + perp * src.DistanceTo(dst) * 0.18f;
+            var col = new Color("6f7e58") with { A = a };
+            Vector2 prev = src;
+            for (int i = 1; i <= 16; i++)
+            {
+                float t = i / 16f;
+                var pt = src.Lerp(ctrl, t).Lerp(ctrl.Lerp(dst, t), t);   // quadratic Bézier
+                DrawLine(prev, pt, col, 1.6f);
+                prev = pt;
+            }
+            // a small arrowhead at the destination end
+            var dir = (dst - ctrl).Normalized();
+            var n = dir.Orthogonal();
+            DrawColoredPolygon(new[] { dst, dst - dir * 8f + n * 4f, dst - dir * 8f - n * 4f }, col);
         }
     }
 
@@ -1219,6 +1372,28 @@ public partial class MapView : Control
         {
             foreach (var (mp, mr, number) in _replayScreen)
                 if (pos.DistanceTo(mp) <= mr + 3) { ReplayBeatPicked?.Invoke(number); return; }
+        }
+
+        // A verb is armed: a click aims the hand. Person verbs resolve to the nearest soul dot;
+        // land/people verbs to the region under the cursor. Main does the validity gate + apply.
+        if (Armed != AimKind.None && ArmedApply is not null)
+        {
+            if (Armed == AimKind.Person)
+            {
+                int pBest = -1; float pD = float.MaxValue;
+                foreach (var d in _dots)
+                {
+                    float dist = pos.DistanceTo(d.pos);
+                    if (dist <= d.r + 3 && dist < pD) { pD = dist; pBest = d.id; }
+                }
+                if (pBest >= 0) ArmedApply(pBest);
+            }
+            else
+            {
+                int armedRegion = NearestRegion(pos);
+                if (armedRegion >= 0) ArmedApply(armedRegion);
+            }
+            return;
         }
 
         int bestId = -1;
