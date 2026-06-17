@@ -542,8 +542,16 @@ public partial class GreymarketCanvas : Control
 				if (_terr[x, y] == 0 || _terr[x, y] == 1)
 					if (Math.Abs(x - 11) + Math.Abs(y - 11) <= 4) _terr[x, y] = 5;
 
-		// stalls RING the open square (on the plaza rim, ~radius 3 from centre), never in the middle
-		foreach (var (sx, sy) in new (int, int)[] { (8, 11), (9, 9), (11, 8), (13, 9), (14, 11), (13, 13), (11, 14), (9, 13) })
+		// stalls frame the open square in ASYMMETRIC groups (not an even ring): a sparse west arc, a
+		// denser EAST market knot (the focal cluster the eye reads first), and an open S/SE mouth that
+		// invites the approach up the spine — composition flow, not a clock face. Centre stays clear.
+		foreach (var (sx, sy) in new (int, int)[]
+				 {
+					 (8, 11), (9, 9),               // west arc — sparse
+					 (11, 8), (13, 9),              // north arc
+					 (14, 11), (14, 12), (13, 13),  // east knot — the dense market heart
+					 (9, 13),                       // a lone SW stall; the S/SE mouth (11..12,14) stays open
+				 })
 			_stalls.Add((sx, sy));
 
 		// BUILDINGS — rows that FRONT onto a street, NOT a circular pile. Each ROW lays dwellings
@@ -630,14 +638,17 @@ public partial class GreymarketCanvas : Control
 				_people.Add((cx + dx, cy + dy, (int)((h >> 20) % 3)));
 			}
 		}
-		// market ring: ~14 folk around the rim of the open square, browsing the stalls
-		for (int i = 0; i < 14; i++)
+		// market ring: a thinner annulus of folk around the rim (clear centre)…
+		for (int i = 0; i < 10; i++)
 		{
 			uint h = Hash(i, 0, 51);
-			float ang = i / 14f * Mathf.Tau + ((h & 0xff) / 255f - 0.5f) * 0.4f;
+			float ang = i / 10f * Mathf.Tau + ((h & 0xff) / 255f - 0.5f) * 0.4f;
 			float rad = 2.6f + ((h >> 8) & 0xff) / 255f * 1.1f;     // annulus 2.6..3.7 — clear centre
 			_people.Add((11 + Mathf.Cos(ang) * rad, 11 + Mathf.Sin(ang) * rad * 0.9f, (int)((h >> 16) % 3)));
 		}
+		// …and a denser BROWSING KNOT massed at the east market cluster, so the crowd weight matches
+		// the stall weight and the focal heart reads as the busiest place (composition hierarchy).
+		Crowd(13.4f, 11.6f, 2.4f, 6, 61);
 		// a couple of folk crossing the open square (sparse, so it still reads open)
 		Crowd(11, 11, 1.6f, 2, 7);
 		// street-walkers along the spine + lanes
@@ -821,7 +832,9 @@ public partial class GreymarketCanvas : Control
 	{
 		var light = KeyLight(vx, vy);
 		float dist = (Mathf.Abs(vx - 11) + Mathf.Abs(vy - 11)) / 18f;
-		float focal = Mathf.Clamp(0.16f - dist * 0.5f, -0.22f, 0.16f);
+		// a STRONGER focal swing than V1 — the market core lifts warm and bright, the periphery sinks
+		// into shadow, so the eye lands on the square and the edges recede (composition hierarchy).
+		float focal = Mathf.Clamp(0.23f - dist * 0.66f, -0.32f, 0.23f);
 		uint h = Hash((int)(vx * 2), (int)(vy * 2), 3);
 		float j = ((h & 0xff) / 255f - 0.5f) * 0.05f;
 		return new Color(light.R * (1 + focal) + j, light.G * (1 + focal * 0.92f) + j, light.B * (1 + focal * 0.74f) + j);
@@ -830,30 +843,65 @@ public partial class GreymarketCanvas : Control
 	// per-zone colour push over the grain texture (only where the texture isn't already the zone hue)
 	private Color ZoneMul(int t) => t == 3 ? new Color(1.20f, 1.04f, 0.55f) : Colors.White;
 
+	// how much of `zone` surrounds a grid VERTEX (0..1, eased). Drives the per-vertex alpha of a zone
+	// overlay so its edges FEATHER into the meadow instead of cutting a hard tile line.
+	private float ZoneCover(int vx, int vy, int zone)
+	{
+		int hit = 0;
+		if (vx - 1 >= 0 && vy - 1 >= 0 && _terr[vx - 1, vy - 1] == zone) hit++;
+		if (vx < GW && vy - 1 >= 0 && _terr[vx, vy - 1] == zone) hit++;
+		if (vx - 1 >= 0 && vy < GH && _terr[vx - 1, vy] == zone) hit++;
+		if (vx < GW && vy < GH && _terr[vx, vy] == zone) hit++;
+		return Mathf.Pow(hit / 4f, 0.7f);
+	}
+
+	private Vector2[] CellUv(int gx, int gy) => new[]
+	{
+		new Vector2(gx / UvP, gy / UvP), new Vector2((gx + 1) / UvP, gy / UvP),
+		new Vector2((gx + 1) / UvP, (gy + 1) / UvP), new Vector2(gx / UvP, (gy + 1) / UvP),
+	};
+
+	private Vector2[] CellPts(int gx, int gy) =>
+		new[] { Iso(gx, gy), Iso(gx + 1, gy), Iso(gx + 1, gy + 1), Iso(gx, gy + 1) };
+
 	private void DrawGround()
 	{
-		// LAND PASS — every non-water cell, textured by zone, gouraud-lit at the shared vertices.
+		// 1) BASE MEADOW — every land cell painted with the continuous (de-tiled) grass grain,
+		//    gouraud-lit at shared vertices: one unbroken green surface under the whole village.
+		var grass = View.Tex("ground_grass");
 		for (int gy = 0; gy < GH; gy++)
 			for (int gx = 0; gx < GW; gx++)
 			{
-				int t = _terr[gx, gy];
-				if (t == 2) continue;
-				var pts = new[] { Iso(gx, gy), Iso(gx + 1, gy), Iso(gx + 1, gy + 1), Iso(gx, gy + 1) };
-				var zm = ZoneMul(t);
-				var cols = new[]
-				{
-					VertLight(gx, gy) * zm, VertLight(gx + 1, gy) * zm,
-					VertLight(gx + 1, gy + 1) * zm, VertLight(gx, gy + 1) * zm,
-				};
-				var uvs = new[]
-				{
-					new Vector2(gx / UvP, gy / UvP), new Vector2((gx + 1) / UvP, gy / UvP),
-					new Vector2((gx + 1) / UvP, (gy + 1) / UvP), new Vector2(gx / UvP, (gy + 1) / UvP),
-				};
-				var tex = View.Tex(GroundTex(t));
-				if (tex != null) DrawPolygon(pts, cols, uvs, tex);
-				else DrawColoredPolygon(pts, GroundColor(t) * cols[0]);
+				if (_terr[gx, gy] == 2) continue;
+				var pts = CellPts(gx, gy);
+				var cols = new[] { VertLight(gx, gy), VertLight(gx + 1, gy), VertLight(gx + 1, gy + 1), VertLight(gx, gy + 1) };
+				if (grass != null) DrawPolygon(pts, cols, CellUv(gx, gy), grass);
+				else DrawColoredPolygon(pts, GroundColor(0) * cols[0]);
 			}
+
+		// 2) ZONE OVERLAYS — dirt lanes, gold fields, packed plaza, shore sand painted OVER the meadow
+		//    with per-vertex alpha = ZoneCover, so every zone edge feathers into the grass instead of
+		//    cutting a hard tile line. (Plaza centre stays solid; lane sides + field/beach edges fade.)
+		foreach (int zone in new[] { 4, 3, 1, 5 })   // sand under, then field, lanes, plaza on top
+		{
+			var tex = View.Tex(GroundTex(zone));
+			if (tex == null) continue;
+			var zm = ZoneMul(zone);
+			for (int gy = 0; gy < GH; gy++)
+				for (int gx = 0; gx < GW; gx++)
+				{
+					if (_terr[gx, gy] != zone) continue;
+					var pts = CellPts(gx, gy);
+					Color C(int vx, int vy)
+					{
+						var c = VertLight(vx, vy) * zm;
+						c.A = ZoneCover(vx, vy, zone);
+						return c;
+					}
+					var cols = new[] { C(gx, gy), C(gx + 1, gy), C(gx + 1, gy + 1), C(gx, gy + 1) };
+					DrawPolygon(pts, cols, CellUv(gx, gy), tex);
+				}
+		}
 
 		// WORN-EARTH integration — soft trodden-dirt halos under the dwellings (cleared grass), so the
 		// houses sit IN the ground instead of on a green carpet. Drawn before the water + foam.
@@ -932,8 +980,8 @@ public partial class GreymarketCanvas : Control
 	private void DrawMarketGlow(Vector2 size)
 	{
 		var c = Iso(11, 11);
-		for (int i = 10; i >= 1; i--)
-			DrawCircle(c, i * 34f, new Color(1f, 0.86f, 0.55f, 0.012f));
+		for (int i = 12; i >= 1; i--)
+			DrawCircle(c, i * 30f, new Color(1f, 0.87f, 0.56f, 0.017f));
 	}
 
 	private void DrawEdgeHaze(Vector2 size)
