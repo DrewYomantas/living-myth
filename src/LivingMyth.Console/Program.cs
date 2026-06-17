@@ -29,9 +29,10 @@ switch (cmd)
     case "plague": PlagueCmd(Years(120)); break;
     case "migration": MigrationCmd(Years(120)); break;
     case "prejudice": PrejudiceCmd(Years(120)); break;
+    case "creeping": CreepingDeathCmd(Years(1000)); break;
     case "paint": PaintCmd(Seed(7), Years(120)); break;
     default:
-        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine | save | sites | replay | harvest | plague | migration | prejudice | paint");
+        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine | save | sites | replay | harvest | plague | migration | prejudice | creeping | paint");
         break;
 }
 return;
@@ -1542,6 +1543,122 @@ string PlagueCanon(World w)
           .Append('|').Append(r.InPlague ? 1 : 0).Append('\n');
     foreach (var f in w.Config.Factions.Select(cf => w.Factions[cf.Id]))
         sb.Append(f.Id).Append('=').Append(f.InPlague ? 1 : 0).Append('\n');
+    return sb.ToString();
+}
+
+// Proof gate for The Creeping Death (disease-V2 spread-chain echo). RECORDING-ONLY: the contagion
+// provenance adds NO Rng draw and NO event (verify is the keystone), so this gate proves the recorded
+// edges are honest. Proves: double-run determinism (chronicle + contagion-edge set byte-identical),
+// edge honesty (every contagion-from tag names a valid ADJACENT region and the onset cause-links a
+// plague in that region with Year<=this), anchoring non-leak (the convention anchors no chained
+// plague, and SiteId/HomeRegionId stay null), chain discipline (distinct regions, >=3, span<=window),
+// and non-vacuity (>=1 contagion edge across the suite AND >=1 chain of length>=3 somewhere).
+void CreepingDeathCmd(int years)
+{
+    Console.WriteLine($"Creeping Death gate ({years} yrs): contagion provenance is recording-only (no draw, no");
+    Console.WriteLine("event); every contagion-from tag names a real adjacent plagued land; chains of >=3 distinct");
+    Console.WriteLine("lands within the window become The Creeping Death; all of it deterministic.");
+    int window = 30;
+    int failures = 0;
+    int suiteEdges = 0, suiteChains = 0, suiteLongest = 0;
+
+    foreach (int seed in new[] { 1, 18, 42, 7 })
+    {
+        var (c1, n1) = Load();
+        var w = new World(seed, c1, n1); w.Run(years);
+        window = (int)w.Params.GetValueOrDefault("creeping_death_window", 30);
+        var bad = new List<string>();
+        int edges = 0;
+
+        // (1) Edge honesty + anchoring non-leak, per contagion-tagged plague.
+        foreach (var e in w.Chronicle.Events)
+        {
+            if (e.Type != "plague") continue;
+            var tag = e.Tags.FirstOrDefault(t => t.StartsWith("contagion-from-"));
+            if (tag is null) continue;
+            edges++;
+
+            // The chained plague stays land-anchored only — no site/home leak, convention agrees none.
+            if (e.RegionId is not int rid || rid < 0 || rid >= w.Regions.Count)
+            { bad.Add($"plague #{e.Id} has no valid RegionId"); break; }
+            if (e.SiteId is not null)
+            { bad.Add($"chained plague #{e.Id} leaked a SiteId ({e.SiteId})"); break; }
+            if (e.HomeRegionId is not null)
+            { bad.Add($"chained plague #{e.Id} carries a home anchor"); break; }
+            if (SiteAnchors.Expected(w, e.Type, e.Tags, e.RegionId) is int leak)
+            { bad.Add($"convention anchors plague #{e.Id} to site {leak} — expected none"); break; }
+
+            if (!int.TryParse(tag.Substring("contagion-from-".Length), out int src))
+            { bad.Add($"plague #{e.Id} has a malformed contagion tag '{tag}'"); break; }
+            // The source must be an ACTUAL adjacent region.
+            if (!w.Regions[rid].AdjacentRegionIds.Contains(src))
+            { bad.Add($"plague #{e.Id} names contagion source {src} that is not adjacent to {rid}"); break; }
+            // The onset must cause-link a plague in the source region, recorded no later than this one.
+            var parent = e.Causes.Select(cid => w.Chronicle.Get(cid))
+                .FirstOrDefault(c => c.Type == "plague" && c.RegionId == src && c.Year <= e.Year);
+            if (parent is null)
+            { bad.Add($"plague #{e.Id} contagion-from-{src} cause-links no plague in {src} with Year<={e.Year}"); break; }
+        }
+
+        // (2) Chain discipline: every emitted Creeping Death echo names distinct regions, >=3 of them,
+        // within the window — recomputed independently of the detector's framing.
+        var chains = Echoes.DetectCreepingDeath(w);
+        int longest = 0;
+        foreach (var echo in chains)
+        {
+            var regions = echo.EventIds.Select(id => w.Chronicle.Get(id))
+                .Select(ev => ev.RegionId).ToList();
+            if (regions.Any(r => r is null))
+            { bad.Add($"Creeping Death echo '{echo.Label}' has an unanchored beat"); break; }
+            var distinct = regions.Select(r => r!.Value).Distinct().Count();
+            if (distinct != regions.Count)
+            { bad.Add($"Creeping Death echo '{echo.Label}' repeats a region ({distinct} distinct of {regions.Count})"); break; }
+            if (regions.Count < 3)
+            { bad.Add($"Creeping Death echo '{echo.Label}' is only {regions.Count} lands"); break; }
+            if (echo.YearSpan.Last - echo.YearSpan.First > window)
+            { bad.Add($"Creeping Death echo '{echo.Label}' spans {echo.YearSpan.Last - echo.YearSpan.First} > {window}"); break; }
+            longest = Math.Max(longest, regions.Count);
+        }
+
+        // (3) Determinism: the whole chronicle AND the contagion-edge set are byte-identical across an
+        // independent run (the recording-only provenance must not introduce any order-dependence).
+        var (c2, n2) = Load();
+        var w2 = new World(seed, c2, n2); w2.Run(years);
+        if (w.Chronicle.Render() != w2.Chronicle.Render())
+            bad.Add("chronicle differs between identical runs");
+        if (CreepingCanon(w) != CreepingCanon(w2))
+            bad.Add("contagion-edge set differs between identical runs");
+
+        suiteEdges += edges; suiteChains += chains.Count; suiteLongest = Math.Max(suiteLongest, longest);
+        Console.WriteLine($"  seed {seed,3}: {(bad.Count == 0 ? "OK" : "FAIL")}  {edges} contagion edge(s) · {chains.Count} chain(s) · longest {longest} lands");
+        foreach (var b in bad.Take(5)) Console.WriteLine($"           {b}");
+        if (bad.Count > 0) failures++;
+    }
+
+    Console.WriteLine($"  suite: {suiteEdges} contagion edges, {suiteChains} creeping-death chains, longest {suiteLongest} lands");
+
+    // (4) Non-vacuity: contagion must actually carry (else edge honesty is vacuous) AND at least one
+    // chain of >=3 lands must form somewhere (else the echo's chain discipline is vacuous).
+    if (suiteEdges == 0)
+    { Console.WriteLine("  SUITE FAIL: no contagion edge ever recorded — the provenance is inert, edge checks vacuous"); failures++; }
+    if (suiteLongest < 3)
+    { Console.WriteLine("  SUITE FAIL: no chain of >=3 lands ever formed — the echo is unreachable, chain checks vacuous"); failures++; }
+
+    Console.WriteLine(failures == 0 ? "\nTHE CREEPING DEATH HOLDS." : $"\n{failures} CHECK(S) FAILED.");
+    Environment.Exit(failures == 0 ? 0 : 1);
+}
+
+string CreepingCanon(World w)
+{
+    var sb = new System.Text.StringBuilder();
+    foreach (var e in w.Chronicle.Events)
+    {
+        if (e.Type != "plague") continue;
+        var tag = e.Tags.FirstOrDefault(t => t.StartsWith("contagion-from-"));
+        if (tag is null) continue;
+        sb.Append(e.Id).Append('|').Append(tag).Append('|')
+          .Append(string.Join(",", e.Causes)).Append('\n');
+    }
     return sb.ToString();
 }
 

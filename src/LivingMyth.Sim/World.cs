@@ -990,11 +990,33 @@ public sealed class World
                 if (r.InFamine && r.FamineEvent is Event fe) causes.Add(fe.Id);
                 if (holder.DoomUntilYear > Year && holder.DoomEventId is int de) causes.Add(de);
                 if (holder.ProtectUntilYear > Year && holder.ProtectEventId is int pe) causes.Add(pe);
+                var tags = new List<string> { "disease", "pestilence" };
+                // Contagion provenance (zero draws): if a still-plagued neighbour carried sickness
+                // across the border this year — read from the FROZEN prior-year snapshot, never live
+                // in-loop state — name it as a cause. The neighbour with the highest prior pestilence
+                // (>= threshold, currently InPlague with a live onset) wins; sorted ids + strict '>'
+                // make the tie-break the lowest-id neighbour, deterministically. This is the only
+                // link The Creeping Death's spread chain is built from.
+                int? source = null;
+                double srcPrev = 0.0;
+                foreach (var nid in r.AdjacentRegionIds)
+                {
+                    if (nid < 0 || nid >= prev.Length) continue;
+                    if (prev[nid] < Params["plague_threshold"]) continue;
+                    var nr = Regions[nid];
+                    if (!nr.InPlague || nr.PlagueEvent is null) continue;
+                    if (source is null || prev[nid] > srcPrev) { source = nid; srcPrev = prev[nid]; }
+                }
+                if (source is int csid)
+                {
+                    causes.Add(Regions[csid].PlagueEvent!.Id);
+                    tags.Add($"contagion-from-{csid}");
+                }
                 r.PlagueEvent = Chronicle.Record(Year, "plague",
                     $"A pestilence breaks out in {r.Name}.",
                     participants: holder.LeaderId is int pl ? new() { pl } : null,
                     causes: causes.Count > 0 ? causes : null,
-                    tags: new() { "disease", "pestilence" },
+                    tags: tags,
                     regionId: r.Id);
             }
             else if (r.InPlague && r.Pestilence < Params["plague_threshold"])

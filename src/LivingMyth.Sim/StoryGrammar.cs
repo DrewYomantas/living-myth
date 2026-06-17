@@ -272,6 +272,10 @@ public static class StoryGrammar
             return (ConnectorKind.Therefore, "plague-breaks");   // the outbreak burns itself out
         if (effect.Type == "death" && cause.Type == "plague")
             return (ConnectorKind.Therefore, "plague-death");
+        // Disease-V2 contagion (The Creeping Death): an outbreak whose proximate cause is a plague in
+        // an adjacent land — the sickness crept across the border (the spread-chain edge).
+        if (effect.Type == "plague" && cause.Type == "plague")
+            return (ConnectorKind.Therefore, "plague-spread");
 
         // Migration V1: a people driven from its land by famine or plague — the flight cause-links
         // back to the disaster that drove it out (a settlement migration carries no cause and stays

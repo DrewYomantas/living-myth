@@ -37,6 +37,7 @@ public static class StoryCopy
             "plague-under-doom" => "the doom upon them festered into sickness — therefore,",
             "plague-breaks" => "the pestilence at last burned itself out — therefore,",
             "plague-death" => "the pestilence took them — therefore,",
+            "plague-spread" => "the sickness crossed the border from the next land — therefore,",
             "migration-from-famine" => "the hunger drove them from their land — therefore,",
             "migration-from-plague" => "the sickness drove them from their land — therefore,",
             "prejudice-from-famine" => "the hunger sharpened their scorn — therefore,",

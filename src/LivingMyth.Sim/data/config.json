@@ -49,6 +49,7 @@
     "doom_plague_burden": 1.5,
     "plague_protect_bias": 0.03,
     "plague_doom_bias": 0.03,
+    "creeping_death_window": 30,
     "trade_chance_per_year": 0.06,
     "trade_tension_reduction": 1.0,
     "culture_drift_step": 0.04,

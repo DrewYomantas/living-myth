@@ -419,6 +419,69 @@ public static class Echoes
         return echoes;
     }
 
+    /// <summary>A pestilence that crept from land to land — each outbreak cause-linked to a plagued
+    /// neighbour by its `contagion-from-{regionId}` tag, forming a chain of distinct lands the
+    /// sickness crossed. The first echo keyed on a CONTAGION CHAIN (the spread, not a single place):
+    /// build child→parent edges from the tags, find the roots (no contagion parent), walk the longest
+    /// DISTINCT-region path from each root (children ordered by id), and remember any chain of ≥3
+    /// distinct lands whose first→last span fits the creeping_death_window — the disease-V2 echo.</summary>
+    public static List<Echo> DetectCreepingDeath(World world)
+    {
+        const string prefix = "contagion-from-";
+        int window = (int)world.Params.GetValueOrDefault("creeping_death_window", 30);
+
+        // Index plague onsets by region, and build the contagion edges from the tags: a child plague
+        // points at the parent plague in the tagged source region that it cause-links to.
+        var plagues = world.Chronicle.Events.Where(e => e.Type == "plague" && e.RegionId is int).ToList();
+        var byId = plagues.ToDictionary(e => e.Id);
+        var children = new Dictionary<int, List<int>>();   // parent plague id -> child plague ids
+        var hasParent = new HashSet<int>();
+        foreach (var e in plagues)
+        {
+            var tag = e.Tags.FirstOrDefault(t => t.StartsWith(prefix));
+            if (tag is null) continue;
+            if (!int.TryParse(tag.Substring(prefix.Length), out int src)) continue;
+            var parent = e.Causes.Select(cid => world.Chronicle.Get(cid))
+                .FirstOrDefault(c => c.Type == "plague" && c.RegionId == src);
+            if (parent is null || !byId.ContainsKey(parent.Id)) continue;
+            if (!children.TryGetValue(parent.Id, out var kids)) { kids = new(); children[parent.Id] = kids; }
+            kids.Add(e.Id);
+            hasParent.Add(e.Id);
+        }
+
+        // Walk the longest distinct-region path from a node (children ordered by id, deterministic).
+        List<int> LongestPath(int id, HashSet<int> seenRegions)
+        {
+            var best = new List<int> { id };
+            if (!children.TryGetValue(id, out var kids)) return best;
+            foreach (var kid in kids.OrderBy(k => k))
+            {
+                if (byId[kid].RegionId is not int krid || seenRegions.Contains(krid)) continue;
+                seenRegions.Add(krid);
+                var sub = LongestPath(kid, seenRegions);
+                seenRegions.Remove(krid);
+                if (1 + sub.Count > best.Count) { best = new List<int> { id }; best.AddRange(sub); }
+            }
+            return best;
+        }
+
+        var echoes = new List<Echo>();
+        foreach (var root in plagues.Where(e => !hasParent.Contains(e.Id)).OrderBy(e => e.Id))
+        {
+            var seen = new HashSet<int> { (int)root.RegionId! };
+            var path = LongestPath(root.Id, seen);
+            if (path.Count < 3) continue;
+            var first = byId[path[0]];
+            var last = byId[path[^1]];
+            if (last.Year - first.Year > window) continue;
+            string fromName = world.RegionName((int)first.RegionId!) ?? "a lost land";
+            string toName = world.RegionName((int)last.RegionId!) ?? "a lost land";
+            string label = $"A pestilence crept from {fromName} through {path.Count} lands to {toName}.";
+            echoes.Add(new Echo("The Creeping Death", label, path, (first.Year, last.Year)));
+        }
+        return echoes;
+    }
+
     /// <summary>One land that peoples fled to again and again — a refuge the wandering sought out,
     /// remembered as the promised land. The migration echo keyed on the DESTINATION place
     /// (Event.RegionId — where each migration settled), the same bounded/clustered discipline as
@@ -511,6 +574,7 @@ public static class Echoes
         echoes.AddRange(DetectFieldOfBones(world));
         echoes.AddRange(DetectBarrenYears(world));
         echoes.AddRange(DetectLongPestilence(world));
+        echoes.AddRange(DetectCreepingDeath(world));
         echoes.AddRange(DetectPromisedLand(world));
         echoes.AddRange(DetectTheUnwelcome(world));
 
