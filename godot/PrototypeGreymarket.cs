@@ -1,3 +1,10 @@
+// NOTE (2026-06-16): Krita-inking the 3 new ground swatches (ground_grass/dirt/plaza) was tried
+// and ABANDONED — the headless ground chain applied cleanly (added to GROUNDS in krita_paintover.py)
+// but the result is IMPERCEPTIBLE in-engine: grounds are heavily C#-tinted at draw time and the
+// gentle ground ink (opacity 80) washes out entirely. Before/after F5 shots are identical even at 3x
+// crop (docs/visual_pass/northstar_v0/ink_check/). Originals left un-inked on purpose. To make ground
+// grain read it would take a much stronger overlay or a tint-aware pass — not worth it now; the next
+// static-polish lever is elsewhere (focal darkening / atmospheric depth). See next-build-sequencing.
 using Godot;
 using System;
 using System.Collections.Generic;
@@ -575,7 +582,9 @@ public partial class GreymarketCanvas : Control
 				float jy = (((h >> 8) & 0xff) / 255f - 0.5f) * 0.5f;
 				float gx = x0 + dx * i + ox + jx, gy = y0 + dy * i + oy + jy;
 				if (!Free(gx, gy)) continue;
-				int kind = (b2Every > 0 && i % b2Every == 0 && i > 0) ? 1 : 0;
+				// 0 house_a (warm thatch, dominant) · 1 house_b (broad tile hall) · 3 house_c (tall
+				// narrow slate towne-house) — three rooflines so a terrace never repeats one stamp
+				int kind = (b2Every > 0 && i % b2Every == 0 && i > 0) ? 1 : ((h & 3) == 0 ? 3 : 0);
 				_buildings.Add((gx, gy, kind));
 			}
 		}
@@ -731,10 +740,13 @@ public partial class GreymarketCanvas : Control
 			uint h = Hash((int)(gx * 7), (int)(gy * 7), 17);
 			bool smoke = (h & 3) != 0 && fk != 2;
 			var p = Iso(gx, gy);
-			// dwellings 1.7..2.0 tall; the seat keep larger (2.8) so it crowns the town
-			float bscale = fk == 2 ? 2.8f : (1.7f + ((h >> 8) & 0xff) / 255f * 0.3f);
-			string key = fk == 2 ? "keep" : (fk == 1 ? "house_b" : "house_a");
-			var warm = fk == 2 ? new Color("ded2b8") : new Color("f0d2a2");   // timber/thatch warmth
+			// dwellings 1.7..2.0 tall; house_c (tall slate towne-house) reads taller; keep larger (2.8)
+			float bscale = fk == 2 ? 2.8f
+				: fk == 3 ? (2.1f + ((h >> 8) & 0xff) / 255f * 0.3f)
+				: (1.7f + ((h >> 8) & 0xff) / 255f * 0.3f);
+			string key = fk == 2 ? "keep" : (fk == 1 ? "house_b" : (fk == 3 ? "house_c" : "house_a"));
+			// timber/thatch warmth; house_c's slate roof reads cold-grey, warm it a touch more
+			var warm = fk == 2 ? new Color("ded2b8") : (fk == 3 ? new Color("ead0a6") : new Color("f0d2a2"));
 			var tint = KeyLight(fgx, fgy) * warm;
 			draws.Add((p.Y, () =>
 			{

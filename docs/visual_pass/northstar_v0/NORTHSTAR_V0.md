@@ -80,3 +80,26 @@ tiny folk — resembling the reference in composition, density, warmth, and UI.
   `VerbBar`; references only the Sim read-model.
 - `godot/PrototypeGreymarket.tscn`, `godot/PrototypeGreymarket.cs.uid`
 - `docs/visual_pass/northstar_v0/ns_v0_{wide,inspect,detail}.png`, this report.
+
+## Route A house fidelity — render commands (run on Drew's machine)
+Route A (Blender-extend) added course-by-course roofs (thatch/tile/slate), a warm emissive window glow,
+and a third roofline `house_c` (tall narrow slate towne-house). `render_diorama.py` + the Greymarket
+scene are wired; **rendering needs Blender, which is NOT on this session's PATH**, so run the three
+stages below on Drew's machine. Copy-paste from the repo root (Git Bash):
+
+```bash
+# Stage 1 — Blender: re-render JUST the three house bases (LM_ONLY keeps it fast)
+BLENDER="/c/Program Files/Blender Foundation/Blender 5.1/blender.exe"
+LM_ONLY=house_a,house_b,house_c "$BLENDER" -b -P tools/art/render_diorama.py -- godot/assets/diorama
+
+# Stage 2 — Krita (headless): painterly pass IN PLACE over the fresh bases
+#   (plugin must be installed/enabled per tools/art/krita_plugin/INSTALL.md; not idempotent —
+#    always re-run stage 1 first). Run for each new base, e.g.:
+LM_KRITA_MODE=apply kritarunner -s lm_paintover -f run_main
+
+# Stage 3 — Godot Greymarket: just launch the prototype scene; PNGs load at runtime (no import step).
+GODOT="…/Godot_v4.6.3-stable_mono_win64_console.exe"
+LM_NS_MODE=wide "$GODOT" --path godot res://PrototypeGreymarket.tscn        # village now mixes 3 rooflines
+```
+After stage 1 produces `house_c.png`, `LoadTextures()` picks it up automatically (it globs every PNG in
+`assets/diorama/`); the scene already selects house_a/house_b/house_c per terrace house.

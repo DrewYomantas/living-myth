@@ -1,0 +1,37 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-gate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build sim + console (Release)
+        run: dotnet build LivingMyth.slnx -c Release
+
+      - name: Gate suite (fail-fast)
+        shell: pwsh
+        run: |
+          $gates = @(
+            "verify","homes","story","canon","divine","save",
+            "sites","replay","harvest","plague","migration","prejudice"
+          )
+          foreach ($g in $gates) {
+            Write-Host "--- gate: $g ---"
+            dotnet run --project src/LivingMyth.Console -c Release --no-build -- $g
+            if ($LASTEXITCODE -ne 0) { throw "GATE FAILED: $g" }
+          }
+          Write-Host "All $($gates.Count) gates green."
+
+  # Tagged export (Godot templates + headless export) is added in a later pass,
+  # gated on a release tag (e.g. v*.*.*) once export templates are wired into CI.

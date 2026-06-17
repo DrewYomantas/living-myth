@@ -67,6 +67,28 @@ public partial class MapView : Control
         if (_turningMarks.Count > TurningMarksKept) _turningMarks.RemoveAt(0);
     }
 
+    // Echo payoff marks: a small constellation of the lands a great myth named — fed by Main
+    // only when a NEW echo cards, ONE per archetype keyed to the echo's place. The Promised
+    // Land laurel (a refuge the wandering sought) and The Unwelcome barred ring (a people named
+    // unwelcome) — distinct from the gold turning diamond, in the migration/scorn palettes.
+    // Capped + aged by sim year like the turning constellation; clicking opens the echo's thread.
+    private readonly List<(float nx, float ny, int eventId, int year)> _promisedMarks = new();
+    private readonly List<(float nx, float ny, int eventId, int year)> _unwelcomeMarks = new();
+    private const int EchoMarksKept = 8;
+    private readonly List<(Vector2 pos, float r, int eventId)> _echoScreen = new();
+
+    public void AddPromisedMark(float nx, float ny, int eventId, int year)
+    {
+        _promisedMarks.Add((nx, ny, eventId, year));
+        if (_promisedMarks.Count > EchoMarksKept) _promisedMarks.RemoveAt(0);
+    }
+
+    public void AddUnwelcomeMark(float nx, float ny, int eventId, int year)
+    {
+        _unwelcomeMarks.Add((nx, ny, eventId, year));
+        if (_unwelcomeMarks.Count > EchoMarksKept) _unwelcomeMarks.RemoveAt(0);
+    }
+
     private readonly List<(Vector2 pos, float r, int id)> _dots = new();
     private readonly List<(Vector2 pos, float r, int id)> _siteScreen = new();   // sites drawn this frame, for clicks + tags
     private int _hoverRegion = -1;
@@ -513,6 +535,7 @@ public partial class MapView : Control
 
         DrawTurningMarks(P);                                                // 7e. turning points
         DrawMigrationArcs(P);                                               // 7f. migration flight arcs
+        DrawEchoMarks(P);                                                   // 7g. great-myth place marks
 
         var placed = DrawFactionLabels(P, font);                            // 8. labels
         DrawPlaceTags(P, regionR, placed);
@@ -562,6 +585,53 @@ public partial class MapView : Control
             float halo = 0.25f + 0.18f * Mathf.Sin(_breath * 1.8f + eventId);
             DrawArc(c, s + 4f, 0, Mathf.Tau, 24, Ui.GoldGlow with { A = a * halo }, 1.5f);
             _turningScreen.Add((c, s + 5f, eventId));
+        }
+    }
+
+    // 7g. The marks of great myths: a refuge the wandering sought (The Promised Land — a moss
+    // laurel of two boughs cradling a halo) and a people named unwelcome (The Unwelcome — a
+    // slow-breathing ember-rose ring barred shut). Only echoes that named a real land ever mark;
+    // Main feeds them, this only draws. Aged by sim year, clickable to open the echo's thread.
+    private void DrawEchoMarks(Func<float, float, Vector2> P)
+    {
+        _echoScreen.Clear();
+        if (ReplayActive) return;
+        foreach (var (nx, ny, eventId, year) in _promisedMarks)
+        {
+            float age = World!.Year - year;
+            float a = Mathf.Lerp(0.9f, 0.28f, Mathf.Clamp(age / 120f, 0f, 1f));
+            var c = P(nx, ny);
+            float s = 8f;
+            var col = Ui.Moss with { A = a };
+            float halo = 0.35f + 0.2f * Mathf.Sin(_breath * 1.5f + eventId);
+            DrawArc(c, s * 0.55f, 0, Mathf.Tau, 24, Ui.Moss.Lightened(0.2f) with { A = a * (0.5f + halo * 0.5f) }, 1.6f);
+            // two laurel boughs sweeping up around the halo
+            for (int side = -1; side <= 1; side += 2)
+            {
+                Vector2 prev = c + new Vector2(side * s * 0.18f, s * 0.78f);
+                for (int i = 1; i <= 8; i++)
+                {
+                    float t = i / 8f;
+                    float ang = side * (0.5f + t * 2.1f);
+                    var pt = c + new Vector2(side * Mathf.Sin(ang) * s * 0.85f, s * 0.78f - t * s * 1.5f);
+                    DrawLine(prev, pt, col, 1.7f);
+                    prev = pt;
+                }
+            }
+            _echoScreen.Add((c, s + 5f, eventId));
+        }
+        foreach (var (nx, ny, eventId, year) in _unwelcomeMarks)
+        {
+            float age = World!.Year - year;
+            float a = Mathf.Lerp(0.9f, 0.28f, Mathf.Clamp(age / 120f, 0f, 1f));
+            var c = P(nx, ny);
+            float s = 8f;
+            float breathe = 0.65f + 0.25f * Mathf.Sin(_breath * 1.2f + eventId);
+            var rose = new Color("8a4a52") with { A = a * breathe };
+            DrawArc(c, s * 0.62f, 0, Mathf.Tau, 28, rose, 2f);
+            DrawLine(c + new Vector2(-s * 0.5f, s * 0.5f), c + new Vector2(s * 0.5f, -s * 0.5f),
+                     new Color("8a4a52").Darkened(0.12f) with { A = a }, 2f);   // barred shut
+            _echoScreen.Add((c, s + 5f, eventId));
         }
     }
 
@@ -816,6 +886,7 @@ public partial class MapView : Control
     // deliberately apart from the abandon cairn's scattered round stones, warm where ruin is cold.
     private void DrawMemorialCairn(Vector2 c, float s, float a)
     {
+        MarkOutline(c, s, a);
         DrawRect(new Rect2(c.X - s * 0.34f, c.Y + s * 0.05f, s * 0.68f, s * 0.22f), StoneMark with { A = a });
         DrawRect(new Rect2(c.X - s * 0.22f, c.Y - s * 0.18f, s * 0.44f, s * 0.2f), StoneMark.Lightened(0.08f) with { A = a });
         DrawRect(new Rect2(c.X - s * 0.11f, c.Y - s * 0.38f, s * 0.22f, s * 0.18f), StoneMark.Lightened(0.16f) with { A = a });
@@ -824,6 +895,7 @@ public partial class MapView : Control
 
     private void DrawMemoryMark(Vector2 c, float s, MarkKind kind, float a)
     {
+        MarkOutline(c, s, a);
         switch (kind)
         {
             case MarkKind.FoundingStone:   // a standing stone raised where a people first held land
@@ -926,6 +998,7 @@ public partial class MapView : Control
     // Flight (driven by disaster) reads slate-amber; settlement (growth) reads mossy green.
     private void DrawMigrationMark(Vector2 c, float s, bool flight, float a)
     {
+        MarkOutline(c, s, a);
         var col = (flight ? new Color("6f7e58") : Ui.Moss) with { A = a };
         // a few footfalls leading up to the arrow
         DrawCircle(c + new Vector2(-s * 0.42f, s * 0.22f), Mathf.Max(1f, s * 0.1f), col);
@@ -1005,6 +1078,7 @@ public partial class MapView : Control
     // place seeds (timber/thatch/stone/dirt) — generated shapes, never imported art.
     private void DrawSiteMarker(Vector2 c, float s, SiteType type)
     {
+        MarkOutline(c, s);
         switch (type)
         {
             case SiteType.HillFort:
@@ -1098,6 +1172,15 @@ public partial class MapView : Control
             basePos + new Vector2(w / 2f, 0),
             basePos + new Vector2(0, -w * 0.8f),
         }, TentCloth);
+    }
+
+    // A 1-texel dark halo behind a marker so its silhouette reads against busy terrain — a
+    // soft oversized backing disc in MarkInk, drawn as a pre-pass under the marker's own shapes.
+    // Cheap and shape-agnostic: it rings the marker's footprint rather than tracing each glyph.
+    private void MarkOutline(Vector2 c, float s, float a = 1f)
+    {
+        DrawCircle(c, s * 0.95f, MarkInk with { A = 0.22f * a });
+        DrawCircle(c, s * 0.7f, MarkInk with { A = 0.16f * a });
     }
 
     // A soft elliptical contact shadow under a marker, so each place reads as a little diorama
@@ -1425,6 +1508,10 @@ public partial class MapView : Control
         // A turning-point pulse beats the land beneath it — the pivot asks to be read.
         foreach (var (tp, tr, teid) in _turningScreen)
             if (pos.DistanceTo(tp) <= tr + 3 && TurningPicked is not null) { TurningPicked(teid); return; }
+
+        // An echo mark (great-myth place) reads the same way — open its thread.
+        foreach (var (ep, er, eeid) in _echoScreen)
+            if (pos.DistanceTo(ep) <= er + 3 && TurningPicked is not null) { TurningPicked(eeid); return; }
 
         int region = NearestRegion(pos);
         if (region >= 0) RegionPicked?.Invoke(region);

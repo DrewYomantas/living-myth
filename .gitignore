@@ -11,6 +11,9 @@ godot/data/
 # Console run artifact
 chronicle.txt
 
+# Build / release output (committed Version.cs is NOT ignored — it must exist for the build)
+dist/
+
 # Godot SDK-bump backups
 *.old
 

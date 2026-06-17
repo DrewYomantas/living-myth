@@ -95,6 +95,24 @@ def mat(color, rough=0.82, mottle=0.16):
     m.diffuse_color = color
     return m
 
+def glow_mat(color=(1.0, 0.72, 0.34, 1.0), strength=2.4):
+    """A warm emissive window material — a lit pane behind the shutter. Built like mat() but the
+    BSDF carries an Emission so the window glows golden into the dusk diorama."""
+    m = bpy.data.materials.new("glow")
+    m.use_nodes = True
+    nt = m.node_tree
+    bsdf = nt.nodes.get("Principled BSDF")
+    lin = rgba(color)
+    bsdf.inputs["Base Color"].default_value = lin
+    for k in ("Emission Color", "Emission"):
+        if k in bsdf.inputs:
+            bsdf.inputs[k].default_value = lin
+            break
+    if "Emission Strength" in bsdf.inputs:
+        bsdf.inputs["Emission Strength"].default_value = strength
+    m.diffuse_color = lin
+    return m
+
 _OFF = (0.0, 0.0, 0.0)
 
 def add(op, color=None, loc=(0, 0, 0), scale=(1, 1, 1), rot=(0, 0, 0),
@@ -283,7 +301,42 @@ def _beam(x, y, z, sx, sy, sz, ang, tone="timber_dark"):
     add("primitive_cube_add", rgba(tone), loc=(x, y, z), scale=(sx, sy, sz), rot=(0, 0, ang),
         bevel=0.004)
 
-def _house(x, y, w, d, wall, roof, rng, ang=0.0, roof_pitch=0.86, eave=1.42, tall=1.0):
+# roof course recipes: (n courses, overhang past the eave, course depth ×, tone, dark tone)
+_ROOF = {
+    "thatch": (5, 0.10, 1.30, "thatch", "thatch_dark"),   # fat, deeply overlapping reed bundles
+    "tile":   (7, 0.06, 1.00, "tile",   "tile_dark"),     # many shallow terracotta courses
+    "slate":  (8, 0.05, 0.90, "slate",  "slate_dark"),    # tight, thin grey slate rows
+}
+
+def _roof_courses(x, y, ridge_z, wtop, perp, ridge_dir, run, kind, rng):
+    """Lay shallow OVERLAPPING courses down both gable slopes so the roof reads as painterly
+    thatch/tile/slate rather than one flat diamond. The dark ridge prism stays as underlayment;
+    these banded slabs ride on its two slopes. `perp` is the down-slope horizontal axis, `ridge_dir`
+    runs along the peak, `run` is the half-length along the ridge."""
+    ncourse, overhang, cdepth, tone, tone_dark = _ROOF[kind]
+    px, py = perp
+    rx, ry = ridge_dir
+    ridge_ang = math.atan2(ry, rx)
+    for s in (-1, 1):                          # the two slopes
+        for i in range(ncourse):
+            t = i / (ncourse - 1)              # 0 at ridge → 1 at eave
+            # walk from the ridge down-and-out to the eave (eave line at the wall top)
+            horiz = overhang + t * (1.0 - overhang)          # 0..1(+overhang) of the half-slope
+            hx = x + s * px * horiz
+            hy = y + s * py * horiz
+            cz = ridge_z - t * (ridge_z - wtop)
+            band = tone if i % 2 == 0 else tone_dark         # light/dark banding per course
+            # each course is a thin slab spanning the ridge length, tilted to lie on the slope
+            add("primitive_cube_add", rgba(band, jitter=0.07, rng=rng),
+                loc=(hx, hy, cz + 0.012),
+                scale=(run * 1.04, 0.085 * cdepth, 0.05 * cdepth),
+                rot=(s * -0.785, 0, ridge_ang), bevel=0.004)
+    # ridge cap — a capping run straddling the peak
+    add("primitive_cube_add", rgba(tone_dark, jitter=0.05, rng=rng),
+        loc=(x, y, ridge_z + 0.03), scale=(run * 1.06, 0.07, 0.045), rot=(0, 0, ridge_ang), bevel=0.004)
+
+def _house(x, y, w, d, wall, roof, rng, ang=0.0, roof_pitch=0.86, eave=1.42, tall=1.0,
+           roof_kind="thatch"):
     """A richer dwelling, not a toy box: a STONE BASE COURSE grounds it, the walls carry exposed
     TIMBER FRAMING (corner posts, top plate, sill, a brace), a HEAVY OVERHANGING pitched roof with
     a ridge beam crowns it, plus a stone CHIMNEY and a recessed door + window. Proportions are
@@ -325,10 +378,16 @@ def _house(x, y, w, d, wall, roof, rng, ang=0.0, roof_pitch=0.86, eave=1.42, tal
     #    raises the ridge. The gable end stays solid (cube faces), so no open peak.
     yz = d * eave                      # diamond half-size in the depth/height plane
     rz = wtop + yz*0.50                # centre so the lower vertex tucks just under the eaves line
-    add("primitive_cube_add", rgba(roof, jitter=0.05, rng=rng),
+    # the dark ridge prism stays as the UNDERLAYMENT — courses ride on its slopes
+    under = _ROOF[roof_kind][4]        # roof's dark tone, dimmed under the courses
+    add("primitive_cube_add", rgba(under, jitter=0.05, rng=rng),
         loc=(x, y, rz), scale=(w*1.16, yz, yz*roof_pitch), rot=(0.785, 0, ang), bevel=0.008)
-    # ridge beam along the peak
     ridge_z = rz + yz*1.04*roof_pitch
+    # painterly courses down both gable slopes (perp = down-slope horizontal, ridge_dir along peak)
+    perp = (-sa, ca)
+    ridge_dir = (ca, sa)
+    _roof_courses(x, y, ridge_z, wtop, (perp[0]*yz, perp[1]*yz), ridge_dir, w*1.16, roof_kind, rng)
+    # ridge beam along the peak
     _beam(x, y, ridge_z, w*1.18, 0.05, 0.05, ang, "timber")
     # 5) CHIMNEY — stone, rear corner, with a darker cap
     chx = x + (-w*0.55*ca - d*0.4*sa)
@@ -346,16 +405,30 @@ def _house(x, y, w, d, wall, roof, rng, ang=0.0, roof_pitch=0.86, eave=1.42, tal
     wy = y + (w + 0.012)*sa + d*0.42*ca
     add("primitive_cube_add", rgba("ink"),
         loc=(wx, wy, wz0 + wall_h*0.58), scale=(0.02, d*0.16, wall_h*0.18), rot=(0, 0, ang))
+    # a warm LIT window pane — a glow set just proud of the +X face so it casts golden light
+    gx2 = x + (w + 0.020)*ca + d*0.42*sa
+    gy2 = y + (w + 0.020)*sa - d*0.42*ca
+    glow = add("primitive_cube_add", None,
+        loc=(gx2, gy2, wz0 + wall_h*0.52), scale=(0.018, d*0.13, wall_h*0.15), rot=(0, 0, ang))
+    glow.data.materials.append(glow_mat())
 
 def build_house_a():
-    # a thatched cottage — smaller, STEEP warm-thatch roof, plaster + dark timber
+    # a thatched cottage — smaller, STEEP warm-thatch roof in fat reed courses, plaster + dark timber
     rng = random.Random(505)
-    _house(0, 0, 0.40, 0.32, "plaster", "thatch", rng, roof_pitch=1.05, eave=0.82, tall=0.92)
+    _house(0, 0, 0.40, 0.32, "plaster", "thatch", rng, roof_pitch=1.05, eave=0.82, tall=0.92,
+           roof_kind="thatch")
+
+def build_house_c():
+    # a TALL NARROW slate towne-house — steep cold-slate roof in tight thin courses, taller storey
+    rng = random.Random(616)
+    _house(0, 0, 0.34, 0.30, "plaster_warm", "slate", rng, roof_pitch=1.10, eave=0.78, tall=1.42,
+           roof_kind="slate")
 
 def build_house_b():
-    # a larger timber hall — lower-pitch WARM TILE roof (not cold slate), a lean-to porch off the side
+    # a broad terracotta-tile hall — lower-pitch warm-tile roof in many shallow courses, lean-to porch
     rng = random.Random(606)
-    _house(0, 0, 0.58, 0.42, "plaster_warm", "tile", rng, roof_pitch=0.72, eave=0.74, tall=1.06)
+    _house(0, 0, 0.58, 0.42, "plaster_warm", "tile", rng, roof_pitch=0.72, eave=0.74, tall=1.06,
+           roof_kind="tile")
     # lean-to / porch roof off the +Y end — a single sloped panel on two posts
     add("primitive_cube_add", rgba("tile_dark", jitter=0.05, rng=rng), loc=(0, 0.62, 0.66),
         scale=(0.5, 0.2, 0.03), rot=(0.5, 0, 0), bevel=0.006)
@@ -609,6 +682,7 @@ BUILDERS = {
     "crag": build_crag,
     "house_a": build_house_a,
     "house_b": build_house_b,
+    "house_c": build_house_c,
     "stall_a": build_stall_a,
     "stall_b": build_stall_b,
     "figure": build_figure,

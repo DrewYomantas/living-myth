@@ -18,7 +18,11 @@ using LivingMyth.Sim;
 // standalone class library with zero Godot dependency — this scene only drives and renders it.
 public partial class Main : Node
 {
-    private const int Seed = 7;
+    // The world seed the VIEWER opens. Loaded at boot from user://seed.json (default 7), chosen
+    // via ✶ New World. Viewer-only: the gates run their own fixed seeds through the Console, so a
+    // chosen seed here never moves verify. All user:// save paths key off it (a seed is a world).
+    private int _seed = 7;
+    private const int DefaultSeed = 7;
     // Drama Time constants — see docs/TIME_AND_STORY_PACING.md (the four clocks). Wall-clock
     // presentation only; they never change Tick() count or order. TODO(focus-time): the next
     // pacing slice is chapter recaps (roadmap 3) — the focus guard (roadmap 2) shipped.
@@ -292,8 +296,9 @@ public partial class Main : Node
     {
         _capture = OS.GetEnvironment("LM_SHOTS");   // dev evidence capture: a directory, else ""
 
+        _seed = LoadSeed();
         var (config, names) = DataLoader.Load();
-        _world = new World(Seed, config, names);
+        _world = new World(_seed, config, names);
         _world.SeedWorld();
         _lastEventCount = 0;
 
@@ -460,8 +465,8 @@ public partial class Main : Node
     // untouched and this session simply cannot write (affordances hide on ReadOnly).
     private void LoadCanon()
     {
-        string path = ProjectSettings.GlobalizePath($"user://canon_seed{Seed}.json");
-        var (canon, warning) = PlayerCanonStore.LoadOrNew(path, Seed);
+        string path = ProjectSettings.GlobalizePath($"user://canon_seed{_seed}.json");
+        var (canon, warning) = PlayerCanonStore.LoadOrNew(path, _seed);
         if (warning is not null)
         {
             GD.PushWarning($"player canon: {warning}");
@@ -471,7 +476,7 @@ public partial class Main : Node
                 {
                     System.IO.File.Move(path, path + ".bak", overwrite: false);
                     GD.PushWarning($"player canon: unreadable file set aside as {path}.bak");
-                    (canon, _) = PlayerCanonStore.LoadOrNew(path, Seed);
+                    (canon, _) = PlayerCanonStore.LoadOrNew(path, _seed);
                 }
                 catch (System.Exception ex) when (ex is System.IO.IOException or System.UnauthorizedAccessException)
                 { /* a .bak already exists or the file is locked — stay read-only this session */ }
@@ -484,8 +489,8 @@ public partial class Main : Node
     // .bak (never destroyed), future-schema files stay untouched and read-only.
     private void LoadWorldStore()
     {
-        string path = ProjectSettings.GlobalizePath($"user://world_seed{Seed}.json");
-        var (store, warning) = PlayerWorldStore.LoadOrNew(path, Seed);
+        string path = ProjectSettings.GlobalizePath($"user://world_seed{_seed}.json");
+        var (store, warning) = PlayerWorldStore.LoadOrNew(path, _seed);
         if (warning is not null)
         {
             GD.PushWarning($"world save: {warning}");
@@ -495,7 +500,7 @@ public partial class Main : Node
                 {
                     System.IO.File.Move(path, path + ".bak", overwrite: false);
                     GD.PushWarning($"world save: unreadable file set aside as {path}.bak");
-                    (store, _) = PlayerWorldStore.LoadOrNew(path, Seed);
+                    (store, _) = PlayerWorldStore.LoadOrNew(path, _seed);
                 }
                 catch (System.Exception ex) when (ex is System.IO.IOException or System.UnauthorizedAccessException)
                 { /* a .bak already exists or the file is locked — stay read-only this session */ }
@@ -2481,6 +2486,20 @@ public partial class Main : Node
 
     // The single most important event in the echo, so clicking the card opens the catch-up on the
     // heart of the story rather than an arbitrary beat. -1 if the echo names no events.
+    // Drop an echo's atlas mark on the land it named. Both place-keyed echoes carry RegionId on
+    // every event (migration → destination, prejudice → border); the events are year-ordered, so
+    // the last with a RegionId is the most-recent land. The mark clicks through to the anchor event.
+    private void MarkEchoPlace(Echo echo, int anchorEventId, System.Action<float, float, int, int> add)
+    {
+        int rid = -1;
+        for (int i = echo.EventIds.Count - 1; i >= 0; i--)
+            if (_world.Chronicle.Get(echo.EventIds[i]).RegionId is int r) { rid = r; break; }
+        if (rid < 0 && anchorEventId >= 0 && _world.Chronicle.Get(anchorEventId).RegionId is int ar) rid = ar;
+        if (rid < 0 || rid >= _world.Regions.Count) return;
+        var reg = _world.Regions[rid];
+        add(reg.X, reg.Y, anchorEventId >= 0 ? anchorEventId : echo.EventIds[^1], _world.Year);
+    }
+
     private int AnchorEvent(Echo echo, System.Collections.Generic.Dictionary<int, List<int>> reverse)
     {
         int best = -1, bestScore = int.MinValue;
@@ -2496,6 +2515,13 @@ public partial class Main : Node
     {
         _chapterEchoes.Add((echo.Archetype, echo.Label, anchorEventId));
         _chapterCloseReason ??= "a myth echoed";   // an echo carding closes the chapter
+
+        // Atlas payoff for the two place-keyed echoes: the laurel / barred ring lands on the land
+        // the myth named (the most-recent of its events carries the place). Click → the echo thread.
+        if (echo.Archetype == "The Promised Land")
+            MarkEchoPlace(echo, anchorEventId, _map.AddPromisedMark);
+        else if (echo.Archetype == "The Unwelcome")
+            MarkEchoPlace(echo, anchorEventId, _map.AddUnwelcomeMark);
 
 
         // Echo cards carry the only luminous treatment in the feed: warm fill, gold border.
@@ -3389,6 +3415,10 @@ public partial class Main : Node
         sb.AppendLine($"[b]∴[/b]  a scattered cairn — a land [b]abandoned[/b] when its people died out");
         sb.AppendLine($"[color=#b07a2e][b]▦[/b][/color]  cracked ochre earth — a [b]famine[/b] struck this land");
         sb.AppendLine($"[color=#6d4f63][b]✷[/b][/color]  a bruised, spore-pocked stain — a [b]plague[/b] swept this land");
+        sb.AppendLine($"[color=#3f6e92][b]⇉[/b][/color]  footfalls & a sweeping arc — a [b]people moved[/b] here (the arc traces flight from a stricken land)");
+        sb.AppendLine($"[color=#8a4a52][b]⊘[/b][/color]  a barred ring — a people named [b]newcomers unwelcome[/b] on this border");
+        sb.AppendLine($"[color=#4e7d43][b]❧[/b][/color]  a moss laurel — [b]The Promised Land[/b]: a refuge the wandering sought again and again");
+        sb.AppendLine($"[color=#8a4a52][b]⊘[/b][/color]  a slow-breathing barred ring — [b]The Unwelcome[/b]: a people scorned across an age");
         sb.AppendLine($"[color=#{gold}][b]⊟[/b][/color]  stacked stones & a gold light — a [b]memorial cairn[/b], at the home of a remembered leader");
         sb.AppendLine($"[color=#{violet}][b]❧[/b][/color]  a violet ribbon — a [b]custom[/b] was born or faded here");
         sb.AppendLine($"[color=#{gold}][b]◆[/b][/color]  a gold diamond — a [b]turning point[/b]; click it to trace the chain");
@@ -3412,6 +3442,8 @@ public partial class Main : Node
 
         sb.AppendLine(SectionCap("Your world"));
         sb.AppendLine($"[color=#{faded}]Your acts, follows, and progress save on their own — close and return to the same age. [b]✶ New World[/b] begins a fresh age (your written canon is kept).[/color]");
+        sb.AppendLine($"[color=#{faded}]When you begin a fresh age you may choose its [b]seed[/b] — each number is a wholly different world to watch. [b]⚄ Random[/b] picks one for you.[/color]");
+        sb.AppendLine($"[color=#{faded}]Living Myth v{LivingMyth.Godot.BuildInfo.Version} ({LivingMyth.Godot.BuildInfo.Commit})[/color]");
 
         body.Text = sb.ToString();
 
@@ -3447,22 +3479,46 @@ public partial class Main : Node
         var dlg = new ConfirmationDialog
         {
             Title = "Begin a fresh age?",
-            DialogText = "This discards your saved acts, follows, and progress for this world.\n"
-                + "Your written canon (tellings, inscriptions, legends) is kept.\n\nStart over from the first year?",
             OkButtonText = "✶ New World",
             CancelButtonText = "Keep watching",
         };
+
+        // The seed chooser: each seed is a whole different living age. Default to the one we're
+        // watching so "✶ New World" without touching it just restarts this world, as before.
+        var pick = new VBoxContainer();
+        pick.AddThemeConstantOverride("separation", 8);
+        var blurb = new Label
+        {
+            Text = "This discards your saved acts, follows, and progress for the chosen world.\n"
+                 + "Your written canon (tellings, inscriptions, legends) is kept.",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+        };
+        pick.AddChild(blurb);
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 8);
+        row.AddChild(new Label { Text = "Seed (each is a different age):" });
+        var spin = new SpinBox { MinValue = 1, MaxValue = 9999, Step = 1, Value = _seed, CustomMinimumSize = new Vector2(96, 0) };
+        row.AddChild(spin);
+        var rand = new Button { Text = "⚄ Random" };
+        Ui.StyleButton(rand);
+        // UI-random ONLY — wall-clock entropy, never the sim Rng (which must stay deterministic).
+        rand.Pressed += () => spin.Value = 1 + (int)(Time.GetUnixTimeFromSystem() * 1000) % 9999;
+        row.AddChild(rand);
+        pick.AddChild(row);
+        dlg.AddChild(pick);
+
         _root.AddChild(dlg);
-        dlg.Confirmed += DoNewWorld;   // reloads the scene, freeing the dialog with it
+        dlg.Confirmed += () => DoNewWorld((int)spin.Value);   // reloads the scene, freeing the dialog with it
         dlg.Canceled += dlg.QueueFree;
-        dlg.PopupCentered();
+        dlg.PopupCentered(new Vector2I(420, 0));
     }
 
-    private void DoNewWorld()
+    private void DoNewWorld(int seed)
     {
-        // Drop the world journal (acts + follows + resume year). The store funnels every write,
-        // so disabling it here prevents the close-handler from re-saving the world we're leaving.
-        string path = ProjectSettings.GlobalizePath($"user://world_seed{Seed}.json");
+        WriteSeed(seed);   // the boot LoadSeed reads this after the reload — the chosen age opens
+        // Drop the chosen world's journal (acts + follows + resume year). The store funnels every
+        // write, so disabling it here prevents the close-handler from re-saving the world we leave.
+        string path = ProjectSettings.GlobalizePath($"user://world_seed{seed}.json");
         try
         {
             if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
@@ -3471,6 +3527,40 @@ public partial class Main : Node
         { GD.PushWarning($"new world: could not remove the save ({ex.GetType().Name})"); }
         _worldStore = null!;   // the close-handler guards on null; the reload rebuilds a fresh store
         GetTree().ReloadCurrentScene();
+    }
+
+    // The viewer's chosen seed, persisted in user://seed.json (a tiny {"seed":N}). Default 7 when
+    // absent or unreadable — never throws on a fresh install. Gates are unaffected (Console seeds).
+    private int LoadSeed()
+    {
+        string path = ProjectSettings.GlobalizePath("user://seed.json");
+        try
+        {
+            if (System.IO.File.Exists(path))
+            {
+                var parsed = Json.ParseString(System.IO.File.ReadAllText(path));
+                if (parsed.VariantType == Variant.Type.Dictionary)
+                {
+                    var d = parsed.AsGodotDictionary();
+                    if (d.TryGetValue("seed", out var v))
+                    {
+                        int s = (int)v.AsDouble();
+                        if (s is >= 1 and <= 9999) return s;
+                    }
+                }
+            }
+        }
+        catch (System.Exception ex) when (ex is System.IO.IOException or System.UnauthorizedAccessException)
+        { GD.PushWarning($"seed: could not read seed.json ({ex.GetType().Name}) — using default {DefaultSeed}"); }
+        return DefaultSeed;
+    }
+
+    private void WriteSeed(int seed)
+    {
+        string path = ProjectSettings.GlobalizePath("user://seed.json");
+        try { System.IO.File.WriteAllText(path, $"{{\"seed\":{seed}}}"); }
+        catch (System.Exception ex) when (ex is System.IO.IOException or System.UnauthorizedAccessException)
+        { GD.PushWarning($"seed: could not write seed.json ({ex.GetType().Name})"); }
     }
 
     // -------------------------------------------------------------- inspectors
