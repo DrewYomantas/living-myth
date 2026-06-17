@@ -103,11 +103,16 @@ public partial class DioramaView : Control
 
     private void LoadTextures()
     {
-        string dir = ProjectSettings.GlobalizePath("res://assets/diorama/");
-        foreach (var f in System.IO.Directory.GetFiles(dir, "*.png"))
+        // Load through res:// (DirAccess + ResourceLoader) so packed builds work — System.IO on a
+        // globalized path only sees loose files, which don't exist in an exported .pck. Sorted for
+        // deterministic load order.
+        using var d = DirAccess.Open("res://assets/diorama");
+        if (d == null) return;
+        var pngs = d.GetFiles().Where(f => f.EndsWith(".png")).OrderBy(f => f, StringComparer.Ordinal);
+        foreach (var f in pngs)
         {
-            var img = Image.LoadFromFile(f);
-            _tex[System.IO.Path.GetFileNameWithoutExtension(f)] = ImageTexture.CreateFromImage(img);
+            var tex = ResourceLoader.Load<Texture2D>("res://assets/diorama/" + f);
+            if (tex != null) _tex[System.IO.Path.GetFileNameWithoutExtension(f)] = tex;
         }
     }
 
