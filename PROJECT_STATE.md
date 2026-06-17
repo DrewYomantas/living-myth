@@ -640,6 +640,38 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       Migration / Prejudice F5 feel-tests.
 
 ## Session log
+- [2026-06-17] Multi-squad program (senior-lead, 4 agent squads: ATLAS/FORGE/KEEP/LOOM; plan
+  `~/.claude/plans/adaptive-squishing-flask.md`). Ran as Workflows per wave; Lead integrated + held the gate.
+  **Shipped — The Creeping Death** (disease-V2 spread-chain echo, Phase-2 capstone, commit `721ffe0`): a
+  ZERO-DRAW recording-only move — `Pestilence()` stamps the contagion source it already computes onto plague
+  onsets as a Cause + `contagion-from-{rid}` tag. New Echo (longest ≥3 distinct-region contagion path ≤30yr,
+  keyed on chain root — opposite of The Long Pestilence), `plague-spread` connector, new `creeping` gate
+  (1000yr default; non-vacuous: 36 edges/3 chains/longest 4 lands). **Baseline UNMOVED — 598/751/809/1065.**
+  **Shipped — Wave 1 viewer/infra** (commit `adf140b`): confirmed migration/prejudice payoffs + famine-scar
+  store were ALREADY built; added Promised-Land + The Unwelcome echo atlas marks, Guide legend, marker
+  outlines, per-launch seed picker (`const Seed`→`_seed` ← `user://seed.json`); shippability scaffold
+  (`export_presets.cfg`, `tools/build/*`, CI, `Version.cs`); FORGE Route A house builders authored
+  (render pending on Drew's machine). All 13 gates green; both builds clean.
+  **Wave 3 demo attempt:** full gate suite re-run green; **Windows export BLOCKED** — `4.6.3.stable.mono`
+  export templates not installed (the only failure; preset valid). F5 capture (seed 7 @ 120yr) confirmed live
+  migration arcs + region-lens Movement + diorama render. NEXT on Drew's machine: install export templates →
+  `tools/build/build.ps1`; render+judge Route A houses; full F5 sweep. (The 8-system per-system isolated sweep
+  needs an `LM_SWEEP` capture branch — deferred; the gate suite is the authoritative per-system proof.)
+- [2026-06-16] Session: PrototypeGreymarket "Visual Fidelity V1" attempt — REJECTED, reverted, not
+  committed. Added a code-procedural detail pass to `godot/PrototypeGreymarket.cs` (worn paths, market
+  goods, crates/barrels/sacks/baskets, brazier/lantern/hearth light, shrine offerings, aged-stone
+  streaks, stronger SE shadows, all-mode hero pin, lower secondary-panel opacity). All deterministic
+  Hash-scatter; verify held 598/751/809/1065, both builds clean. Drew's verdict: "little to no
+  meaningful visual change — still reads like the same low-poly prototype." Conclusion: code-procedural
+  detail has HIT ITS CEILING for this scene; the next visual pass must be an ART ASSET / SCENE FIDELITY
+  pass (rework the flat house/tree/person/stall base forms, materials, and silhouettes via authored/
+  painterly assets or a stronger pipeline — larger visible scene masses, not decorative specks). NO
+  more micro-detail/clutter passes until the base forms + materials change. The art route lives in the
+  Blender→Krita pipeline (`tools/art/render_diorama.py`), which needs Blender — NOT available in the
+  Claude Code session, so heavy asset authoring runs on Drew's machine. Next (Drew's call this session):
+  PIPELINE / ASSET SCOUTING FIRST — decide the asset route (extend Blender→Krita vs treated-Kenney
+  kitbash vs offline AI-tooled sprites) and LOCK the material/style targets before rebuilding any single
+  form. TODO parked at the top of `docs/GODOT_ASSETLIB_SCOUT.md`.
 - [2026-06-15] Session: Migration V1 (sim + read-models + gate, lead dev; design forks locked with
   Drew before any code per the Disease cadence — push+pull driver, flight-relocates/growth-expands).
   The fifth deliberate baseline move and the last missing natural force. New `Migration()` engine

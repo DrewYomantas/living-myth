@@ -34,6 +34,9 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   terrain plane for the live selected region; freezes time while open). The diorama asset pipeline
   is `tools/art/render_diorama.py` (headless Blender → Cycles → transparent PNGs in
   `godot/assets/diorama/`); `godot/shaders/parchment_post.gdshader` is the warm-grade post.
+  `PrototypeGreymarket.cs`/`.tscn` is a STANDALONE North-Star look-target scene (`res://PrototypeGreymarket.tscn`),
+  NOT wired into `Main` and referencing only the Sim read-model — a hand-composed site-scale hero shot;
+  by construction it cannot move the verify baseline.
 
 ## Milestones
 - **M0–M5.1** — spatial island, regions, territory, extinction land-release.
@@ -252,16 +255,53 @@ separate from logic. Never let simulation logic leak into Godot nodes.
   0.26→**0.27** absorbed it (the plague move repeated). 5000-yr **151/267/294/317**, no extinction.
   Baseline 1131/880/425/998 → **598/751/809/1065**. All 12 gates green, both builds clean. No viewer
   payoff yet.
-- **Next** — **viewer payoff for migration** (movement arcs / a migration mark at the destination,
-  Region Lens "settled by the fleeing / a people spread here", the Promised Land echo — viewer-only,
-  must hold 598/751/809/1065); **prejudice viewer payoff** (scorn marks on the border / The Unwelcome
-  on the atlas / Region Lens "named the newcomers unwelcome"); **diorama art fidelity** (hand-finished/
-  licensed assets — the 7.0→7.5+ gap) or seamless atlas→diorama zoom (retire the bridge button per its
-  doctrine); more code-only visual treatment (territory boundary lines, elevation contours, marker
-  outlines — sandbox/screenshot-verify each); still-unwatched Theater of War / Chronicle Replay /
-  persistence / Cast / Harvest / Plague / Migration / Prejudice F5 feel-tests; disease-V2 spread-chain
-  echo (the last remaining Phase 2 force); person↔site anchoring; timeline scrubbing; per-launch seed
-  choice (today fixed at 7).
+- **North Star Greymarket Prototype V0** (2026-06-16, viewer/prototype-only — NOT a sim milestone, NOT
+  main-atlas polish) — a STANDALONE isolated Godot scene (`PrototypeGreymarket.cs`/`.tscn`) proving the
+  locked end-product LOOK at site scale, after Drew's F5 verdict that the production viewer "still feels
+  like the same game." Slice A = "Greymarket" market-village site view: scene-first frame-filling
+  composition, ~14–20 visible inhabitants (the #1 thing the production diorama lacked), a road spine +
+  street-fronting houses, a focal market square, golden-hour light, parchment chronicle chrome (gazetteer
+  with a real inspectable soul, Saga of real beats, bronze verb bar). Names come honestly from a booted
+  seed-7 world (year 462); the building/stall/crowd LAYOUT is an authored mock, labeled by a persistent
+  `PROTOTYPE` ribbon. References only the Sim read-model, never wired into `Main` — **verify holds exactly
+  598/751/809/1065, all 12 gates green**. Honest score ~7/10 vs the hero reference; the remaining gap is
+  ART LABOR not code (flat Blender billboards → painterly per-asset fidelity; ovoid figures → posed
+  silhouettes). Evidence: `docs/visual_pass/northstar_v0/NORTHSTAR_V0.md`. KNOWN TODO (file header): Krita-
+  ink the 3 new ground swatches (`ground_grass/dirt/plaza`) via an isolated temp dir — see the
+  next-build-sequencing memory.
+- **The Creeping Death — disease-V2 spread-chain echo** (2026-06-16, sim + read-models + gate — the
+  Phase-2 natural-force CAPSTONE, and a ZERO-DRAW recording-only move like Battle Sites): plague now
+  remembers HOW it traveled. `Pestilence()`'s plague-onset branch reads the contagion source it already
+  computes (the highest-pressure adjacent neighbour in the FROZEN prior-year snapshot that is ≥threshold
+  and currently `InPlague`) and stamps it onto the onset event as a `Cause` (the neighbour's `PlagueEvent.Id`)
+  + a `contagion-from-{rid}` tag. **No new `Rng` draw, no new event** — so the verify baseline is UNMOVED
+  (still 598/751/809/1065). Read-models: Echo **The Creeping Death** (`Echoes.DetectCreepingDeath` — the
+  longest DISTINCT-region path of ≥3 lands along contagion edges within `creeping_death_window`=30yr,
+  keyed on the chain root — the FIRST echo keyed on a PATH of places, the OPPOSITE shape of The Long
+  Pestilence's one-land scourge); StoryGrammar `plague-spread` (Therefore, plague→plague); StoryCopy line.
+  New **`creeping`** gate (defaults 1000yr so chains are reachable — at 120yr outbreaks burn out before
+  lighting a neighbour) proving determinism, contagion-edge honesty (adjacency + cause-linked plague in the
+  tagged region), anchoring non-leak (RegionId-only, `SiteAnchors` NOT extended — proven `Expected==null`),
+  distinct/≥3/span≤window discipline, and non-vacuity (suite: 36 edges / 3 chains / longest 4 lands; seeds
+  18 & 7 fire). All 13 gates green; both builds clean. NO viewer payoff yet (a "creeping front" map trail
+  is the natural follow-on).
+- **Multi-squad program Wave 1 also shipped (viewer + infra, baseline-SAFE)** — alongside The Creeping
+  Death: confirmed the **migration + prejudice viewer payoffs and the famine-scar dedicated store were
+  ALREADY built** (CLAUDE.md's old "Next" was stale); added the **Promised Land + The Unwelcome echo atlas
+  marks**, Watcher's Guide legend lines, **marker outlines** (dark-halo backing in `MapView`), and a
+  **per-launch seed picker** (`const Seed`→`_seed` field ← `user://seed.json`, SpinBox + Random in the New
+  World dialog — gates still run fixed seeds, verify unmoved). Shippability infra scaffolded: `godot/
+  export_presets.cfg`, `tools/build/{build,stamp-version,feeltest}.ps1` + `VERSION` + `FEELTEST_CHECKLIST.md`,
+  `godot/Version.cs` (BuildInfo, in-Guide version line), `.github/workflows/ci.yml`, `dist/` gitignored.
+  Route A (Blender-extend) house fidelity authored (`render_diorama.py` `_roof_courses`+glow window+`house_c`,
+  Greymarket wired to 3 rooflines) — render+judge pending on Drew's machine.
+- **Next** — **ON DREW'S MACHINE:** install Godot 4.6.3-mono export templates → run `tools/build/build.ps1`
+  for the first Windows export (smoke-test that `data/*.json` resolves beside the exe); render the Route A
+  houses (Blender `LM_ONLY=house_a,house_b,house_c` → kritarunner → Greymarket) and judge vs the reference;
+  run the F5 feel-test sweep (`tools/build/feeltest.ps1`) over the 8 systems + the new echo marks/seed
+  picker. **CODE next:** a Creeping-Death "spreading front" map trail (viewer payoff for the new echo);
+  **diorama art fidelity** (the 7.0→7.5+ gap, Route A render results) or seamless atlas→diorama zoom (retire
+  the bridge button per its doctrine); person↔site anchoring; timeline scrubbing.
 
 ## Commands
 ```bash
@@ -278,6 +318,7 @@ dotnet run --project src/LivingMyth.Console -- harvest         # per-region harv
 dotnet run --project src/LivingMyth.Console -- plague          # disease & plague contract gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- migration       # migration (flight & settlement) contract gate (must pass; --years N)
 dotnet run --project src/LivingMyth.Console -- prejudice        # prejudice (the outsider force) contract gate (must pass; --years N)
+dotnet run --project src/LivingMyth.Console -- creeping         # The Creeping Death contagion-chain gate (must pass; defaults 1000yr for reachable chains; --years N)
 dotnet run --project src/LivingMyth.Console -- run --seed 42
 dotnet run --project src/LivingMyth.Console -- divergence --seed 18
 dotnet run --project src/LivingMyth.Console -- surface --seed 1
@@ -286,6 +327,10 @@ dotnet build godot/LivingMyth.Godot.csproj                     # build Godot pro
 ```
 
 **Viewer:** open `godot/` with Godot mono editor and press **F5** to launch the viewer.
+
+**North Star prototype:** `"$GODOT" --path godot res://PrototypeGreymarket.tscn` (standalone look-target,
+never boots `Main.tscn`); `LM_NS_MODE=wide|inspect|detail` picks the framing, `LM_NS_SHOT=<dir>` self-captures
+headlessly. See `docs/visual_pass/northstar_v0/NORTHSTAR_V0.md`.
 
 ## Gotchas
 - **The yearly tick is a fixed engine order** (`World.Tick`): Economy → **Pestilence** →
