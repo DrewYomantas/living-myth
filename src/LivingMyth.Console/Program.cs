@@ -31,8 +31,9 @@ switch (cmd)
     case "prejudice": PrejudiceCmd(Years(120)); break;
     case "creeping": CreepingDeathCmd(Years(1000)); break;
     case "paint": PaintCmd(Seed(7), Years(120)); break;
+    case "unreal-snapshot": UnrealSnapshotCmd(Seed(1), Years(250)); break;
     default:
-        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine | save | sites | replay | harvest | plague | migration | prejudice | creeping | paint");
+        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine | save | sites | replay | harvest | plague | migration | prejudice | creeping | paint | unreal-snapshot");
         break;
 }
 return;
@@ -2049,4 +2050,116 @@ void ReplayCmd(int years)
 
     Console.WriteLine(failures == 0 ? "\nREPLAY CONTRACT HOLDS." : $"\n{failures} CHECK(S) BROKE THE CONTRACT.");
     Environment.Exit(failures == 0 ? 0 : 1);
+}
+
+// ------------------------------------------------------------------ unreal-snapshot
+
+// Godot Snapshot Bridge V1 — export + gate. Runs a real Living Myth world, writes the
+// deterministic Unreal-facing snapshot JSON (UnrealExport, a pure Sim read-model that draws
+// zero Rng — so this can't move the verify baseline), then validates it: the file writes +
+// parses, the contract fields are present, no required field is fabricated, the RegionId
+// (happened-here) vs HomeRegionId (remembered-here) channels stay unmixed, and two builds off
+// the same (seed, year) are byte-identical.
+//   dotnet run -- unreal-snapshot --years 250 --out artifacts/unreal_snapshot_seed1_year250.json
+void UnrealSnapshotCmd(int seed, int years)
+{
+    var (config, names) = Load();
+    int cap = GetInt("--cap", -1);
+    if (cap >= 0) config.Params["carrying_capacity"] = cap;
+    var world = new World(seed, config, names);
+    world.Run(years);
+
+    var snap = UnrealExport.Build(world, seed);
+    string json = UnrealExport.ToJson(snap);
+
+    int oi = Array.IndexOf(args, "--out");
+    string outPath = oi >= 0 && oi + 1 < args.Length
+        ? args[oi + 1]
+        : Path.Combine("artifacts", $"unreal_snapshot_seed{seed}_year{years}.json");
+    string? dir = Path.GetDirectoryName(Path.GetFullPath(outPath));
+    if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+    File.WriteAllText(outPath, json);
+
+    Console.WriteLine($"Unreal snapshot: seed {seed}, {world.Island} year {world.Year} -> {outPath}");
+    Console.WriteLine($"  {snap.Counts.Regions} regions, {snap.Counts.Factions} factions, {snap.Counts.Sites} sites, "
+        + $"{snap.PeopleHighlights.Count} people, {snap.MemoryMarkers.Count} markers, {snap.ChroniclePath.Count} beats");
+
+    // ---- validation ----
+    var bad = new List<string>();
+    void Check(string name, bool ok, string? detail = null)
+    {
+        Console.WriteLine($"  {name}: {(ok ? "OK" : "FAIL")}{(ok || detail is null ? "" : "  " + detail)}");
+        if (!ok) bad.Add(name);
+    }
+
+    // 1. Parses; schemaVersion present; regions present (and round-trip the count).
+    bool parsed = false;
+    System.Text.Json.JsonElement root = default;
+    try
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        root = doc.RootElement.Clone();
+        parsed = true;
+    }
+    catch { }
+    Check("parses", parsed);
+    Check("schema-version", parsed && root.TryGetProperty("schemaVersion", out var sv)
+        && sv.ValueKind == System.Text.Json.JsonValueKind.String && sv.GetString() == UnrealExport.SchemaVersion);
+    Check("regions-present", snap.Regions.Count > 0 && parsed
+        && root.TryGetProperty("regions", out var rg)
+        && rg.ValueKind == System.Text.Json.JsonValueKind.Array && rg.GetArrayLength() == snap.Regions.Count);
+
+    // 2. No fabricated required fields: region ids real, terrain non-empty, roles inside the
+    //    allowed set, controllers real; sites stand in real regions and carry a name.
+    var roleSet = new HashSet<string> { "forest", "highland", "coast", "grassland", "ruin_or_sacred", "settlement", "unknown" };
+    var facIds = new HashSet<string>(snap.Factions.Select(f => f.Id), StringComparer.Ordinal);
+    bool regionsHonest = snap.Regions.All(r =>
+        r.Id >= 0 && r.Id < world.Regions.Count
+        && !string.IsNullOrWhiteSpace(r.Terrain)
+        && roleSet.Contains(r.SuggestedUnrealRole)
+        && (r.ControllingFactionId is null || facIds.Contains(r.ControllingFactionId)));
+    bool sitesHonest = snap.Sites.All(s =>
+        s.RegionId >= 0 && s.RegionId < world.Regions.Count && !string.IsNullOrWhiteSpace(s.Name));
+    Check("no-fabricated-fields", regionsHonest && sitesHonest);
+
+    // 3. RegionId/HomeRegionId distinction preserved: every marker/beat copies its source event's
+    //    two anchors verbatim, a remembered-home cairn never claims a literal place (RegionId
+    //    null), and a life event (birth/death/murder) never surfaces as a place mark.
+    var ev = world.Chronicle.Events;   // id == index
+    bool channels = true;
+    string? channelDetail = null;
+    foreach (var m in snap.MemoryMarkers)
+    {
+        var e = ev[m.EventId];
+        if (m.RegionId != e.RegionId || m.HomeRegionId != e.HomeRegionId)
+        { channels = false; channelDetail = $"marker #{m.EventId} anchors differ from the event"; break; }
+        if (m.MarkerKind == "home_memory_cairn" && m.RegionId is not null)
+        { channels = false; channelDetail = $"home cairn #{m.EventId} claims a literal place"; break; }
+        if (e.Type is "birth" or "death" or "murder" && m.RegionId is not null)
+        { channels = false; channelDetail = $"life event #{m.EventId} claims a literal place"; break; }
+    }
+    if (channels)
+        foreach (var b in snap.ChroniclePath)
+        {
+            var e = ev[b.EventId];
+            if (b.RegionId != e.RegionId || b.HomeRegionId != e.HomeRegionId)
+            { channels = false; channelDetail = $"beat #{b.EventId} anchors differ from the event"; break; }
+        }
+    Check("region-home-distinction", channels, channelDetail);
+
+    // 4. Deterministic across two builds of the same (seed, year).
+    var (c2, n2) = Load();
+    if (cap >= 0) c2.Params["carrying_capacity"] = cap;
+    var world2 = new World(seed, c2, n2); world2.Run(years);
+    string json2 = UnrealExport.ToJson(UnrealExport.Build(world2, seed));
+    Check("deterministic", json == json2);
+
+    if (snap.ExportWarnings.Count > 0)
+    {
+        Console.WriteLine("  warnings (honest missing/derived data):");
+        foreach (var wstr in snap.ExportWarnings) Console.WriteLine($"    - {wstr}");
+    }
+
+    Console.WriteLine(bad.Count == 0 ? "\nUNREAL SNAPSHOT CONTRACT HOLDS." : $"\n{bad.Count} CHECK(S) BROKE THE CONTRACT.");
+    Environment.Exit(bad.Count == 0 ? 0 : 1);
 }

@@ -31,6 +31,10 @@ jobs:
             dotnet run --project src/LivingMyth.Console -c Release --no-build -- $g
             if ($LASTEXITCODE -ne 0) { throw "GATE FAILED: $g" }
           }
+          # Godot Snapshot Bridge gate: deterministic Unreal-facing export (takes args).
+          Write-Host "--- gate: unreal-snapshot ---"
+          dotnet run --project src/LivingMyth.Console -c Release --no-build -- unreal-snapshot --years 250 --out artifacts/unreal_snapshot_seed1_year250.json
+          if ($LASTEXITCODE -ne 0) { throw "GATE FAILED: unreal-snapshot" }
           Write-Host "All $($gates.Count) gates green."
 
   # Tagged export (Godot templates + headless export) is added in a later pass,

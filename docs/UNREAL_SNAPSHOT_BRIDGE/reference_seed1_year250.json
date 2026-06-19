@@ -1,0 +1,2571 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedBy": "LivingMyth.Console unreal-snapshot",
+  "seed": 1,
+  "year": 250,
+  "worldName": "Ysmere",
+  "counts": {
+    "regions": 22,
+    "factions": 3,
+    "sites": 100,
+    "peopleAlive": 14,
+    "peopleEver": 222,
+    "events": 754,
+    "memoryMarkers": 60,
+    "chronicleBeats": 7
+  },
+  "regions": [
+    {
+      "id": 0,
+      "name": "Storm Bay",
+      "terrain": "coast",
+      "x": 0.32520258,
+      "y": 0.3153301,
+      "controllingFactionId": "wood",
+      "homeMemoryCount": 62,
+      "trueEventCount": 14,
+      "suggestedUnrealRole": "settlement"
+    },
+    {
+      "id": 1,
+      "name": "the Sunken Bay",
+      "terrain": "coast",
+      "x": 0.20296663,
+      "y": 0.49552053,
+      "controllingFactionId": "wood",
+      "homeMemoryCount": 0,
+      "trueEventCount": 3,
+      "suggestedUnrealRole": "settlement"
+    },
+    {
+      "id": 2,
+      "name": "the Old Forest",
+      "terrain": "forest",
+      "x": 0.32059097,
+      "y": 0.31763586,
+      "controllingFactionId": "wood",
+      "homeMemoryCount": 175,
+      "trueEventCount": 6,
+      "suggestedUnrealRole": "settlement"
+    },
+    {
+      "id": 3,
+      "name": "the Deep Green",
+      "terrain": "forest",
+      "x": 0.56607103,
+      "y": 0.43605316,
+      "controllingFactionId": null,
+      "homeMemoryCount": 0,
+      "trueEventCount": 37,
+      "suggestedUnrealRole": "forest"
+    },
+    {
+      "id": 4,
+      "name": "the Tangled Wood",
+      "terrain": "forest",
+      "x": 0.41473418,
+      "y": 0.33557856,
+      "controllingFactionId": null,
+      "homeMemoryCount": 0,
+      "trueEventCount": 13,
+      "suggestedUnrealRole": "forest"
+    },
+    {
+      "id": 5,
+      "name": "Whitecap Reach",
+      "terrain": "coast",
+      "x": 0.19417667,
+      "y": 0.51507705,
+      "controllingFactionId": "wood",
+      "homeMemoryCount": 0,
+      "trueEventCount": 8,
+      "suggestedUnrealRole": "settlement"
+    },
+    {
+      "id": 6,
+      "name": "Driftmouth",
+      "terrain": "coast",
+      "x": 0.2889577,
+      "y": 0.7463142,
+      "controllingFactionId": "wood",
+      "homeMemoryCount": 0,
+      "trueEventCount": 8,
+      "suggestedUnrealRole": "settlement"
+    },
+    {
+      "id": 7,
+      "name": "the Broken Ridge",
+      "terrain": "highland",
+      "x": 0.4754023,
+      "y": 0.49317273,
+      "controllingFactionId": null,
+      "homeMemoryCount": 142,
+      "trueEventCount": 14,
+      "suggestedUnrealRole": "highland"
+    },
+    {
+      "id": 8,
+      "name": "Ashgrove",
+      "terrain": "forest",
+      "x": 0.4217797,
+      "y": 0.6890757,
+      "controllingFactionId": "wood",
+      "homeMemoryCount": 0,
+      "trueEventCount": 10,
+      "suggestedUnrealRole": "settlement"
+    },
+    {
+      "id": 9,
+      "name": "Fernhollow",
+      "terrain": "forest",
+      "x": 0.5555531,
+      "y": 0.24077949,
+      "controllingFactionId": null,
+      "homeMemoryCount": 0,
+      "trueEventCount": 3,
+      "suggestedUnrealRole": "ruin_or_sacred"
+    },
+    {
+      "id": 10,
+      "name": "Dustplain",
+      "terrain": "plains",
+      "x": 0.5580647,
+      "y": 0.6172726,
+      "controllingFactionId": null,
+      "homeMemoryCount": 0,
+      "trueEventCount": 0,
+      "suggestedUnrealRole": "grassland"
+    },
+    {
+      "id": 11,
+      "name": "Tidecrag",
+      "terrain": "coast",
+      "x": 0.28562155,
+      "y": 0.8176329,
+      "controllingFactionId": "wood",
+      "homeMemoryCount": 0,
+      "trueEventCount": 1,
+      "suggestedUnrealRole": "settlement"
+    },
+    {
+      "id": 12,
+      "name": "Greyspire",
+      "terrain": "highland",
+      "x": 0.45440772,
+      "y": 0.49281707,
+      "controllingFactionId": null,
+      "homeMemoryCount": 0,
+      "trueEventCount": 8,
+      "suggestedUnrealRole": "highland"
+    },
+    {
+      "id": 13,
+      "name": "the Open Vale",
+      "terrain": "plains",
+      "x": 0.37115723,
+      "y": 0.3622945,
+      "controllingFactionId": null,
+      "homeMemoryCount": 0,
+      "trueEventCount": 0,
+      "suggestedUnrealRole": "ruin_or_sacred"
+    },
+    {
+      "id": 14,
+      "name": "the Dark Boughs",
+      "terrain": "forest",
+      "x": 0.6421336,
+      "y": 0.6502747,
+      "controllingFactionId": "wood",
+      "homeMemoryCount": 0,
+      "trueEventCount": 1,
+      "suggestedUnrealRole": "settlement"
+    },
+    {
+      "id": 15,
+      "name": "the Salt Shore",
+      "terrain": "coast",
+      "x": 0.7349222,
+      "y": 0.6558409,
+      "controllingFactionId": "wood",
+      "homeMemoryCount": 0,
+      "trueEventCount": 3,
+      "suggestedUnrealRole": "settlement"
+    },
+    {
+      "id": 16,
+      "name": "the Grey Shallows",
+      "terrain": "coast",
+      "x": 0.7655524,
+      "y": 0.604831,
+      "controllingFactionId": null,
+      "homeMemoryCount": 0,
+      "trueEventCount": 8,
+      "suggestedUnrealRole": "coast"
+    },
+    {
+      "id": 17,
+      "name": "the Thornwood",
+      "terrain": "forest",
+      "x": 0.38898855,
+      "y": 0.66647977,
+      "controllingFactionId": "wood",
+      "homeMemoryCount": 0,
+      "trueEventCount": 4,
+      "suggestedUnrealRole": "settlement"
+    },
+    {
+      "id": 18,
+      "name": "Iron Pass",
+      "terrain": "highland",
+      "x": 0.54370266,
+      "y": 0.4613732,
+      "controllingFactionId": null,
+      "homeMemoryCount": 0,
+      "trueEventCount": 9,
+      "suggestedUnrealRole": "highland"
+    },
+    {
+      "id": 19,
+      "name": "the Flats",
+      "terrain": "plains",
+      "x": 0.4274924,
+      "y": 0.74742424,
+      "controllingFactionId": null,
+      "homeMemoryCount": 0,
+      "trueEventCount": 0,
+      "suggestedUnrealRole": "grassland"
+    },
+    {
+      "id": 20,
+      "name": "Storm Bay II",
+      "terrain": "coast",
+      "x": 0.38008285,
+      "y": 0.76927745,
+      "controllingFactionId": null,
+      "homeMemoryCount": 0,
+      "trueEventCount": 1,
+      "suggestedUnrealRole": "ruin_or_sacred"
+    },
+    {
+      "id": 21,
+      "name": "the Deep Green II",
+      "terrain": "forest",
+      "x": 0.2873633,
+      "y": 0.6982259,
+      "controllingFactionId": "wood",
+      "homeMemoryCount": 0,
+      "trueEventCount": 7,
+      "suggestedUnrealRole": "settlement"
+    }
+  ],
+  "factions": [
+    {
+      "id": "highland",
+      "name": "the Highland Clans",
+      "color": null,
+      "symbolicColor": "#08EE0F",
+      "seatRegionId": 7,
+      "prosperity": 1,
+      "leaderPersonId": null,
+      "traits": [
+        "culture:highland",
+        "custom:peaceable",
+        "custom:warlike"
+      ]
+    },
+    {
+      "id": "shore",
+      "name": "the Shorefolk",
+      "color": null,
+      "symbolicColor": "#31B999",
+      "seatRegionId": 0,
+      "prosperity": 1,
+      "leaderPersonId": null,
+      "traits": [
+        "culture:shore",
+        "custom:peaceable",
+        "custom:scheming",
+        "custom:warlike"
+      ]
+    },
+    {
+      "id": "wood",
+      "name": "the Wood Tribes",
+      "color": null,
+      "symbolicColor": "#E6454F",
+      "seatRegionId": 2,
+      "prosperity": 0.9437065016677807,
+      "leaderPersonId": 204,
+      "traits": [
+        "culture:wood",
+        "custom:peaceable",
+        "custom:scheming"
+      ]
+    }
+  ],
+  "sites": [
+    {
+      "id": 0,
+      "regionId": 0,
+      "name": "Nettlehallow",
+      "type": "SacredGrove",
+      "typeLabel": "sacred grove",
+      "isSeat": true,
+      "x": 0.328125,
+      "y": 0.31770834,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 1,
+      "regionId": 0,
+      "name": "Thorn Strand",
+      "type": "FishingDock",
+      "typeLabel": "fishing dock",
+      "isSeat": false,
+      "x": 0.25520834,
+      "y": 0.067708336,
+      "displayRole": "dock"
+    },
+    {
+      "id": 2,
+      "regionId": 0,
+      "name": "the Birch Cairns",
+      "type": "CairnField",
+      "typeLabel": "cairn field",
+      "isSeat": false,
+      "x": 0.30729166,
+      "y": 0.234375,
+      "displayRole": "ruin"
+    },
+    {
+      "id": 3,
+      "regionId": 0,
+      "name": "Tarnstone",
+      "type": "Shrine",
+      "typeLabel": "shrine",
+      "isSeat": false,
+      "x": 0.36979166,
+      "y": 0.16145833,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 4,
+      "regionId": 0,
+      "name": "the Gorse Cairns",
+      "type": "CairnField",
+      "typeLabel": "cairn field",
+      "isSeat": false,
+      "x": 0.38020834,
+      "y": 0.24479167,
+      "displayRole": "ruin"
+    },
+    {
+      "id": 5,
+      "regionId": 0,
+      "name": "the Sloe Cairns",
+      "type": "CairnField",
+      "typeLabel": "cairn field",
+      "isSeat": false,
+      "x": 0.359375,
+      "y": 0.203125,
+      "displayRole": "ruin"
+    },
+    {
+      "id": 6,
+      "regionId": 0,
+      "name": "Nettlestone",
+      "type": "Shrine",
+      "typeLabel": "shrine",
+      "isSeat": false,
+      "x": 0.265625,
+      "y": 0.098958336,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 7,
+      "regionId": 1,
+      "name": "Gorseham",
+      "type": "MarketVillage",
+      "typeLabel": "market village",
+      "isSeat": true,
+      "x": 0.203125,
+      "y": 0.49479166,
+      "displayRole": "market"
+    },
+    {
+      "id": 8,
+      "regionId": 1,
+      "name": "the Hazel Clearing",
+      "type": "WildernessCamp",
+      "typeLabel": "wilderness camp",
+      "isSeat": false,
+      "x": 0.109375,
+      "y": 0.421875,
+      "displayRole": "camp"
+    },
+    {
+      "id": 9,
+      "regionId": 1,
+      "name": "Heron Landing",
+      "type": "FishingDock",
+      "typeLabel": "fishing dock",
+      "isSeat": false,
+      "x": 0.057291668,
+      "y": 0.296875,
+      "displayRole": "dock"
+    },
+    {
+      "id": 10,
+      "regionId": 2,
+      "name": "Reedhallow",
+      "type": "SacredGrove",
+      "typeLabel": "sacred grove",
+      "isSeat": true,
+      "x": 0.31770834,
+      "y": 0.31770834,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 11,
+      "regionId": 2,
+      "name": "the Briar Shrine",
+      "type": "Shrine",
+      "typeLabel": "shrine",
+      "isSeat": false,
+      "x": 0.22395833,
+      "y": 0.24479167,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 12,
+      "regionId": 2,
+      "name": "Elderhallow",
+      "type": "SacredGrove",
+      "typeLabel": "sacred grove",
+      "isSeat": false,
+      "x": 0.25520834,
+      "y": 0.38020834,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 13,
+      "regionId": 2,
+      "name": "Mor Camp",
+      "type": "WildernessCamp",
+      "typeLabel": "wilderness camp",
+      "isSeat": false,
+      "x": 0.088541664,
+      "y": 0.18229167,
+      "displayRole": "camp"
+    },
+    {
+      "id": 14,
+      "regionId": 2,
+      "name": "Hartstone",
+      "type": "Shrine",
+      "typeLabel": "shrine",
+      "isSeat": false,
+      "x": 0.22395833,
+      "y": 0.119791664,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 15,
+      "regionId": 2,
+      "name": "Tarn Barrow",
+      "type": "OldBarrow",
+      "typeLabel": "old barrow",
+      "isSeat": false,
+      "x": 0.265625,
+      "y": 0.34895834,
+      "displayRole": "ruin"
+    },
+    {
+      "id": 16,
+      "regionId": 2,
+      "name": "the Rowan Shrine",
+      "type": "Shrine",
+      "typeLabel": "shrine",
+      "isSeat": false,
+      "x": 0.057291668,
+      "y": 0.171875,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 17,
+      "regionId": 3,
+      "name": "the Whin Fastness",
+      "type": "HillFort",
+      "typeLabel": "hill fort",
+      "isSeat": true,
+      "x": 0.5677083,
+      "y": 0.43229166,
+      "displayRole": "fortification"
+    },
+    {
+      "id": 18,
+      "regionId": 3,
+      "name": "the Tarn Clearing",
+      "type": "WildernessCamp",
+      "typeLabel": "wilderness camp",
+      "isSeat": false,
+      "x": 0.7552083,
+      "y": 0.390625,
+      "displayRole": "camp"
+    },
+    {
+      "id": 19,
+      "regionId": 3,
+      "name": "Thornhallow",
+      "type": "SacredGrove",
+      "typeLabel": "sacred grove",
+      "isSeat": false,
+      "x": 0.7135417,
+      "y": 0.359375,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 20,
+      "regionId": 4,
+      "name": "Tarnburgh",
+      "type": "HillFort",
+      "typeLabel": "hill fort",
+      "isSeat": true,
+      "x": 0.41145834,
+      "y": 0.33854166,
+      "displayRole": "fortification"
+    },
+    {
+      "id": 21,
+      "regionId": 4,
+      "name": "the Oat Howe",
+      "type": "OldBarrow",
+      "typeLabel": "old barrow",
+      "isSeat": false,
+      "x": 0.38020834,
+      "y": 0.30729166,
+      "displayRole": "ruin"
+    },
+    {
+      "id": 22,
+      "regionId": 4,
+      "name": "Otter Camp",
+      "type": "WildernessCamp",
+      "typeLabel": "wilderness camp",
+      "isSeat": false,
+      "x": 0.49479166,
+      "y": 0.30729166,
+      "displayRole": "camp"
+    },
+    {
+      "id": 23,
+      "regionId": 5,
+      "name": "Birchham",
+      "type": "MarketVillage",
+      "typeLabel": "market village",
+      "isSeat": true,
+      "x": 0.19270833,
+      "y": 0.515625,
+      "displayRole": "market"
+    },
+    {
+      "id": 24,
+      "regionId": 5,
+      "name": "the Hart Cairns",
+      "type": "CairnField",
+      "typeLabel": "cairn field",
+      "isSeat": false,
+      "x": 0.265625,
+      "y": 0.5885417,
+      "displayRole": "ruin"
+    },
+    {
+      "id": 25,
+      "regionId": 5,
+      "name": "Thornstone",
+      "type": "Shrine",
+      "typeLabel": "shrine",
+      "isSeat": false,
+      "x": 0.109375,
+      "y": 0.5572917,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 26,
+      "regionId": 6,
+      "name": "Wrenhallow",
+      "type": "SacredGrove",
+      "typeLabel": "sacred grove",
+      "isSeat": true,
+      "x": 0.28645834,
+      "y": 0.7447917,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 27,
+      "regionId": 6,
+      "name": "the Alder Crossing",
+      "type": "RiverFord",
+      "typeLabel": "river ford",
+      "isSeat": false,
+      "x": 0.31770834,
+      "y": 0.7447917,
+      "displayRole": "ford"
+    },
+    {
+      "id": 28,
+      "regionId": 6,
+      "name": "Reedcroft",
+      "type": "Farmstead",
+      "typeLabel": "farmstead",
+      "isSeat": false,
+      "x": 0.119791664,
+      "y": 0.734375,
+      "displayRole": "farm"
+    },
+    {
+      "id": 29,
+      "regionId": 6,
+      "name": "the Lark Clearing",
+      "type": "WildernessCamp",
+      "typeLabel": "wilderness camp",
+      "isSeat": false,
+      "x": 0.078125,
+      "y": 0.7447917,
+      "displayRole": "camp"
+    },
+    {
+      "id": 30,
+      "regionId": 6,
+      "name": "the Lark Shrine",
+      "type": "Shrine",
+      "typeLabel": "shrine",
+      "isSeat": false,
+      "x": 0.18229167,
+      "y": 0.7552083,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 31,
+      "regionId": 6,
+      "name": "Ashford",
+      "type": "RiverFord",
+      "typeLabel": "river ford",
+      "isSeat": false,
+      "x": 0.328125,
+      "y": 0.7760417,
+      "displayRole": "ford"
+    },
+    {
+      "id": 32,
+      "regionId": 6,
+      "name": "Wren Strand",
+      "type": "FishingDock",
+      "typeLabel": "fishing dock",
+      "isSeat": false,
+      "x": 0.140625,
+      "y": 0.765625,
+      "displayRole": "dock"
+    },
+    {
+      "id": 33,
+      "regionId": 7,
+      "name": "the Oat Fastness",
+      "type": "HillFort",
+      "typeLabel": "hill fort",
+      "isSeat": true,
+      "x": 0.47395834,
+      "y": 0.49479166,
+      "displayRole": "fortification"
+    },
+    {
+      "id": 34,
+      "regionId": 7,
+      "name": "the Reed Ward",
+      "type": "WatchPost",
+      "typeLabel": "watch post",
+      "isSeat": false,
+      "x": 0.47395834,
+      "y": 0.46354166,
+      "displayRole": "fortification"
+    },
+    {
+      "id": 35,
+      "regionId": 7,
+      "name": "Gorseburgh",
+      "type": "HillFort",
+      "typeLabel": "hill fort",
+      "isSeat": false,
+      "x": 0.484375,
+      "y": 0.5364583,
+      "displayRole": "fortification"
+    },
+    {
+      "id": 36,
+      "regionId": 7,
+      "name": "the Ash Stones",
+      "type": "CairnField",
+      "typeLabel": "cairn field",
+      "isSeat": false,
+      "x": 0.484375,
+      "y": 0.43229166,
+      "displayRole": "ruin"
+    },
+    {
+      "id": 37,
+      "regionId": 8,
+      "name": "Morhallow",
+      "type": "SacredGrove",
+      "typeLabel": "sacred grove",
+      "isSeat": true,
+      "x": 0.421875,
+      "y": 0.6927083,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 38,
+      "regionId": 8,
+      "name": "the Sedge Shrine",
+      "type": "Shrine",
+      "typeLabel": "shrine",
+      "isSeat": false,
+      "x": 0.43229166,
+      "y": 0.6614583,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 39,
+      "regionId": 8,
+      "name": "the Holly Howe",
+      "type": "OldBarrow",
+      "typeLabel": "old barrow",
+      "isSeat": false,
+      "x": 0.49479166,
+      "y": 0.703125,
+      "displayRole": "ruin"
+    },
+    {
+      "id": 40,
+      "regionId": 8,
+      "name": "Tarn Camp",
+      "type": "WildernessCamp",
+      "typeLabel": "wilderness camp",
+      "isSeat": false,
+      "x": 0.46354166,
+      "y": 0.6197917,
+      "displayRole": "camp"
+    },
+    {
+      "id": 41,
+      "regionId": 9,
+      "name": "Whinhallow",
+      "type": "SacredGrove",
+      "typeLabel": "sacred grove",
+      "isSeat": true,
+      "x": 0.5572917,
+      "y": 0.24479167,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 42,
+      "regionId": 9,
+      "name": "the Otter Howe",
+      "type": "OldBarrow",
+      "typeLabel": "old barrow",
+      "isSeat": false,
+      "x": 0.7760417,
+      "y": 0.234375,
+      "displayRole": "ruin"
+    },
+    {
+      "id": 43,
+      "regionId": 9,
+      "name": "the Sloe Howe",
+      "type": "OldBarrow",
+      "typeLabel": "old barrow",
+      "isSeat": false,
+      "x": 0.5052083,
+      "y": 0.18229167,
+      "displayRole": "ruin"
+    },
+    {
+      "id": 44,
+      "regionId": 9,
+      "name": "the Sedge Crossing",
+      "type": "RiverFord",
+      "typeLabel": "river ford",
+      "isSeat": false,
+      "x": 0.6510417,
+      "y": 0.31770834,
+      "displayRole": "ford"
+    },
+    {
+      "id": 45,
+      "regionId": 10,
+      "name": "Heronburgh",
+      "type": "HillFort",
+      "typeLabel": "hill fort",
+      "isSeat": true,
+      "x": 0.5572917,
+      "y": 0.6197917,
+      "displayRole": "fortification"
+    },
+    {
+      "id": 46,
+      "regionId": 10,
+      "name": "Stagford",
+      "type": "RiverFord",
+      "typeLabel": "river ford",
+      "isSeat": false,
+      "x": 0.5989583,
+      "y": 0.6197917,
+      "displayRole": "ford"
+    },
+    {
+      "id": 47,
+      "regionId": 10,
+      "name": "the Elder Clearing",
+      "type": "WildernessCamp",
+      "typeLabel": "wilderness camp",
+      "isSeat": false,
+      "x": 0.6197917,
+      "y": 0.578125,
+      "displayRole": "camp"
+    },
+    {
+      "id": 48,
+      "regionId": 10,
+      "name": "the Nettle Crossing",
+      "type": "RiverFord",
+      "typeLabel": "river ford",
+      "isSeat": false,
+      "x": 0.5572917,
+      "y": 0.546875,
+      "displayRole": "ford"
+    },
+    {
+      "id": 49,
+      "regionId": 11,
+      "name": "the Tarn Grove",
+      "type": "SacredGrove",
+      "typeLabel": "sacred grove",
+      "isSeat": true,
+      "x": 0.28645834,
+      "y": 0.8177083,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 50,
+      "regionId": 11,
+      "name": "the Holly Clearing",
+      "type": "WildernessCamp",
+      "typeLabel": "wilderness camp",
+      "isSeat": false,
+      "x": 0.33854166,
+      "y": 0.9010417,
+      "displayRole": "camp"
+    },
+    {
+      "id": 51,
+      "regionId": 11,
+      "name": "Elderstone",
+      "type": "Shrine",
+      "typeLabel": "shrine",
+      "isSeat": false,
+      "x": 0.30729166,
+      "y": 0.9010417,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 52,
+      "regionId": 11,
+      "name": "the Thorn Clearing",
+      "type": "WildernessCamp",
+      "typeLabel": "wilderness camp",
+      "isSeat": false,
+      "x": 0.40104166,
+      "y": 0.9635417,
+      "displayRole": "camp"
+    },
+    {
+      "id": 53,
+      "regionId": 11,
+      "name": "Alder Strand",
+      "type": "FishingDock",
+      "typeLabel": "fishing dock",
+      "isSeat": false,
+      "x": 0.265625,
+      "y": 0.9114583,
+      "displayRole": "dock"
+    },
+    {
+      "id": 54,
+      "regionId": 11,
+      "name": "Lark Strand",
+      "type": "FishingDock",
+      "typeLabel": "fishing dock",
+      "isSeat": false,
+      "x": 0.203125,
+      "y": 0.984375,
+      "displayRole": "dock"
+    },
+    {
+      "id": 55,
+      "regionId": 12,
+      "name": "Sedgeburgh",
+      "type": "HillFort",
+      "typeLabel": "hill fort",
+      "isSeat": true,
+      "x": 0.453125,
+      "y": 0.49479166,
+      "displayRole": "fortification"
+    },
+    {
+      "id": 56,
+      "regionId": 12,
+      "name": "Wren Watch",
+      "type": "WatchPost",
+      "typeLabel": "watch post",
+      "isSeat": false,
+      "x": 0.359375,
+      "y": 0.484375,
+      "displayRole": "fortification"
+    },
+    {
+      "id": 57,
+      "regionId": 12,
+      "name": "the Sloe Fastness",
+      "type": "HillFort",
+      "typeLabel": "hill fort",
+      "isSeat": false,
+      "x": 0.46354166,
+      "y": 0.43229166,
+      "displayRole": "fortification"
+    },
+    {
+      "id": 58,
+      "regionId": 12,
+      "name": "the Mor Shrine",
+      "type": "Shrine",
+      "typeLabel": "shrine",
+      "isSeat": false,
+      "x": 0.453125,
+      "y": 0.5260417,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 59,
+      "regionId": 12,
+      "name": "the Rowan Cairns",
+      "type": "CairnField",
+      "typeLabel": "cairn field",
+      "isSeat": false,
+      "x": 0.41145834,
+      "y": 0.46354166,
+      "displayRole": "ruin"
+    },
+    {
+      "id": 60,
+      "regionId": 12,
+      "name": "the Holly Ward",
+      "type": "WatchPost",
+      "typeLabel": "watch post",
+      "isSeat": false,
+      "x": 0.359375,
+      "y": 0.5364583,
+      "displayRole": "fortification"
+    },
+    {
+      "id": 61,
+      "regionId": 12,
+      "name": "Wrenstone",
+      "type": "Shrine",
+      "typeLabel": "shrine",
+      "isSeat": false,
+      "x": 0.46354166,
+      "y": 0.46354166,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 62,
+      "regionId": 13,
+      "name": "Thornburgh",
+      "type": "HillFort",
+      "typeLabel": "hill fort",
+      "isSeat": true,
+      "x": 0.36979166,
+      "y": 0.359375,
+      "displayRole": "fortification"
+    },
+    {
+      "id": 63,
+      "regionId": 13,
+      "name": "Morstone",
+      "type": "Shrine",
+      "typeLabel": "shrine",
+      "isSeat": false,
+      "x": 0.34895834,
+      "y": 0.46354166,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 64,
+      "regionId": 13,
+      "name": "Larkstone",
+      "type": "Shrine",
+      "typeLabel": "shrine",
+      "isSeat": false,
+      "x": 0.38020834,
+      "y": 0.40104166,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 65,
+      "regionId": 14,
+      "name": "Ashhallow",
+      "type": "SacredGrove",
+      "typeLabel": "sacred grove",
+      "isSeat": true,
+      "x": 0.640625,
+      "y": 0.6510417,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 66,
+      "regionId": 14,
+      "name": "the Reed Clearing",
+      "type": "WildernessCamp",
+      "typeLabel": "wilderness camp",
+      "isSeat": false,
+      "x": 0.6302083,
+      "y": 0.7447917,
+      "displayRole": "camp"
+    },
+    {
+      "id": 67,
+      "regionId": 14,
+      "name": "Nettleford",
+      "type": "RiverFord",
+      "typeLabel": "river ford",
+      "isSeat": false,
+      "x": 0.6822917,
+      "y": 0.671875,
+      "displayRole": "ford"
+    },
+    {
+      "id": 68,
+      "regionId": 14,
+      "name": "Ash Camp",
+      "type": "WildernessCamp",
+      "typeLabel": "wilderness camp",
+      "isSeat": false,
+      "x": 0.6197917,
+      "y": 0.8697917,
+      "displayRole": "camp"
+    },
+    {
+      "id": 69,
+      "regionId": 14,
+      "name": "the Otter Shrine",
+      "type": "Shrine",
+      "typeLabel": "shrine",
+      "isSeat": false,
+      "x": 0.5989583,
+      "y": 0.7552083,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 70,
+      "regionId": 15,
+      "name": "the Fen Grove",
+      "type": "SacredGrove",
+      "typeLabel": "sacred grove",
+      "isSeat": true,
+      "x": 0.734375,
+      "y": 0.6510417,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 71,
+      "regionId": 15,
+      "name": "Briarstone",
+      "type": "Shrine",
+      "typeLabel": "shrine",
+      "isSeat": false,
+      "x": 0.7552083,
+      "y": 0.9010417,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 72,
+      "regionId": 15,
+      "name": "the Elder Stones",
+      "type": "CairnField",
+      "typeLabel": "cairn field",
+      "isSeat": false,
+      "x": 0.6927083,
+      "y": 0.6197917,
+      "displayRole": "ruin"
+    },
+    {
+      "id": 73,
+      "regionId": 15,
+      "name": "Sloe Camp",
+      "type": "WildernessCamp",
+      "typeLabel": "wilderness camp",
+      "isSeat": false,
+      "x": 0.765625,
+      "y": 0.828125,
+      "displayRole": "camp"
+    },
+    {
+      "id": 74,
+      "regionId": 15,
+      "name": "Nettle Strand",
+      "type": "FishingDock",
+      "typeLabel": "fishing dock",
+      "isSeat": false,
+      "x": 0.890625,
+      "y": 0.765625,
+      "displayRole": "dock"
+    },
+    {
+      "id": 75,
+      "regionId": 15,
+      "name": "Crowstone",
+      "type": "Shrine",
+      "typeLabel": "shrine",
+      "isSeat": false,
+      "x": 0.7239583,
+      "y": 0.859375,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 76,
+      "regionId": 16,
+      "name": "Otterham",
+      "type": "MarketVillage",
+      "typeLabel": "market village",
+      "isSeat": true,
+      "x": 0.765625,
+      "y": 0.609375,
+      "displayRole": "market"
+    },
+    {
+      "id": 77,
+      "regionId": 16,
+      "name": "the Oat Crossing",
+      "type": "RiverFord",
+      "typeLabel": "river ford",
+      "isSeat": false,
+      "x": 0.8489583,
+      "y": 0.6510417,
+      "displayRole": "ford"
+    },
+    {
+      "id": 78,
+      "regionId": 16,
+      "name": "the Fen Clearing",
+      "type": "WildernessCamp",
+      "typeLabel": "wilderness camp",
+      "isSeat": false,
+      "x": 0.796875,
+      "y": 0.453125,
+      "displayRole": "camp"
+    },
+    {
+      "id": 79,
+      "regionId": 16,
+      "name": "Hollystone",
+      "type": "Shrine",
+      "typeLabel": "shrine",
+      "isSeat": false,
+      "x": 0.703125,
+      "y": 0.5572917,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 80,
+      "regionId": 17,
+      "name": "the Hart Grove",
+      "type": "SacredGrove",
+      "typeLabel": "sacred grove",
+      "isSeat": true,
+      "x": 0.390625,
+      "y": 0.6614583,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 81,
+      "regionId": 17,
+      "name": "the Whin Clearing",
+      "type": "WildernessCamp",
+      "typeLabel": "wilderness camp",
+      "isSeat": false,
+      "x": 0.421875,
+      "y": 0.6302083,
+      "displayRole": "camp"
+    },
+    {
+      "id": 82,
+      "regionId": 17,
+      "name": "the Otter Crossing",
+      "type": "RiverFord",
+      "typeLabel": "river ford",
+      "isSeat": false,
+      "x": 0.359375,
+      "y": 0.6197917,
+      "displayRole": "ford"
+    },
+    {
+      "id": 83,
+      "regionId": 17,
+      "name": "Hazelstone",
+      "type": "Shrine",
+      "typeLabel": "shrine",
+      "isSeat": false,
+      "x": 0.359375,
+      "y": 0.5677083,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 84,
+      "regionId": 18,
+      "name": "Morburgh",
+      "type": "HillFort",
+      "typeLabel": "hill fort",
+      "isSeat": true,
+      "x": 0.546875,
+      "y": 0.46354166,
+      "displayRole": "fortification"
+    },
+    {
+      "id": 85,
+      "regionId": 18,
+      "name": "the Oat Ward",
+      "type": "WatchPost",
+      "typeLabel": "watch post",
+      "isSeat": false,
+      "x": 0.6197917,
+      "y": 0.5260417,
+      "displayRole": "fortification"
+    },
+    {
+      "id": 86,
+      "regionId": 18,
+      "name": "the Elder Howe",
+      "type": "OldBarrow",
+      "typeLabel": "old barrow",
+      "isSeat": false,
+      "x": 0.5052083,
+      "y": 0.421875,
+      "displayRole": "ruin"
+    },
+    {
+      "id": 87,
+      "regionId": 19,
+      "name": "the Gorse Grove",
+      "type": "SacredGrove",
+      "typeLabel": "sacred grove",
+      "isSeat": true,
+      "x": 0.43229166,
+      "y": 0.7447917,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 88,
+      "regionId": 19,
+      "name": "Ravenham",
+      "type": "MarketVillage",
+      "typeLabel": "market village",
+      "isSeat": false,
+      "x": 0.5052083,
+      "y": 0.7864583,
+      "displayRole": "market"
+    },
+    {
+      "id": 89,
+      "regionId": 19,
+      "name": "Wrenwick",
+      "type": "MarketVillage",
+      "typeLabel": "market village",
+      "isSeat": false,
+      "x": 0.5677083,
+      "y": 0.9010417,
+      "displayRole": "market"
+    },
+    {
+      "id": 90,
+      "regionId": 19,
+      "name": "the Otter Ward",
+      "type": "WatchPost",
+      "typeLabel": "watch post",
+      "isSeat": false,
+      "x": 0.46354166,
+      "y": 0.7552083,
+      "displayRole": "fortification"
+    },
+    {
+      "id": 91,
+      "regionId": 20,
+      "name": "the Hazel Grove",
+      "type": "SacredGrove",
+      "typeLabel": "sacred grove",
+      "isSeat": true,
+      "x": 0.38020834,
+      "y": 0.765625,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 92,
+      "regionId": 20,
+      "name": "Yewstone",
+      "type": "Shrine",
+      "typeLabel": "shrine",
+      "isSeat": false,
+      "x": 0.33854166,
+      "y": 0.7760417,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 93,
+      "regionId": 20,
+      "name": "Nettle Landing",
+      "type": "FishingDock",
+      "typeLabel": "fishing dock",
+      "isSeat": false,
+      "x": 0.36979166,
+      "y": 0.859375,
+      "displayRole": "dock"
+    },
+    {
+      "id": 94,
+      "regionId": 20,
+      "name": "Brackenstone",
+      "type": "Shrine",
+      "typeLabel": "shrine",
+      "isSeat": false,
+      "x": 0.421875,
+      "y": 0.8489583,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 95,
+      "regionId": 20,
+      "name": "Yew Camp",
+      "type": "WildernessCamp",
+      "typeLabel": "wilderness camp",
+      "isSeat": false,
+      "x": 0.44270834,
+      "y": 0.8802083,
+      "displayRole": "camp"
+    },
+    {
+      "id": 96,
+      "regionId": 21,
+      "name": "Harthallow",
+      "type": "SacredGrove",
+      "typeLabel": "sacred grove",
+      "isSeat": true,
+      "x": 0.28645834,
+      "y": 0.703125,
+      "displayRole": "sacred"
+    },
+    {
+      "id": 97,
+      "regionId": 21,
+      "name": "Thorn Camp",
+      "type": "WildernessCamp",
+      "typeLabel": "wilderness camp",
+      "isSeat": false,
+      "x": 0.265625,
+      "y": 0.5989583,
+      "displayRole": "camp"
+    },
+    {
+      "id": 98,
+      "regionId": 21,
+      "name": "the Rowan Howe",
+      "type": "OldBarrow",
+      "typeLabel": "old barrow",
+      "isSeat": false,
+      "x": 0.296875,
+      "y": 0.6614583,
+      "displayRole": "ruin"
+    },
+    {
+      "id": 99,
+      "regionId": 21,
+      "name": "the Crow Crossing",
+      "type": "RiverFord",
+      "typeLabel": "river ford",
+      "isSeat": false,
+      "x": 0.328125,
+      "y": 0.6822917,
+      "displayRole": "ford"
+    }
+  ],
+  "peopleHighlights": [
+    {
+      "id": 204,
+      "name": "Ash",
+      "factionId": "wood",
+      "homeRegionId": 2,
+      "currentRegionId": null,
+      "roleTags": [
+        "leader"
+      ],
+      "alive": true,
+      "birthYear": 191,
+      "deathYear": null,
+      "age": 59
+    },
+    {
+      "id": 210,
+      "name": "Mossa",
+      "factionId": "wood",
+      "homeRegionId": 2,
+      "currentRegionId": null,
+      "roleTags": [
+        "prophet"
+      ],
+      "alive": true,
+      "birthYear": 216,
+      "deathYear": null,
+      "age": 34
+    },
+    {
+      "id": 211,
+      "name": "Bram",
+      "factionId": "wood",
+      "homeRegionId": 2,
+      "currentRegionId": null,
+      "roleTags": [
+        "prophet"
+      ],
+      "alive": true,
+      "birthYear": 217,
+      "deathYear": null,
+      "age": 33
+    }
+  ],
+  "memoryMarkers": [
+    {
+      "eventId": 54,
+      "year": 11,
+      "type": "famine",
+      "regionId": 12,
+      "homeRegionId": null,
+      "markerKind": "faction_pulse",
+      "label": "Famine (Year 11)",
+      "description": "Famine grips Greyspire.",
+      "involvedFactionIds": [
+        "highland"
+      ],
+      "involvedPersonIds": [
+        6
+      ]
+    },
+    {
+      "eventId": 70,
+      "year": 14,
+      "type": "murder",
+      "regionId": null,
+      "homeRegionId": 7,
+      "markerKind": "home_memory_cairn",
+      "label": "Murder (Year 14)",
+      "description": "Mara murders Bram, leader of the Highland Clans, in a grasp for power.",
+      "involvedFactionIds": [
+        "highland"
+      ],
+      "involvedPersonIds": [
+        6,
+        4
+      ]
+    },
+    {
+      "eventId": 96,
+      "year": 19,
+      "type": "murder",
+      "regionId": null,
+      "homeRegionId": 0,
+      "markerKind": "home_memory_cairn",
+      "label": "Murder (Year 19)",
+      "description": "The bond ends in blood: Thessa kills Yara to end the disgrace.",
+      "involvedFactionIds": [
+        "shore",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        31,
+        49
+      ]
+    },
+    {
+      "eventId": 103,
+      "year": 19,
+      "type": "war",
+      "regionId": 4,
+      "homeRegionId": null,
+      "markerKind": "true_place_mark",
+      "label": "War (Year 19)",
+      "description": "War breaks out between the Shorefolk and the Wood Tribes.",
+      "involvedFactionIds": [
+        "shore",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        24,
+        51
+      ]
+    },
+    {
+      "eventId": 104,
+      "year": 20,
+      "type": "battle",
+      "regionId": 4,
+      "homeRegionId": null,
+      "markerKind": "true_place_mark",
+      "label": "Battle (Year 20)",
+      "description": "the Shorefolk and the Wood Tribes meet in battle at Tarnburgh.",
+      "involvedFactionIds": [
+        "shore",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        24,
+        51
+      ]
+    },
+    {
+      "eventId": 138,
+      "year": 28,
+      "type": "famine",
+      "regionId": 12,
+      "homeRegionId": null,
+      "markerKind": "faction_pulse",
+      "label": "Famine (Year 28)",
+      "description": "Famine grips Greyspire.",
+      "involvedFactionIds": [
+        "highland"
+      ],
+      "involvedPersonIds": [
+        57
+      ]
+    },
+    {
+      "eventId": 177,
+      "year": 34,
+      "type": "famine",
+      "regionId": 18,
+      "homeRegionId": null,
+      "markerKind": "faction_pulse",
+      "label": "Famine (Year 34)",
+      "description": "Famine grips Iron Pass.",
+      "involvedFactionIds": [
+        "highland"
+      ],
+      "involvedPersonIds": [
+        57
+      ]
+    },
+    {
+      "eventId": 187,
+      "year": 36,
+      "type": "murder",
+      "regionId": null,
+      "homeRegionId": 2,
+      "markerKind": "home_memory_cairn",
+      "label": "Murder (Year 36)",
+      "description": "Thessa murders Niall the younger, leader of the Wood Tribes, in a grasp for power.",
+      "involvedFactionIds": [
+        "wood"
+      ],
+      "involvedPersonIds": [
+        51,
+        49
+      ]
+    },
+    {
+      "eventId": 206,
+      "year": 37,
+      "type": "war",
+      "regionId": 3,
+      "homeRegionId": null,
+      "markerKind": "chronicle_beat",
+      "label": "War (Year 37)",
+      "description": "War breaks out between the Highland Clans and the Wood Tribes.",
+      "involvedFactionIds": [
+        "highland",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        57,
+        48
+      ]
+    },
+    {
+      "eventId": 207,
+      "year": 38,
+      "type": "battle",
+      "regionId": 3,
+      "homeRegionId": null,
+      "markerKind": "true_place_mark",
+      "label": "Battle (Year 38)",
+      "description": "the Highland Clans and the Wood Tribes meet in battle at the Whin Fastness.",
+      "involvedFactionIds": [
+        "highland",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        57,
+        48
+      ]
+    },
+    {
+      "eventId": 216,
+      "year": 39,
+      "type": "battle",
+      "regionId": 3,
+      "homeRegionId": null,
+      "markerKind": "true_place_mark",
+      "label": "Battle (Year 39)",
+      "description": "the Highland Clans and the Wood Tribes clash again at the Whin Fastness.",
+      "involvedFactionIds": [
+        "highland",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        57,
+        48
+      ]
+    },
+    {
+      "eventId": 233,
+      "year": 43,
+      "type": "war",
+      "regionId": 3,
+      "homeRegionId": null,
+      "markerKind": "chronicle_beat",
+      "label": "War (Year 43)",
+      "description": "War breaks out between the Highland Clans and the Wood Tribes.",
+      "involvedFactionIds": [
+        "highland",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        57,
+        54
+      ]
+    },
+    {
+      "eventId": 234,
+      "year": 44,
+      "type": "battle",
+      "regionId": 3,
+      "homeRegionId": null,
+      "markerKind": "true_place_mark",
+      "label": "Battle (Year 44)",
+      "description": "the Highland Clans and the Wood Tribes meet in battle at the Whin Fastness.",
+      "involvedFactionIds": [
+        "highland",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        57,
+        54
+      ]
+    },
+    {
+      "eventId": 241,
+      "year": 45,
+      "type": "battle",
+      "regionId": 3,
+      "homeRegionId": null,
+      "markerKind": "true_place_mark",
+      "label": "Battle (Year 45)",
+      "description": "the Highland Clans and the Wood Tribes clash again at the Whin Fastness.",
+      "involvedFactionIds": [
+        "highland",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        57,
+        54
+      ]
+    },
+    {
+      "eventId": 262,
+      "year": 47,
+      "type": "war",
+      "regionId": 3,
+      "homeRegionId": null,
+      "markerKind": "chronicle_beat",
+      "label": "War (Year 47)",
+      "description": "War breaks out between the Highland Clans and the Wood Tribes.",
+      "involvedFactionIds": [
+        "highland",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        91,
+        54
+      ]
+    },
+    {
+      "eventId": 263,
+      "year": 48,
+      "type": "battle",
+      "regionId": 3,
+      "homeRegionId": null,
+      "markerKind": "true_place_mark",
+      "label": "Battle (Year 48)",
+      "description": "the Highland Clans and the Wood Tribes meet in battle at the Whin Fastness.",
+      "involvedFactionIds": [
+        "highland",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        91,
+        54
+      ]
+    },
+    {
+      "eventId": 268,
+      "year": 49,
+      "type": "battle",
+      "regionId": 3,
+      "homeRegionId": null,
+      "markerKind": "true_place_mark",
+      "label": "Battle (Year 49)",
+      "description": "the Highland Clans and the Wood Tribes clash again at the Whin Fastness.",
+      "involvedFactionIds": [
+        "highland",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        91,
+        54
+      ]
+    },
+    {
+      "eventId": 289,
+      "year": 56,
+      "type": "murder",
+      "regionId": null,
+      "homeRegionId": 0,
+      "markerKind": "home_memory_cairn",
+      "label": "Murder (Year 56)",
+      "description": "Asha the younger murders Marek, leader of the Shorefolk, in a grasp for power.",
+      "involvedFactionIds": [
+        "shore"
+      ],
+      "involvedPersonIds": [
+        19,
+        72
+      ]
+    },
+    {
+      "eventId": 298,
+      "year": 57,
+      "type": "murder",
+      "regionId": null,
+      "homeRegionId": 0,
+      "markerKind": "home_memory_cairn",
+      "label": "Murder (Year 57)",
+      "description": "Oren murders Asha the younger, leader of the Shorefolk, in a grasp for power.",
+      "involvedFactionIds": [
+        "shore"
+      ],
+      "involvedPersonIds": [
+        72,
+        81
+      ]
+    },
+    {
+      "eventId": 338,
+      "year": 65,
+      "type": "famine",
+      "regionId": 4,
+      "homeRegionId": null,
+      "markerKind": "faction_pulse",
+      "label": "Famine (Year 65)",
+      "description": "Famine grips the Tangled Wood.",
+      "involvedFactionIds": [
+        "wood"
+      ],
+      "involvedPersonIds": [
+        93
+      ]
+    },
+    {
+      "eventId": 356,
+      "year": 67,
+      "type": "famine",
+      "regionId": 4,
+      "homeRegionId": null,
+      "markerKind": "faction_pulse",
+      "label": "Famine (Year 67)",
+      "description": "Famine grips the Tangled Wood.",
+      "involvedFactionIds": [
+        "wood"
+      ],
+      "involvedPersonIds": [
+        93
+      ]
+    },
+    {
+      "eventId": 362,
+      "year": 67,
+      "type": "war",
+      "regionId": 6,
+      "homeRegionId": null,
+      "markerKind": "true_place_mark",
+      "label": "War (Year 67)",
+      "description": "War breaks out between the Shorefolk and the Wood Tribes.",
+      "involvedFactionIds": [
+        "shore",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        138,
+        93
+      ]
+    },
+    {
+      "eventId": 366,
+      "year": 68,
+      "type": "custom",
+      "regionId": 0,
+      "homeRegionId": null,
+      "markerKind": "true_place_mark",
+      "label": "Custom (Year 68)",
+      "description": "the Wood Tribes take up the peaceable ways of the Highland Clans.",
+      "involvedFactionIds": [
+        "wood"
+      ],
+      "involvedPersonIds": [
+        93
+      ]
+    },
+    {
+      "eventId": 367,
+      "year": 69,
+      "type": "famine",
+      "regionId": 4,
+      "homeRegionId": null,
+      "markerKind": "faction_pulse",
+      "label": "Famine (Year 69)",
+      "description": "Famine grips the Tangled Wood.",
+      "involvedFactionIds": [
+        "wood"
+      ],
+      "involvedPersonIds": [
+        93
+      ]
+    },
+    {
+      "eventId": 377,
+      "year": 70,
+      "type": "murder",
+      "regionId": null,
+      "homeRegionId": 0,
+      "markerKind": "home_memory_cairn",
+      "label": "Murder (Year 70)",
+      "description": "The bond ends in blood: Mossa the younger kills Coren the younger to end the disgrace.",
+      "involvedFactionIds": [
+        "shore",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        95,
+        93
+      ]
+    },
+    {
+      "eventId": 380,
+      "year": 70,
+      "type": "war",
+      "regionId": 6,
+      "homeRegionId": null,
+      "markerKind": "chronicle_beat",
+      "label": "War (Year 70)",
+      "description": "War breaks out between the Shorefolk and the Wood Tribes.",
+      "involvedFactionIds": [
+        "shore",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        138,
+        93
+      ]
+    },
+    {
+      "eventId": 383,
+      "year": 71,
+      "type": "battle",
+      "regionId": 6,
+      "homeRegionId": null,
+      "markerKind": "true_place_mark",
+      "label": "Battle (Year 71)",
+      "description": "the Shorefolk and the Wood Tribes meet in battle at the Alder Crossing.",
+      "involvedFactionIds": [
+        "shore",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        138,
+        93
+      ]
+    },
+    {
+      "eventId": 390,
+      "year": 72,
+      "type": "famine",
+      "regionId": 18,
+      "homeRegionId": null,
+      "markerKind": "faction_pulse",
+      "label": "Famine (Year 72)",
+      "description": "Famine grips Iron Pass.",
+      "involvedFactionIds": [
+        "highland"
+      ],
+      "involvedPersonIds": [
+        120
+      ]
+    },
+    {
+      "eventId": 391,
+      "year": 72,
+      "type": "battle",
+      "regionId": 6,
+      "homeRegionId": null,
+      "markerKind": "true_place_mark",
+      "label": "Battle (Year 72)",
+      "description": "the Shorefolk and the Wood Tribes clash again at the Alder Crossing.",
+      "involvedFactionIds": [
+        "shore",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        138,
+        93
+      ]
+    },
+    {
+      "eventId": 407,
+      "year": 74,
+      "type": "famine",
+      "regionId": 21,
+      "homeRegionId": null,
+      "markerKind": "faction_pulse",
+      "label": "Famine (Year 74)",
+      "description": "Famine grips the Deep Green II.",
+      "involvedFactionIds": [
+        "wood"
+      ],
+      "involvedPersonIds": [
+        125
+      ]
+    },
+    {
+      "eventId": 420,
+      "year": 78,
+      "type": "famine",
+      "regionId": 7,
+      "homeRegionId": null,
+      "markerKind": "faction_pulse",
+      "label": "Famine (Year 78)",
+      "description": "Famine grips the Broken Ridge.",
+      "involvedFactionIds": [
+        "highland"
+      ],
+      "involvedPersonIds": [
+        120
+      ]
+    },
+    {
+      "eventId": 423,
+      "year": 78,
+      "type": "murder",
+      "regionId": null,
+      "homeRegionId": 2,
+      "markerKind": "home_memory_cairn",
+      "label": "Murder (Year 78)",
+      "description": "Dern of the Wood Tribes has Briar the younger put to death for the heresy of the Disciples of the Silent Saint.",
+      "involvedFactionIds": [
+        "wood"
+      ],
+      "involvedPersonIds": [
+        75,
+        119
+      ]
+    },
+    {
+      "eventId": 428,
+      "year": 80,
+      "type": "murder",
+      "regionId": null,
+      "homeRegionId": 0,
+      "markerKind": "home_memory_cairn",
+      "label": "Murder (Year 80)",
+      "description": "Wenna avenges Mossa the younger by killing Nira the younger.",
+      "involvedFactionIds": [
+        "shore",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        89,
+        125
+      ]
+    },
+    {
+      "eventId": 434,
+      "year": 80,
+      "type": "war",
+      "regionId": 6,
+      "homeRegionId": null,
+      "markerKind": "chronicle_beat",
+      "label": "War (Year 80)",
+      "description": "A holy war erupts between the Shorefolk and the Wood Tribes over the worship of their gods.",
+      "involvedFactionIds": [
+        "shore",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        138,
+        125
+      ]
+    },
+    {
+      "eventId": 435,
+      "year": 81,
+      "type": "famine",
+      "regionId": 7,
+      "homeRegionId": null,
+      "markerKind": "faction_pulse",
+      "label": "Famine (Year 81)",
+      "description": "Famine grips the Broken Ridge.",
+      "involvedFactionIds": [
+        "highland"
+      ],
+      "involvedPersonIds": [
+        120
+      ]
+    },
+    {
+      "eventId": 436,
+      "year": 81,
+      "type": "famine",
+      "regionId": 21,
+      "homeRegionId": null,
+      "markerKind": "faction_pulse",
+      "label": "Famine (Year 81)",
+      "description": "Famine grips the Deep Green II.",
+      "involvedFactionIds": [
+        "wood"
+      ],
+      "involvedPersonIds": [
+        125
+      ]
+    },
+    {
+      "eventId": 437,
+      "year": 81,
+      "type": "battle",
+      "regionId": 6,
+      "homeRegionId": null,
+      "markerKind": "true_place_mark",
+      "label": "Battle (Year 81)",
+      "description": "the Shorefolk and the Wood Tribes meet in battle at the Alder Crossing.",
+      "involvedFactionIds": [
+        "shore",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        138,
+        125
+      ]
+    },
+    {
+      "eventId": 442,
+      "year": 81,
+      "type": "murder",
+      "regionId": null,
+      "homeRegionId": 2,
+      "markerKind": "home_memory_cairn",
+      "label": "Murder (Year 81)",
+      "description": "Pell the younger avenges Nira the younger by killing Wenna.",
+      "involvedFactionIds": [
+        "shore",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        125,
+        116
+      ]
+    },
+    {
+      "eventId": 447,
+      "year": 82,
+      "type": "battle",
+      "regionId": 6,
+      "homeRegionId": null,
+      "markerKind": "true_place_mark",
+      "label": "Battle (Year 82)",
+      "description": "the Shorefolk and the Wood Tribes clash again at the Alder Crossing.",
+      "involvedFactionIds": [
+        "shore",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        138,
+        107
+      ]
+    },
+    {
+      "eventId": 454,
+      "year": 82,
+      "type": "murder",
+      "regionId": null,
+      "homeRegionId": 0,
+      "markerKind": "home_memory_cairn",
+      "label": "Murder (Year 82)",
+      "description": "Mira murders Asha, leader of the Shorefolk, in a grasp for power.",
+      "involvedFactionIds": [
+        "shore"
+      ],
+      "involvedPersonIds": [
+        138,
+        135
+      ]
+    },
+    {
+      "eventId": 459,
+      "year": 83,
+      "type": "murder",
+      "regionId": null,
+      "homeRegionId": 2,
+      "markerKind": "home_memory_cairn",
+      "label": "Murder (Year 83)",
+      "description": "Torv of the northern crags avenges Astrid by killing Thessa of the deep forest.",
+      "involvedFactionIds": [
+        "highland",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        107,
+        110
+      ]
+    },
+    {
+      "eventId": 463,
+      "year": 83,
+      "type": "war",
+      "regionId": 3,
+      "homeRegionId": null,
+      "markerKind": "true_place_mark",
+      "label": "War (Year 83)",
+      "description": "War breaks out between the Highland Clans and the Wood Tribes.",
+      "involvedFactionIds": [
+        "highland",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        120,
+        143
+      ]
+    },
+    {
+      "eventId": 464,
+      "year": 84,
+      "type": "battle",
+      "regionId": 3,
+      "homeRegionId": null,
+      "markerKind": "true_place_mark",
+      "label": "Battle (Year 84)",
+      "description": "the Highland Clans and the Wood Tribes meet in battle at the Whin Fastness.",
+      "involvedFactionIds": [
+        "highland",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        120,
+        143
+      ]
+    },
+    {
+      "eventId": 472,
+      "year": 85,
+      "type": "battle",
+      "regionId": 3,
+      "homeRegionId": null,
+      "markerKind": "true_place_mark",
+      "label": "Battle (Year 85)",
+      "description": "the Highland Clans and the Wood Tribes clash again at the Whin Fastness.",
+      "involvedFactionIds": [
+        "highland",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        120,
+        143
+      ]
+    },
+    {
+      "eventId": 482,
+      "year": 86,
+      "type": "famine",
+      "regionId": 7,
+      "homeRegionId": null,
+      "markerKind": "faction_pulse",
+      "label": "Famine (Year 86)",
+      "description": "Famine grips the Broken Ridge.",
+      "involvedFactionIds": [
+        "highland"
+      ],
+      "involvedPersonIds": [
+        120
+      ]
+    },
+    {
+      "eventId": 507,
+      "year": 92,
+      "type": "famine",
+      "regionId": 8,
+      "homeRegionId": null,
+      "markerKind": "faction_pulse",
+      "label": "Famine (Year 92)",
+      "description": "Famine grips Ashgrove.",
+      "involvedFactionIds": [
+        "wood"
+      ],
+      "involvedPersonIds": [
+        119
+      ]
+    },
+    {
+      "eventId": 514,
+      "year": 93,
+      "type": "war",
+      "regionId": 4,
+      "homeRegionId": null,
+      "markerKind": "chronicle_beat",
+      "label": "War (Year 93)",
+      "description": "A holy war erupts between the Highland Clans and the Wood Tribes over the worship of their gods.",
+      "involvedFactionIds": [
+        "highland",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        153,
+        119
+      ]
+    },
+    {
+      "eventId": 515,
+      "year": 94,
+      "type": "battle",
+      "regionId": 4,
+      "homeRegionId": null,
+      "markerKind": "true_place_mark",
+      "label": "Battle (Year 94)",
+      "description": "the Highland Clans and the Wood Tribes meet in battle at Tarnburgh.",
+      "involvedFactionIds": [
+        "highland",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        153,
+        119
+      ]
+    },
+    {
+      "eventId": 526,
+      "year": 96,
+      "type": "murder",
+      "regionId": null,
+      "homeRegionId": 2,
+      "markerKind": "home_memory_cairn",
+      "label": "Murder (Year 96)",
+      "description": "Thessa murders Dern, leader of the Wood Tribes, in a grasp for power.",
+      "involvedFactionIds": [
+        "wood"
+      ],
+      "involvedPersonIds": [
+        119,
+        160
+      ]
+    },
+    {
+      "eventId": 553,
+      "year": 103,
+      "type": "murder",
+      "regionId": null,
+      "homeRegionId": 0,
+      "markerKind": "home_memory_cairn",
+      "label": "Murder (Year 103)",
+      "description": "The bond ends in blood: Sif kills Sorin the younger to end the disgrace.",
+      "involvedFactionIds": [
+        "highland",
+        "shore"
+      ],
+      "involvedPersonIds": [
+        148,
+        132
+      ]
+    },
+    {
+      "eventId": 590,
+      "year": 117,
+      "type": "murder",
+      "regionId": null,
+      "homeRegionId": 7,
+      "markerKind": "home_memory_cairn",
+      "label": "Murder (Year 117)",
+      "description": "Bram of the northern crags murders Sif, leader of the Highland Clans, in a grasp for power.",
+      "involvedFactionIds": [
+        "highland"
+      ],
+      "involvedPersonIds": [
+        132,
+        170
+      ]
+    },
+    {
+      "eventId": 595,
+      "year": 118,
+      "type": "murder",
+      "regionId": null,
+      "homeRegionId": 7,
+      "markerKind": "home_memory_cairn",
+      "label": "Murder (Year 118)",
+      "description": "Bram of the northern crags avenges Sif by killing Bram of the northern crags.",
+      "involvedFactionIds": [
+        "highland"
+      ],
+      "involvedPersonIds": [
+        170,
+        170
+      ]
+    },
+    {
+      "eventId": 615,
+      "year": 129,
+      "type": "murder",
+      "regionId": null,
+      "homeRegionId": 7,
+      "markerKind": "home_memory_cairn",
+      "label": "Murder (Year 129)",
+      "description": "Mara murders Bram the younger, leader of the Highland Clans, in a grasp for power.",
+      "involvedFactionIds": [
+        "highland"
+      ],
+      "involvedPersonIds": [
+        165,
+        174
+      ]
+    },
+    {
+      "eventId": 643,
+      "year": 142,
+      "type": "murder",
+      "regionId": null,
+      "homeRegionId": 7,
+      "markerKind": "home_memory_cairn",
+      "label": "Murder (Year 142)",
+      "description": "Greta murders Edda, leader of the Highland Clans, in a grasp for power.",
+      "involvedFactionIds": [
+        "highland"
+      ],
+      "involvedPersonIds": [
+        175,
+        179
+      ]
+    },
+    {
+      "eventId": 663,
+      "year": 152,
+      "type": "murder",
+      "regionId": null,
+      "homeRegionId": 2,
+      "markerKind": "home_memory_cairn",
+      "label": "Murder (Year 152)",
+      "description": "The bond ends in blood: Tava kills Bram the younger to end the disgrace.",
+      "involvedFactionIds": [
+        "highland",
+        "wood"
+      ],
+      "involvedPersonIds": [
+        185,
+        178
+      ]
+    },
+    {
+      "eventId": 693,
+      "year": 184,
+      "type": "famine",
+      "regionId": 8,
+      "homeRegionId": null,
+      "markerKind": "faction_pulse",
+      "label": "Famine (Year 184)",
+      "description": "Famine grips Ashgrove.",
+      "involvedFactionIds": [
+        "wood"
+      ],
+      "involvedPersonIds": [
+        189
+      ]
+    },
+    {
+      "eventId": 699,
+      "year": 194,
+      "type": "famine",
+      "regionId": 17,
+      "homeRegionId": null,
+      "markerKind": "faction_pulse",
+      "label": "Famine (Year 194)",
+      "description": "Famine grips the Thornwood.",
+      "involvedFactionIds": [
+        "wood"
+      ],
+      "involvedPersonIds": [
+        198
+      ]
+    },
+    {
+      "eventId": 724,
+      "year": 223,
+      "type": "famine",
+      "regionId": 2,
+      "homeRegionId": null,
+      "markerKind": "faction_pulse",
+      "label": "Famine (Year 223)",
+      "description": "Famine grips the Old Forest.",
+      "involvedFactionIds": [
+        "wood"
+      ],
+      "involvedPersonIds": [
+        199
+      ]
+    },
+    {
+      "eventId": 729,
+      "year": 225,
+      "type": "famine",
+      "regionId": 2,
+      "homeRegionId": null,
+      "markerKind": "faction_pulse",
+      "label": "Famine (Year 225)",
+      "description": "Famine grips the Old Forest.",
+      "involvedFactionIds": [
+        "wood"
+      ],
+      "involvedPersonIds": [
+        199
+      ]
+    },
+    {
+      "eventId": 745,
+      "year": 240,
+      "type": "famine",
+      "regionId": 21,
+      "homeRegionId": null,
+      "markerKind": "faction_pulse",
+      "label": "Famine (Year 240)",
+      "description": "Famine grips the Deep Green II.",
+      "involvedFactionIds": [
+        "wood"
+      ],
+      "involvedPersonIds": [
+        204
+      ]
+    }
+  ],
+  "chroniclePath": [
+    {
+      "beatIndex": 0,
+      "eventId": 150,
+      "year": 29,
+      "type": "war",
+      "regionId": null,
+      "homeRegionId": null,
+      "label": "War (Year 29)",
+      "causalHint": "war-from-grievance"
+    },
+    {
+      "beatIndex": 1,
+      "eventId": 206,
+      "year": 37,
+      "type": "war",
+      "regionId": 3,
+      "homeRegionId": null,
+      "label": "War (Year 37)",
+      "causalHint": "war-of-whispers"
+    },
+    {
+      "beatIndex": 2,
+      "eventId": 233,
+      "year": 43,
+      "type": "war",
+      "regionId": 3,
+      "homeRegionId": null,
+      "label": "War (Year 43)",
+      "causalHint": "war-of-whispers"
+    },
+    {
+      "beatIndex": 3,
+      "eventId": 262,
+      "year": 47,
+      "type": "war",
+      "regionId": 3,
+      "homeRegionId": null,
+      "label": "War (Year 47)",
+      "causalHint": "war-from-grievance"
+    },
+    {
+      "beatIndex": 4,
+      "eventId": 380,
+      "year": 70,
+      "type": "war",
+      "regionId": 6,
+      "homeRegionId": null,
+      "label": "War (Year 70)",
+      "causalHint": "war-of-whispers"
+    },
+    {
+      "beatIndex": 5,
+      "eventId": 434,
+      "year": 80,
+      "type": "war",
+      "regionId": 6,
+      "homeRegionId": null,
+      "label": "War (Year 80)",
+      "causalHint": "war-of-whispers"
+    },
+    {
+      "beatIndex": 6,
+      "eventId": 514,
+      "year": 93,
+      "type": "war",
+      "regionId": 4,
+      "homeRegionId": null,
+      "label": "War (Year 93)",
+      "causalHint": "war-from-grievance"
+    }
+  ],
+  "cameraHints": {
+    "preferredMode": "atlas",
+    "regionFocusId": 3,
+    "bounds": {
+      "minX": 0.19417667,
+      "minY": 0.24077949,
+      "maxX": 0.7655524,
+      "maxY": 0.8176329
+    }
+  },
+  "exportWarnings": [
+    "faction.color is not modeled in sim data (null); symbolicColor is a deterministic derived hint, not authored lore.",
+    "person.currentRegionId is not modeled by the sim (always null); homeRegionId is the remembered-home anchor, not a current location."
+  ]
+}

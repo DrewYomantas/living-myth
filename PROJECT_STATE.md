@@ -638,8 +638,34 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       chain echo (the last remaining Phase 2 force); per-launch seed choice (today seed is fixed at 7);
       still-unwatched Theater of War / Chronicle Replay / persistence / Cast / Harvest / Plague /
       Migration / Prejudice F5 feel-tests.
-
-## Session log
+- [x] Godot Snapshot Bridge V1 — the Unreal-facing export contract (2026-06-19, sim read-model +
+      console gate + docs; baseline-INERT by construction): a deterministic, honest JSON export of a
+      real Living Myth world, designed to **drive** the separate Unreal Engine 5.8 diorama sandbox
+      (one-way: Living Myth → JSON → Unreal; the export never reads or touches the UE project). New
+      `UnrealExport.Build(World, seed)` in `src/LivingMyth.Sim/UnrealSnapshot.cs` is a **pure Sim
+      read-model** in the Sites/Replay/SurfacePainter family — draws **zero Rng**, never read by
+      `Tick`, a deterministic function of finished world state — so it **cannot move the verify
+      baseline** (held EXACTLY **598/751/809/1065**) and two exports off the same `(seed, year)` are
+      **byte-identical** (proven by SHA-256 across two separate process runs). Snapshot (schemaVersion
+      `1.0.0`): `counts` + `regions` (terrain, x/y, controller, home/true event counts, a deterministic
+      `suggestedUnrealRole`) + `factions` (seat, prosperity, leader, real `traits`; `color` null +
+      derived `symbolicColor`) + `sites` (type/displayRole/x-y) + bounded `peopleHighlights` (living
+      leaders+prophets) + bounded `memoryMarkers` + 3–7-beat `chroniclePath` (importance-ranked) +
+      `cameraHints` + `exportWarnings`. **Honesty keystone — the two anchor channels stay unmixed:**
+      `RegionId` (where it happened) and `HomeRegionId` (where a life is remembered, never a place) are
+      copied verbatim; `markerKind` encodes the channel (`home_memory_cairn` for HomeRegionId-only —
+      `regionId` provably null — vs `true_place_mark`/`faction_pulse` for real place anchors), so a
+      murder is never rendered "happened in" a region. Missing optional data → `null` + an
+      `exportWarnings` line, never invented (faction colour, person current location). New
+      **`unreal-snapshot`** command IS the gate (`--seed`/`--years`/`--out`/`--cap`): writes the file,
+      then asserts parses / schema-version / regions-present / no-fabricated-fields / region-home-
+      distinction / determinism, exits non-zero on failure; wired into CI. All 13 gates green, both
+      builds clean (0 warnings). Contract + consumption guide + committed reference sample:
+      `docs/UNREAL_SNAPSHOT_BRIDGE.md` + `docs/UNREAL_SNAPSHOT_BRIDGE/reference_seed1_year250.json`.
+      **Recommendation: Unreal Import Smoke V1** — parse this sample in UE, lay out `regions`/`sites` by
+      x/y + role, place `memoryMarkers` switching on `markerKind` (cairns at the HOME region, never
+      in-place), and prove one honest region renders before any new hand-built art.
+- [ ] Later — **viewer payoff for migration** (← NEXT: surface movement on the atlas — a migration
 - [2026-06-17] Multi-squad program (senior-lead, 4 agent squads: ATLAS/FORGE/KEEP/LOOM; plan
   `~/.claude/plans/adaptive-squishing-flask.md`). Ran as Workflows per wave; Lead integrated + held the gate.
   **Shipped — The Creeping Death** (disease-V2 spread-chain echo, Phase-2 capstone, commit `721ffe0`): a
@@ -1399,7 +1425,22 @@ close to the shipped causal grammar) — pending placement in `Visual references
 with the same honest/aspirational/forbidden discipline as Batch 1.
 
 ## Next session starts with
-**Drew's F5 feel-test of Harvest Economy V1** (newest this session, sim-side — the viewer is
+- [2026-06-17] Session: Export hardening — added `godot/LivingMyth.Godot.sln` (the .NET exporter
+  needs a classic `.sln`, not the repo's `.slnx`), installed Godot 4.6.3-mono export templates, and
+  fixed `DioramaView.LoadTextures` to load diorama PNGs via `res://` (DirAccess + ResourceLoader)
+  instead of `GlobalizePath` + `System.IO` — the `DirectoryNotFoundException` in the exported build
+  is gone (diorama frames render in the packed `.exe`). All 13 gates green, verify exactly
+  598/751/809/1065, builds clean. Commits 7fd362e, a7440fa. **DONE [2026-06-18]: fixed the same
+  `GlobalizePath` font bug project-wide** — replaced `FontFile.LoadDynamicFont(GlobalizePath(...))`
+  with `ResourceLoader.Load<FontFile>/<Font>("res://...")` in `UiTheme.cs` (LoadFonts), `DioramaView.cs`
+  (LoadFont), and `PrototypeGreymarket.cs` (LoadFont) so fonts resolve from the packed `.pck`. Godot
+  build clean, verify held exactly 598/751/809/1065 (viewer-only). **Next on Drew's machine:** re-export
+  and confirm the exported viewer renders Alegreya (no default-font fallback). **Next code milestone:**
+  the Creeping-Death "spreading front" map trail (viewer payoff for the Wave 1 sim capstone — pure
+  read-model over the contagion-edge causes, baseline-safe). Route A house render+judge (Blender/Krita
+  on Drew's machine) is the parallel visual track.
+
+**[STALE — superseded by the 2026-06-17 entry above] Drew's F5 feel-test of Harvest Economy V1** (sim-side — the viewer is
 NOT yet wired): run a few centuries and read the chronicle — does "Famine grips {region}" /
 "The land recovers; the famine in {region} breaks" / "A season of plenty blesses {region}" read
 like the land itself starving and recovering? Do famine deaths still read as belonging to the
