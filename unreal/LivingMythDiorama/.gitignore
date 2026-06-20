@@ -1,0 +1,15 @@
+# UE5 generated / transient
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+.vs/
+*.sln
+*.VC.db
+*.opensdf
+*.sdf
+*.suo
+
+# Generated VS solutions (regenerated from .uproject)
+*.slnx

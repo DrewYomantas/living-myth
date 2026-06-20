@@ -1,0 +1,13 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "{6732447C-4291-731C-A085-76A7E94E0040}",
+	"Category": "",
+	"Description": "Living Myth - Unreal Import Smoke V1. One-way consumer of the deterministic Living Myth snapshot bridge (schema v1). Renders honest sim data; never writes back.",
+	"Modules": [
+		{
+			"Name": "LivingMythDiorama",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}
