@@ -666,6 +666,21 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       x/y + role, place `memoryMarkers` switching on `markerKind` (cairns at the HOME region, never
       in-place), and prove one honest region renders before any new hand-built art.
 - [ ] Later — **viewer payoff for migration** (← NEXT: surface movement on the atlas — a migration
+- [2026-06-20] Session: UE V5.1 Asset Integration Polish (commit `16343b4`, separate proof path; lead
+  dev + Explore recon + a leashed read-only visual verifier). Took the V5 proof trio (which read as test
+  props on a flat carpet) to a coherent handcrafted-atlas island: `/Game/LivingMyth/V5_1/` (5 SM —
+  LandPatch_B island, GrassStoneChunk_B knoll, Path_DirtWorn_B, Memory_HomeCairn_B, Water_Disc_B), 12
+  `MI_LM_V5_1_*` on the REUSED `M_LMV5` (master untouched), map `GeneratedAtlasV5_1_IntegrationPolish`, doc
+  `Docs/UE58_V5_1_INTEGRATION_POLISH.md`, scripts `tools/ue_v5_1_polish.py` + `ue_v5_1_capture.py`. Fixed
+  all six V5 misses (carpet→island in dark water, square/coin tile→overlapping-disc+perlin land, board
+  path→worn-dirt lumps, washed-out cairn→amber heart + dark base + 1 proof-only point light, yellow-green→
+  earthy palette, floaty→contact shadows). KEY GOTCHA: GeometryScript `apply_perlin_noise_to_mesh` SQUARES
+  frequency (use freq≈sqrt(target); 0.06–0.13). Iterated twice (iter-1 over-lit gold → tamed). Visual gate
+  PASS all 5 (verifier-confirmed), ~5→6.5-7/10; remaining gap = hand-painted texture + foliage variety (art
+  labor). Presentation-only: V2/V3/V4 + V5 baseline + sim byte-untouched. **PUSH PENDING** — `git push origin
+  main` timed out (GCM can't prompt in Claude's shell); commit is local `ahead 1`. Next: Drew pushes, then
+  feel-test V5.1 in-editor; then sim-truth-driven placement of the V5.1 kit (terrainType/region cell → which
+  asset), the bridge from proof scene to real generated atlas.
 - [2026-06-17] Multi-squad program (senior-lead, 4 agent squads: ATLAS/FORGE/KEEP/LOOM; plan
   `~/.claude/plans/adaptive-squishing-flask.md`). Ran as Workflows per wave; Lead integrated + held the gate.
   **Shipped — The Creeping Death** (disease-V2 spread-chain echo, Phase-2 capstone, commit `721ffe0`): a

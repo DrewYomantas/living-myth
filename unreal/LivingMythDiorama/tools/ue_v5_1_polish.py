@@ -1,3 +1,12 @@
+# ===== NEXT SESSION STARTS HERE (2026-06-20 checkpoint) =====
+# 1. PUSH FIRST: commit 16343b4 is local-only (ahead 1) — `git -C "C:/dev/LIVING MYTH" push origin main`
+#    (last push timed out; GCM can't prompt in Claude's shell, so Drew runs it).
+# 2. Feel-test V5.1 in the editor: open GeneratedAtlasV5_1_IntegrationPolish, F5 / pilot the 3 cameras,
+#    judge the island vs the North-Star refs. Optional small polish: darken/cool the cairn stones more,
+#    add foliage silhouette variety (cones are placeholders).
+# 3. Then the real bridge: sim-truth-driven placement of this V5.1 kit (terrainType / region cell /
+#    site / HomeRegionId -> which asset where), turning the proof scene into a real generated atlas.
+# ============================================================
 """Living Myth — V5.1 Asset Integration Polish (pure Python + Geometry Script, no C++).
 
 An ART-integration polish pass over the V5 proof set. V5 proved the factory; this proves the *look*.
