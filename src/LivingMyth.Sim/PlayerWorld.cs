@@ -151,6 +151,7 @@ public sealed class PlayerWorldStore
         DivinePressureKind.Doom => "doom",
         DivinePressureKind.Omen => "omen",
         DivinePressureKind.ForestSeeded => "forest",
+        DivinePressureKind.Smite => "smite",
         _ => "spring",
     };
 
@@ -227,10 +228,11 @@ public sealed class PlayerWorldStore
         {
             case "bless":
             case "curse":
+            case "smite":
                 if (!int.TryParse(act.TargetId, out int pid) || !w.People.TryGetValue(pid, out var p)
                     || !Match(act, "name", p.Name) || !Match(act, "birth_year", p.BirthYear.ToString()))
                     throw new ArgumentException($"act #{act.Seq}: person target drifted");
-                return act.Kind == "bless" ? w.BlessPerson(p) : w.PlantCurse(p);
+                return act.Kind switch { "bless" => w.BlessPerson(p), "curse" => w.PlantCurse(p), _ => w.Smite(p) };
             case "protect":
             case "doom":
                 if (!w.Factions.TryGetValue(act.TargetId, out var f) || !Match(act, "name", f.Name))

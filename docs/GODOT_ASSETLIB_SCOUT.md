@@ -1,3 +1,16 @@
+<!-- TODO (NEXT SESSION — first action, 2026-06-16): ART ASSET / SCENE FIDELITY PASS — SCOUTING FIRST.
+     PrototypeGreymarket's code-procedural detail has hit its ceiling (the Visual Fidelity V1 clutter
+     pass was rejected: "still reads like the same low-poly prototype"). Before rebuilding ANY single
+     form, DECIDE the asset route and LOCK material/style targets:
+       1. Pick the route: extend Blender→Krita (`tools/art/render_diorama.py`) vs treated-Kenney kitbash
+          vs offline AI-tooled sprites. License + art-direction clean, never raw/runtime.
+       2. Lock the target material/style read for roof, timber, stone, ground, canopy, figures
+          (against `Visual references/gpt-northstar-site-view-greymarket.png`).
+       3. THEN rebuild the dominant mass first (house silhouette/material), render, judge vs reference.
+     Goal: change the visual LANGUAGE (base forms/materials/silhouettes, larger scene masses) — NOT more
+     decorative specks. NO more micro-detail/clutter passes until base forms + materials change.
+     Blender is NOT available in the Claude Code session → heavy asset authoring runs on Drew's machine. -->
+
 # Godot Asset Library Scout V1
 
 A scouting pass over the Godot Asset Library and reputable open-source Godot/GitHub resources

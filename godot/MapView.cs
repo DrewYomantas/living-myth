@@ -110,6 +110,19 @@ public partial class MapView : Control
     // rendering over the existing deterministic scatter — no new position precision implied.
     private readonly Dictionary<int, float> _soulPulses = new();
     private const float SoulPulseDuration = 1.4f;
+
+    // The hand's immediate bite: a strike landing NOW on a cursed/blessed soul — a brief core
+    // flash, an expanding shockwave, and a dot pop. Dark crimson for a curse, warm gold for a
+    // blessing. Pure rendering over the live scatter position; the real recorded outcome is the
+    // sim's "fortune" beat. person id -> (seconds remaining, ill?).
+    private readonly Dictionary<int, (float t, bool ill)> _handStrikes = new();
+    private const float HandStrikeDuration = 0.65f;
+
+    // The hand on the LAND: a themed colored bloom over a region the player just touched
+    // (protect/doom/omen/forest/spring) — every poke lands visibly, not just person verbs.
+    private readonly Dictionary<int, (float t, Color col)> _handBlooms = new();
+    private const float HandBloomDuration = 0.85f;
+
     private float _breath;
     private readonly List<(Vector2 pos, int id)> _soulScreen = new();   // souls drawn this frame, for name tags
 
@@ -314,6 +327,43 @@ public partial class MapView : Control
 
     public void PulseSoul(int personId) => _soulPulses[personId] = SoulPulseDuration;
 
+    public void HandStrike(int personId, bool ill) => _handStrikes[personId] = (HandStrikeDuration, ill);
+
+    public void HandBloom(int regionId, Color col) => _handBlooms[regionId] = (HandBloomDuration, col);
+
+    // A themed bloom over a region the hand just touched: a filled flash + an expanding ring in
+    // the verb's colour, so a land-scale poke reads as forcefully as a strike on a soul.
+    private void DrawHandBlooms(Func<float, float, Vector2> P, float regionR)
+    {
+        if (_handBlooms.Count == 0 || World is null) return;
+        foreach (var (rid, bl) in _handBlooms)
+        {
+            if (rid < 0 || rid >= World.Regions.Count) continue;
+            var r = World.Regions[rid];
+            var c = P(r.X, r.Y);
+            float t = bl.t / HandBloomDuration;                            // 1 at impact -> 0
+            DrawCircle(c, regionR * (0.4f + 0.5f * t), bl.col with { A = t * 0.30f });   // soft filled flash
+            DrawArc(c, regionR * (1f + (1f - t) * 1.1f), 0, Mathf.Tau, 48, bl.col with { A = t * 0.9f }, 1f + 3f * t);
+        }
+    }
+
+    // Drawn topmost, over the soul's live scatter position (read from _dots, so it tracks drift).
+    private void DrawHandStrikes()
+    {
+        if (_handStrikes.Count == 0) return;
+        foreach (var (pos, _, id) in _dots)
+        {
+            if (!_handStrikes.TryGetValue(id, out var hs)) continue;
+            float t = hs.t / HandStrikeDuration;                            // 1 at impact -> 0
+            var ringCol = hs.ill ? new Color("8a1f1f") : new Color("e6b84a");
+            var coreCol = hs.ill ? new Color("d23a2a") : new Color("fff0c0");
+            float ring = (1f - t) * 34f * _zoom + 6f;                       // shockwave expands as it fades
+            DrawArc(pos, ring, 0, Mathf.Tau, 28, ringCol with { A = t * 0.85f }, 1f + 3f * t);
+            float flash = Mathf.Clamp((t - 0.55f) / 0.45f, 0f, 1f);         // bright only at the instant of impact
+            if (flash > 0f) DrawCircle(pos, (6f + 10f * flash) * _zoom, coreCol with { A = flash * 0.8f });
+        }
+    }
+
     public override void _Process(double delta)
     {
         float dt = (float)delta;
@@ -331,6 +381,18 @@ public partial class MapView : Control
             float v = _soulPulses[id] - dt;
             if (v <= 0f) _soulPulses.Remove(id);
             else _soulPulses[id] = v;
+        }
+        foreach (var id in _handStrikes.Keys.ToList())
+        {
+            float v = _handStrikes[id].t - dt;
+            if (v <= 0f) _handStrikes.Remove(id);
+            else _handStrikes[id] = (v, _handStrikes[id].ill);
+        }
+        foreach (var id in _handBlooms.Keys.ToList())
+        {
+            float v = _handBlooms[id].t - dt;
+            if (v <= 0f) _handBlooms.Remove(id);
+            else _handBlooms[id] = (v, _handBlooms[id].col);
         }
 
         // Find-them focus first: an explicit ask beats the drama camera.
@@ -554,6 +616,9 @@ public partial class MapView : Control
             float ring = regionR * (1f + (1f - t) * 0.8f);     // expands outward as it fades
             DrawArc(P(r.X, r.Y), ring, 0, Mathf.Tau, 48, Ui.GoldGlow with { A = t * 0.9f }, 3f);
         }
+
+        DrawHandBlooms(P, regionR);                                         // 9a. the hand on the land
+        DrawHandStrikes();                                                  // 9b. the hand's bite, topmost
 
         DrawReplayOverlay(P);                                               // 10. chronicle replay
     }
@@ -1026,11 +1091,12 @@ public partial class MapView : Control
             var perp = (dst - src).Orthogonal().Normalized();
             var ctrl = mid + perp * src.DistanceTo(dst) * 0.18f;
             var col = new Color("6f7e58") with { A = a };
+            Vector2 Bez(float t) => src.Lerp(ctrl, t).Lerp(ctrl.Lerp(dst, t), t);   // quadratic Bézier
             Vector2 prev = src;
             for (int i = 1; i <= 16; i++)
             {
                 float t = i / 16f;
-                var pt = src.Lerp(ctrl, t).Lerp(ctrl.Lerp(dst, t), t);   // quadratic Bézier
+                var pt = Bez(t);
                 DrawLine(prev, pt, col, 1.6f);
                 prev = pt;
             }
@@ -1038,6 +1104,17 @@ public partial class MapView : Control
             var dir = (dst - ctrl).Normalized();
             var n = dir.Orthogonal();
             DrawColoredPolygon(new[] { dst, dst - dir * 8f + n * 4f, dst - dir * 8f - n * 4f }, col);
+            // Recent flight reads as MOTION: a few motes stream source -> dest while it's fresh, so
+            // a migration is something you watch cross the map, not a static line you read.
+            if (age <= 4f)
+            {
+                var mote = new Color("d8c898") with { A = Mathf.Lerp(0.9f, 0.25f, age / 4f) };
+                for (int k = 0; k < 3; k++)
+                {
+                    float t = Frac(_breath / Mathf.Tau + k / 3f);   // seamless loop as _breath wraps
+                    DrawCircle(Bez(t), 2.4f * _zoom, mote);
+                }
+            }
         }
     }
 
@@ -1303,9 +1380,19 @@ public partial class MapView : Control
             var off = new Vector2(Frac(p.Id * 0.61803398875f) * 2f - 1f,
                                   Frac(p.Id * 0.75487766624f) * 2f - 1f) * (regionR * 0.62f);
             if (off.Length() > regionR * 0.72f) off = off.Normalized() * regionR * 0.72f;
-            var pos = center + off;
+            // Idle drift: a small per-soul wander so the crowd reads as alive. Cosmetic only — the
+            // sim models no per-person position, so this implies no precision beyond the scatter.
+            // Both axes ride _breath at integer rates, so the motion is seamless across its wrap.
+            float ph = Frac(p.Id * 0.61803398875f) * Mathf.Tau;
+            var drift = new Vector2(Mathf.Sin(_breath + ph), Mathf.Cos(_breath + ph * 1.7f)) * (regionR * 0.06f);
+            var pos = center + off + drift;
 
             float r = (p.IsLeader ? 6.5f : 3.8f) * _zoom;
+            if (_handStrikes.TryGetValue(p.Id, out var hsPop))
+            {
+                float k = hsPop.t / HandStrikeDuration;   // 1 at impact -> 0
+                r *= 1f + 0.6f * k * k;                   // a brief swell that settles
+            }
             var dot = p.Cursed ? Ui.Ember : (p.Sex == "f" ? col.Lightened(0.28f) : col);
             DrawCircle(pos, r, dot);
             if (p.IsLeader) DrawArc(pos, r + 2.5f, 0, Mathf.Tau, 20, Ui.LensGold, 1.6f);

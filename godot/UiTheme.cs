@@ -40,12 +40,12 @@ public static class Ui
 
     public static void LoadFonts()
     {
-        var body = new FontFile();
-        body.LoadDynamicFont(ProjectSettings.GlobalizePath("res://assets/fonts/Alegreya-VariableFont.ttf"));
-        var sc = new FontFile();
-        sc.LoadDynamicFont(ProjectSettings.GlobalizePath("res://assets/fonts/AlegreyaSC-Medium.ttf"));
+        // res:// through ResourceLoader so the .ttf resolves from a packed .pck in exported builds
+        // (GlobalizePath + LoadDynamicFont only sees loose files and silently falls back to default).
+        var body = ResourceLoader.Load<FontFile>("res://assets/fonts/Alegreya-VariableFont.ttf");
+        var sc = ResourceLoader.Load<FontFile>("res://assets/fonts/AlegreyaSC-Medium.ttf");
         var fallback = ThemeDB.FallbackFont;
-        if (body.Data is { Length: > 0 })
+        if (body != null)
         {
             body.Fallbacks = new Godot.Collections.Array<Font> { fallback };
             Serif = body;
@@ -54,7 +54,7 @@ public static class Ui
             SerifBold = bold;
         }
         else { Serif = fallback; SerifBold = fallback; }
-        if (sc.Data is { Length: > 0 })
+        if (sc != null)
         {
             sc.Fallbacks = new Godot.Collections.Array<Font> { fallback };
             SmallCaps = sc;
@@ -184,6 +184,7 @@ public static class Ui
         ["migration"] = new("Migration", new Color("3f6e92"), "⇉"),
         ["prejudice"] = new("Scorn", new Color("8a4a52"), "⊘"),
         ["divine"] = new("Divine", new Color("a8402c"), "✶"),
+        ["fortune"] = new("Fortune", new Color("c9973f"), "✸"),
         ["prophet"] = new("Prophecy", new Color("7c5a9b"), "☾"),
         ["schism"] = new("Schism", new Color("6d5694"), "❖"),
         ["martyr"] = new("Martyr", new Color("6d5694"), "✟"),

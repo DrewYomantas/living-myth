@@ -23,10 +23,16 @@ public partial class Main : Node
     // chosen seed here never moves verify. All user:// save paths key off it (a seed is a world).
     private int _seed = 7;
     private const int DefaultSeed = 7;
+    // The player-authored people from the Peoples Builder, handed across a scene reload (a static
+    // survives the reload in-process). Null → the classic generated world. GenesisChosen suppresses
+    // the auto-open builder after a choice this session; both reset on a true process restart.
+    public static GenesisSpec? PendingGenesis;
+    private static bool GenesisChosen;
+    private GenesisBuilder? _builder;
     // Drama Time constants — see docs/TIME_AND_STORY_PACING.md (the four clocks). Wall-clock
     // presentation only; they never change Tick() count or order. TODO(focus-time): the next
     // pacing slice is chapter recaps (roadmap 3) — the focus guard (roadmap 2) shipped.
-    private const float BaseInterval = 1.2f;   // real seconds per sim-year at 1×
+    private const float BaseInterval = 1.5f;   // real seconds per sim-year at 1× (calm: the hand sets the tempo)
     private static readonly float[] SpeedLadder = { 0.25f, 0.5f, 1f, 2f, 4f, 8f, 16f };
     // Pace names per docs/TIME_AND_STORY_PACING.md — the ladder in lives, not factors.
     private static readonly string[] PaceNames =
@@ -45,6 +51,7 @@ public partial class Main : Node
     // full thread, recap, memorial, writing desk) is the only license to cover more.
     private const int FeedWidth = 300;
     private const int BottomH = 78;
+    private const int HandBarH = 46;   // the hand's own prominent palette, just above the toolbar
 
     private World _world = null!;
     private Control _root = null!;
@@ -71,7 +78,7 @@ public partial class Main : Node
     // Play Surface V1 — the persistent divine-hand palette: the same seven real verbs, but
     // armed once and aimed straight at the map (the inspector buttons stay as a contextual
     // shortcut). Arming a verb tints valid targets on the atlas; a map click applies it.
-    private enum HandVerb { None, Bless, Curse, Protect, Doom, Omen, Forest, Spring }
+    private enum HandVerb { None, Bless, Curse, Smite, Protect, Doom, Omen, Forest, Spring }
     private HandVerb _armedVerb = HandVerb.None;
     private readonly List<(HandVerb verb, Button btn)> _handBtns = new();
     private PanelContainer _actToast = null!;     // brief "the hand acted" confirmation
@@ -125,6 +132,7 @@ public partial class Main : Node
     // reopen chip while focused, restored to the player's prior choice when focus is released.
     private PanelContainer _feedPanel = null!;
     private Button _feedReopenChip = null!;
+    private Tween? _sagaChipTween;                          // ambient gold flash when a beat waits, feed folded
     private bool _feedCollapsed;
     private bool _feedAutoCollapsed;                        // collapse was driven by focus, restore on release
     private Button _dioramaBtn = null!;                     // Region Lens → open the diorama bridge
@@ -149,7 +157,7 @@ public partial class Main : Node
     private Label _chatLabel = null!;
 
     private bool _running = true;
-    private float _speed = 1f;
+    private float _speed = 0.5f;   // calm default — the background never outruns the hand
     private float _accum;
 
     // Dramatic pacing: a notable tick briefly slows presentation to a crawl, then eases back.
@@ -180,6 +188,11 @@ public partial class Main : Node
     // fresh world, fast-forwards, and writes in-engine PNGs of the atlas + a region lens, then
     // quits — never touching the player's save. Empty string = normal interactive launch.
     private string _capture = "";
+    // Dev iteration toggle: every launch boots a brand-new world — resume is skipped and the save is
+    // never written, so feel-test sessions never resume stale acts. Flip this ONE line to false
+    // before shipping (or it ships save-disabled). (LM_FRESH env still forces it on too.)
+    private const bool DevAlwaysFresh = true;
+    private bool _devFresh;
     private int _ticksSinceSave;
     private const int AutosaveTicks = 200;        // crash-safety cadence (shown ticks)
     private const int CatchupFeedRows = 70;       // feed rows actually built for replayed history
@@ -217,7 +230,8 @@ public partial class Main : Node
     // memorial treatment when that soul dies. Pausing is wall-clock presentation only — it
     // never changes how many times or in what order Tick() runs.
     private enum GuardMode { Off, Followed, All }
-    private GuardMode _guardMode = GuardMode.Followed;
+    // The hand is the game: the world never interrupts you by default. Guard cards are opt-in.
+    private GuardMode _guardMode = GuardMode.Off;
     // Watch Mode guard voice: a compact top toast (why-chip + the tale + verbs) instead of
     // the center card. The full card opens only on an explicit click — or immediately for
     // a memorial, the one moment that has earned the ceremony.
@@ -295,20 +309,22 @@ public partial class Main : Node
     public override void _Ready()
     {
         _capture = OS.GetEnvironment("LM_SHOTS");   // dev evidence capture: a directory, else ""
+        _devFresh = DevAlwaysFresh || OS.GetEnvironment("LM_FRESH") != "";   // dev: always boot fresh, never persist
+        if (_devFresh) GD.Print("LM_FRESH: booting a fresh world; the save will not be read or written this session.");
 
         _seed = LoadSeed();
         var (config, names) = DataLoader.Load();
         _world = new World(_seed, config, names);
-        _world.SeedWorld();
+        _world.SeedWorld(PendingGenesis);   // authored people if the builder set one, else the classic world
         _lastEventCount = 0;
 
         LoadCanon();
         LoadWorldStore();
         // Capture mode never reads the player's journal or follows and never saves — it paints a
         // pristine, deterministic world purely for screenshots.
-        bool resumed = _capture == "" && ReplayWorldJournal();   // fast-forward, acts re-applied in place
+        bool resumed = _capture == "" && !_devFresh && ReplayWorldJournal();   // fast-forward, acts re-applied in place
         _lastEchoYear = _world.Year;
-        if (_capture == "") RestoreFollows();
+        if (_capture == "" && !_devFresh) RestoreFollows();
         Ui.LoadFonts();
         BuildUi();
         _map.World = _world;
@@ -324,9 +340,36 @@ public partial class Main : Node
         StartChapter(resumed ? _world.Chronicle.Events.Count : 0);   // a fresh chapter opens NOW
         if (resumed) _running = false;   // the resumed world waits for the player
         RefreshTimeBar();
+        // Pull, don't push: open quiet with the map carrying the read. The Saga feed starts folded
+        // to its chip; a notable beat flashes the chip and pulses its land, and the player chooses
+        // to open it. (Not in capture mode — screenshot evidence keeps its prior framing.)
+        if (_capture == "") SetFeedCollapsed(true, auto: false);
         _map.QueueRedraw();
         if (_capture != "") { _ = CaptureSequence(); return; }   // dev evidence run: shoot + quit
-        if (!resumed) ShowHelp();        // first sight of a fresh age: open the Guide (pauses; "Begin watching" dismisses)
+        // A fresh age opens in the Peoples Builder — author your people first (or quick-start the
+        // classic world). Once a choice is made this session we don't reopen it; a resumed world
+        // and the authored-world reload both skip it.
+        if (!resumed && !GenesisChosen) OpenGenesisBuilder();
+        else if (!resumed && PendingGenesis is null) ShowHelp();
+    }
+
+    private void OpenGenesisBuilder()
+    {
+        if (_builder != null) return;
+        _running = false;
+        _builder = new GenesisBuilder { Seed = _seed, OnBegin = OnGenesisBegin };
+        _builder.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        AddChild(_builder);   // last child → draws over the atlas
+    }
+
+    // The builder's verdict: an authored people (or null for the classic world) at a chosen seed.
+    // Either way we reboot the scene fresh from that choice — DoNewWorld writes the seed, drops the
+    // old save, and reloads; _Ready then seeds from PendingGenesis.
+    private void OnGenesisBegin(GenesisSpec? spec, int seed)
+    {
+        GenesisChosen = true;
+        PendingGenesis = spec;
+        DoNewWorld(seed);
     }
 
     // F3 opens the North Star Diorama for the currently selected region (most-built held region
@@ -567,6 +610,7 @@ public partial class Main : Node
     private void SaveWorldStore()
     {
         if (_capture != "") return;   // dev capture must never overwrite the player's world
+        if (_devFresh) return;        // dev fresh-boot: this session is throwaway, never persisted
         if (_worldStore.ReadOnly) return;
         _worldStore.ResumeYear = _world.Year;
         _worldStore.SetFollows(_world, _followedSouls, _seedPeople, _markedFactions, _followedRegions);
@@ -656,6 +700,7 @@ public partial class Main : Node
 
         BuildFeed(root);
         BuildBottomBar(root);
+        BuildHandBar(root);     // the hand is the game: its own prominent palette above the toolbar
         BuildYearCard(root);
         BuildLeftDock(root);    // cast + inspector share one left column — structurally unstackable
         BuildThreadCard(root);
@@ -1130,8 +1175,8 @@ public partial class Main : Node
         };
         fateRow.AddChild(placesBtn);
 
-        // --- Hand group: the persistent divine-hand palette (Play Surface V1) ---
-        BuildHandPalette(hb);
+        // The hand has its own prominent palette now (BuildHandBar) — it is the game, not a
+        // glyph strip crammed into a toolbar that clips off the edge on a narrow window.
 
         // --- Chronicle group: chattiness threshold ---
         var chronRow = DockGroup(hb, "Chronicle");
@@ -1141,7 +1186,7 @@ public partial class Main : Node
         chronRow.AddChild(_chatLabel);
         _chatSlider = new HSlider
         {
-            MinValue = 30, MaxValue = 140, Value = 60, Step = 5,
+            MinValue = 30, MaxValue = 140, Value = 90, Step = 5,
             CustomMinimumSize = new Vector2(140, 0),
             SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
         };
@@ -1157,9 +1202,9 @@ public partial class Main : Node
         Ui.StyleButton(helpBtn);
         helpBtn.Pressed += ShowHelp;
         guideRow.AddChild(helpBtn);
-        var newWorldBtn = new Button { Text = "✶ New World", TooltipText = "Begin a fresh age — discards your saved acts, follows, and progress (your written canon is kept)" };
+        var newWorldBtn = new Button { Text = "✶ New World", TooltipText = "Forge a new people and begin a fresh age — discards your saved acts, follows, and progress (your written canon is kept)" };
         Ui.StyleButton(newWorldBtn);
-        newWorldBtn.Pressed += ConfirmNewWorld;
+        newWorldBtn.Pressed += OpenGenesisBuilder;
         guideRow.AddChild(newWorldBtn);
 
         RestyleToggles();
@@ -1192,6 +1237,7 @@ public partial class Main : Node
     {
         (HandVerb.Bless,   "✦", "Bless",   "Arm Bless — then click a living soul. Fate eases their death roll.", false),
         (HandVerb.Curse,   "✳", "Curse",   "Arm Curse — then click a soul. A god's mark lies on their bloodline.", true),
+        (HandVerb.Smite,   "☠", "Smite",   "Arm Smite — then click a soul. The hand strikes them dead on the instant.", true),
         (HandVerb.Protect, "❧", "Protect", "Arm Protect — then click a people's land. Famine weighs lighter on them for a season.", false),
         (HandVerb.Doom,    "☄", "Doom",    "Arm Doom — then click a people's land. Their fortunes run thin for a season.", true),
         (HandVerb.Omen,    "✶", "Omen",    "Arm Omen — then click a land. Its tales surface louder while the omen hangs.", false),
@@ -1199,26 +1245,47 @@ public partial class Main : Node
         (HandVerb.Spring,  "≈", "Spring",  "Arm Call Spring — then click a land. Water rises from the earth.", false),
     };
 
-    private void BuildHandPalette(HBoxContainer hb)
+    // The hand is the game: its own prominent palette, a centered bar just above the toolbar, so
+    // the verbs are always one click away with full labels — never crowded off the edge like the
+    // old toolbar glyph strip (which clipped on a narrow window — the reason Smite "vanished").
+    private void BuildHandBar(Control root)
     {
-        var row = DockGroup(hb, "Hand");
+        var bar = new PanelContainer();
+        root.AddChild(bar);
+        bar.AnchorLeft = 0.5f; bar.AnchorRight = 0.5f; bar.AnchorTop = 1; bar.AnchorBottom = 1;
+        bar.GrowHorizontal = Control.GrowDirection.Both;   // size to content, centered
+        bar.OffsetTop = -(BottomH + HandBarH + 12); bar.OffsetBottom = -(BottomH + 12);
+        bar.AddThemeStyleboxOverride("panel", Ui.PanelBox(12));
+
+        var margin = new MarginContainer();
+        foreach (var s in new[] { "left", "right" }) margin.AddThemeConstantOverride($"margin_{s}", 10);
+        foreach (var s in new[] { "top", "bottom" }) margin.AddThemeConstantOverride($"margin_{s}", 4);
+        bar.AddChild(margin);
+
+        var hb = new HBoxContainer();
+        hb.AddThemeConstantOverride("separation", 6);
+        margin.AddChild(hb);
+
+        var title = new Label { Text = "YOUR HAND" };
+        title.AddThemeFontSizeOverride("font_size", 11);
+        title.AddThemeColorOverride("font_color", Ui.FadedSub);
+        title.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+        hb.AddChild(title);
+
         foreach (var (verb, glyph, label, tip, ember) in HandVerbs)
         {
-            // Compact glyph strip (the name + effect live in the tooltip) so the palette stays
-            // narrow on the bottom bar; the inspector keeps the full-labelled verb buttons.
-            var b = new Button { Text = glyph, CustomMinimumSize = new Vector2(32, 0), TooltipText = $"{label} — {tip}" };
-            b.AddThemeFontSizeOverride("font_size", 16);
+            var b = new Button { Text = $"{glyph} {label}", TooltipText = tip, CustomMinimumSize = new Vector2(0, 34) };
             Ui.StyleButton(b);
             var v = verb;
             b.Pressed += () => ArmVerb(v);
-            row.AddChild(b);
+            hb.AddChild(b);
             _handBtns.Add((verb, b));
         }
     }
 
     private static MapView.AimKind AimOf(HandVerb v) => v switch
     {
-        HandVerb.Bless or HandVerb.Curse => MapView.AimKind.Person,
+        HandVerb.Bless or HandVerb.Curse or HandVerb.Smite => MapView.AimKind.Person,
         HandVerb.Protect or HandVerb.Doom => MapView.AimKind.Faction,
         HandVerb.Omen or HandVerb.Forest or HandVerb.Spring => MapView.AimKind.Region,
         _ => MapView.AimKind.None,
@@ -1240,19 +1307,17 @@ public partial class Main : Node
         foreach (var (verb, btn) in _handBtns)
         {
             bool on = verb == _armedVerb;
-            bool ember = verb is HandVerb.Curse or HandVerb.Doom;
+            bool ember = verb is HandVerb.Curse or HandVerb.Doom or HandVerb.Smite;
+            // StyleButton already sets a readable font colour for both states (dark ink on the
+            // gold active face). Only the ember verbs need a lighter face-text when armed; never
+            // REMOVE the override afterwards or the text falls back to the light theme default and
+            // vanishes on the gold active button (the "text turns white" bug).
             Ui.StyleButton(btn, on, on && ember ? Ui.Ember : (Color?)null);
             if (on && ember)
             {
                 btn.AddThemeColorOverride("font_color", new Color("f2e9d2"));
                 btn.AddThemeColorOverride("font_hover_color", new Color("f2e9d2"));
                 btn.AddThemeColorOverride("font_pressed_color", new Color("f2e9d2"));
-            }
-            else
-            {
-                btn.RemoveThemeColorOverride("font_color");
-                btn.RemoveThemeColorOverride("font_hover_color");
-                btn.RemoveThemeColorOverride("font_pressed_color");
             }
         }
     }
@@ -1265,6 +1330,7 @@ public partial class Main : Node
         {
             case HandVerb.Bless: return _world.People.TryGetValue(id, out var bp) && bp.Alive && !bp.Blessed;
             case HandVerb.Curse: return _world.People.TryGetValue(id, out var cp) && cp.Alive && !cp.Cursed;
+            case HandVerb.Smite: return _world.People.TryGetValue(id, out var smp) && smp.Alive;
             case HandVerb.Protect:
             case HandVerb.Doom:
             {
@@ -1288,39 +1354,43 @@ public partial class Main : Node
         if (!AimValidFor(id)) return;   // an illegal target is a no-op (the highlight already warned)
         Event? ev = null;
         int pulseRegion = -1;
+        var bloom = Ui.GoldGlow;
         string what = "";
         switch (_armedVerb)
         {
             case HandVerb.Bless:
-                if (_world.People.TryGetValue(id, out var bp)) { ev = _world.BlessPerson(bp); what = $"✦ a blessing laid upon {bp.Name}"; _map.PulseSoul(id); }
+                if (_world.People.TryGetValue(id, out var bp)) { ev = _world.BlessPerson(bp); what = $"✦ a blessing laid upon {bp.Name}"; _map.HandStrike(id, ill: false); }
                 break;
             case HandVerb.Curse:
-                if (_world.People.TryGetValue(id, out var cp)) { ev = _world.PlantCurse(cp); what = $"✳ a curse laid upon {cp.Name}"; _map.PulseSoul(id); }
+                if (_world.People.TryGetValue(id, out var cp)) { ev = _world.PlantCurse(cp); what = $"✳ a curse laid upon {cp.Name}"; _map.HandStrike(id, ill: true); }
+                break;
+            case HandVerb.Smite:
+                if (_world.People.TryGetValue(id, out var smp) && smp.Alive) { ev = _world.Smite(smp); what = $"☠ {smp.Name} struck down by the hand"; _map.HandStrike(id, ill: true); }
                 break;
             case HandVerb.Protect:
                 if (_world.Regions[id].ControllingFactionId is string pfid)
-                { ev = _world.ProtectFaction(pfid); what = $"❧ {_world.Factions[pfid].Name} placed under protection"; pulseRegion = id; }
+                { ev = _world.ProtectFaction(pfid); what = $"❧ {_world.Factions[pfid].Name} placed under protection"; pulseRegion = id; bloom = new Color("8fb86a"); }
                 break;
             case HandVerb.Doom:
                 if (_world.Regions[id].ControllingFactionId is string dfid)
-                { ev = _world.DoomFaction(dfid); what = $"☄ a doom pronounced on {_world.Factions[dfid].Name}"; pulseRegion = id; }
+                { ev = _world.DoomFaction(dfid); what = $"☄ a doom pronounced on {_world.Factions[dfid].Name}"; pulseRegion = id; bloom = new Color("7c4f8f"); }
                 break;
             case HandVerb.Omen:
-                ev = _world.SeedOmen(id); what = $"✶ an omen seeded over {_world.Regions[id].Name}"; pulseRegion = id;
+                ev = _world.SeedOmen(id); what = $"✶ an omen seeded over {_world.Regions[id].Name}"; pulseRegion = id; bloom = new Color("9b7cc8");
                 break;
             case HandVerb.Forest:
-                ev = _world.SeedForest(id); pulseRegion = id;
+                ev = _world.SeedForest(id); pulseRegion = id; bloom = new Color("5e9b52");
                 what = ev is null ? "✿ the land refused the forest" : $"✿ a forest raised across {_world.Regions[id].Name}";
                 break;
             case HandVerb.Spring:
-                ev = _world.CallSpring(id); pulseRegion = id;
+                ev = _world.CallSpring(id); pulseRegion = id; bloom = new Color("4a90c0");
                 what = ev is null ? "≈ the land refused the spring" : $"≈ a spring called in {_world.Regions[id].Name}";
                 break;
         }
         if (ev is not null)
         {
             RecordDivine(ev);
-            if (pulseRegion >= 0) _map.PulseRegion(pulseRegion);
+            if (pulseRegion >= 0) _map.HandBloom(pulseRegion, bloom);
         }
         ShowActToast(what);   // confirm even a refusal — the feed may be collapsed during focused play
     }
@@ -1369,6 +1439,7 @@ public partial class Main : Node
         _focusBannerLabel.Text = label + "  —  the world recedes; only this gets full voice";
         _focusBanner.Visible = true;
         SetFeedCollapsed(true, auto: true);   // map carries the read while focused
+        _cast.SetCollapsed(true);             // the roster folds to sigils; only this life gets voice
         RefreshFocusButton();
     }
 
@@ -1378,6 +1449,7 @@ public partial class Main : Node
         _focusKind = FocusKind.None; _focusId = -1; _focusFaction = null;
         _focusBanner.Visible = false;
         if (_feedAutoCollapsed) SetFeedCollapsed(false, auto: true);   // restore the prior feed state
+        _cast.SetCollapsed(false);            // the world returns; the roster expands again
         RefreshFocusButton();
     }
 
@@ -1437,6 +1509,16 @@ public partial class Main : Node
         _feedCollapsed = collapsed;
         _feedPanel.Visible = !collapsed;
         _feedReopenChip.Visible = collapsed;
+    }
+
+    // The ambient beat: while the feed is folded, a notable event flashes the Saga chip gold so the
+    // player knows a thread waits — drawing the eye, never pushing a panel. (The land pulses too.)
+    private void FlashSagaChip()
+    {
+        _sagaChipTween?.Kill();
+        _feedReopenChip.Modulate = Ui.Gold;
+        _sagaChipTween = _feedReopenChip.CreateTween();
+        _sagaChipTween.TweenProperty(_feedReopenChip, "modulate", Colors.White, 1.1f);
     }
 
     private void BuildInspector(Control parent)
@@ -2165,6 +2247,10 @@ public partial class Main : Node
                     _map.AddScornMark(mrid, events[i].Year, events[i].Id);
                 else if (ClassifyMark(events[i]) is MapView.MarkKind mk)
                     _map.AddPlaceMark(mrid, mk, events[i].Year, events[i].Id);
+                // War reads as motion at the front: a battle (below the notable bar, so it never
+                // self-pulses) throbs its front region so you SEE where blood is being shed.
+                if (events[i].Type is "battle" or "war")
+                    _map.PulseRegion(mrid);
             }
             // Life memory: a cairn-worthy life raises a memorial cairn at the home of its line
             // (Event.HomeRegionId) — remembered there, never a claim of where it happened.
@@ -2244,7 +2330,13 @@ public partial class Main : Node
             {
                 notableSeen = true;
                 PulseFeedRow(row);
-                if (e.RegionId is int rid) _map.PulseRegion(rid);
+                // The hand is the game: the sim runs QUIET in the background. Only YOUR threads
+                // draw the eye — the world's autonomous churn never pings you or pulses the map.
+                if (yours)
+                {
+                    if (e.RegionId is int rid) _map.PulseRegion(rid);
+                    if (_feedCollapsed) FlashSagaChip();
+                }
             }
         }
         // An open glimpse is a snapshot; if its soul died this tick (e.g. guard off, no
@@ -3709,6 +3801,7 @@ public partial class Main : Node
         if (_selectedPersonId is not int id || !_world.People.TryGetValue(id, out var p)) return;
         if (!p.Alive || p.Cursed) return;
         RecordDivine(_world.PlantCurse(p));   // ledgered like every act of the hand
+        _map.HandStrike(id, ill: true);       // the felt bite, landing on the dot
         _curseBtn.Visible = false;
         OnPersonPicked(id);          // re-render with CURSED state
     }
@@ -3744,7 +3837,10 @@ public partial class Main : Node
             _followedSouls.Add(pid);   // toggle on
             // Recap deltas measure from the follow (or chapter start, whichever is later).
             if (_world.People.TryGetValue(pid, out var p)) _chapterRepBase[pid] = p.Reputation;
+            SetFocusSoul(pid);         // following IS focusing: the world recedes to this one life
         }
+        else if (_focusKind == FocusKind.Soul && _focusId == pid)
+            ClearFocus();              // let them go → the world returns
         _map.QueueRedraw();
         CastChanged();
         OnPersonPicked(pid);

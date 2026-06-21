@@ -159,12 +159,7 @@ public partial class PrototypeGreymarket : Control
 		_ => new Color("b07a3a"),
 	};
 
-	private static Font LoadFont(string path)
-	{
-		var f = new FontFile();
-		f.LoadDynamicFont(ProjectSettings.GlobalizePath(path));
-		return f;
-	}
+	private static Font LoadFont(string path) => ResourceLoader.Load<Font>(path);
 
 	private void LoadTextures()
 	{

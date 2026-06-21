@@ -126,7 +126,7 @@ public sealed class World
     public Person CreatePerson(string factionId, int age, string? sex = null)
     {
         sex ??= Rng.Pick(new[] { "m", "f" });
-        string culture = Factions[factionId].Culture;
+        string culture = Factions[factionId].NameCulture;
         string name = Disambiguate(Rng.Pick(Names.GivenNames[culture][sex]), factionId);
         var p = new Person(NewPid(), name, factionId, birthYear: Year - age, sex: sex);
         People[p.Id] = p;
@@ -221,46 +221,171 @@ public sealed class World
 
     // ---------- world setup ----------
 
-    public void SeedWorld()
+    private GenesisSpec? _genesis;
+    private List<SeedDef> _seedDefs = new();
+
+    /// <summary>One people to seed — unifies the config peoples and an optional authored people so
+    /// every seeding loop iterates ONE list. For the config peoples the override fields mirror the
+    /// per-culture tables exactly, so a world seeded with no GenesisSpec is byte-identical to before
+    /// (verify holds). The authored people carries its own ethos/faith/terrain/naming directly.</summary>
+    private sealed class SeedDef
     {
+        public string Id = "", Name = "", Culture = "", NameCulture = "", Homeland = "";
+        public int StartPop;
+        public Dictionary<string, double>? Axes;     // null → flat 0.5
+        public string? Terrain;                       // null → claims no terrain by culture
+        public string? FaithName, FaithDeity;         // null → no seeded faith
+        public List<GenesisFounder>? Founders;        // null/empty → generate StartPop via CreatePerson
+    }
+
+    private List<SeedDef> BuildSeedDefs(GenesisSpec? authored)
+    {
+        var defs = new List<SeedDef>();
+        // The player's people seeds FIRST so it gets first pick of its chosen homeland terrain.
+        if (authored is not null)
+        {
+            string pid = "player";
+            int n = 1; while (Config.Factions.Any(f => f.Id == pid)) pid = $"player{++n}";
+            defs.Add(new SeedDef
+            {
+                Id = pid, Name = authored.PeopleName, Culture = pid, NameCulture = authored.NamingStyle,
+                Homeland = authored.Homeland, StartPop = authored.StartPop,
+                Axes = authored.Axes.Count > 0 ? authored.Axes : null,
+                Terrain = authored.HomelandTerrain,
+                FaithName = authored.FaithName is { Length: > 0 } fn ? fn : $"the faith of {authored.PeopleName}",
+                FaithDeity = authored.FaithDeity is { Length: > 0 } fd ? fd : "their god",
+                Founders = authored.Founders,
+            });
+        }
         foreach (var f in Config.Factions)
         {
-            Factions[f.Id] = new Faction(f.Id, f.Name, f.Culture, f.Homeland);
-            _factionOrder.Add(f.Id);
+            var rd = Names.Religions.GetValueOrDefault(f.Culture);
+            defs.Add(new SeedDef
+            {
+                Id = f.Id, Name = f.Name, Culture = f.Culture, NameCulture = f.Culture,
+                Homeland = f.Homeland, StartPop = f.StartPop,
+                Axes = CultureValueBaseline.GetValueOrDefault(f.Culture),
+                Terrain = CultureTerrain.GetValueOrDefault(f.Culture),
+                FaithName = rd?.Name, FaithDeity = rd?.Deity,
+            });
         }
+        return defs;
+    }
+
+    public void SeedWorld(GenesisSpec? authored = null)
+    {
+        _genesis = authored;
+        _seedDefs = BuildSeedDefs(authored);
+
+        foreach (var d in _seedDefs)
+        {
+            Factions[d.Id] = new Faction(d.Id, d.Name, d.Culture, d.Homeland) { NameCulture = d.NameCulture };
+            _factionOrder.Add(d.Id);
+        }
+        string peoplesWord = _seedDefs.Count == 3 ? "Three" : _seedDefs.Count.ToString();
         var founding = Chronicle.Record(Year, "founding",
-            $"The world begins. Three peoples share the island of {Island}.",
+            $"The world begins. {peoplesWord} peoples share the island of {Island}.",
             tags: new() { "founding" });
 
-        foreach (var f in Config.Factions)
-        {
-            var fac = Factions[f.Id];
-            for (int i = 0; i < f.StartPop; i++)
-                CreatePerson(f.Id, age: Rng.RandInt(1, 60));
-            var leader = Oldest(FactionMembers(f.Id), Year);
-            fac.LeaderId = leader.Id;
-            leader.IsLeader = true;
-            leader.EverLeader = true;
-            Chronicle.Record(Year, "leadership",
-                $"{leader.Name} of {fac.Name}, eldest of their people, leads them from {fac.Homeland}.",
-                participants: new() { leader.Id }, tags: new() { "leadership" });
-        }
+        foreach (var d in _seedDefs)
+            SeedFounders(d);
+
         SeedCulture();
         GenerateMap();
         SeedReligions(founding.Id);
     }
 
-    /// <summary>Copy each people's culture baseline into its live value vector. No RNG — a
-    /// deterministic init, so its placement among seeding steps can't shift the verify counts.</summary>
+    /// <summary>Populate one people's founding generation. Default (no authored founders): StartPop
+    /// souls of random age, the eldest leads — byte-identical to the original loop. An authored
+    /// lineage is created exactly (zero RNG) by SeedAuthoredFounders.</summary>
+    private void SeedFounders(SeedDef d)
+    {
+        var fac = Factions[d.Id];
+        if (d.Founders is { Count: > 0 })
+        {
+            SeedAuthoredFounders(d);
+            return;
+        }
+        for (int i = 0; i < d.StartPop; i++)
+            CreatePerson(d.Id, age: Rng.RandInt(1, 60));
+        var leader = Oldest(FactionMembers(d.Id), Year);
+        fac.LeaderId = leader.Id;
+        leader.IsLeader = true;
+        leader.EverLeader = true;
+        Chronicle.Record(Year, "leadership",
+            $"{leader.Name} of {fac.Name}, eldest of their people, leads them from {fac.Homeland}.",
+            participants: new() { leader.Id }, tags: new() { "leadership" });
+    }
+
+    /// <summary>Copy each people's value baseline into its live value vector AND store the baseline
+    /// drift mean-reverts toward. No RNG — a deterministic init. For the config peoples the baseline
+    /// equals the old CultureValueBaseline lookup, so the values are byte-identical to before.</summary>
     private void SeedCulture()
     {
-        foreach (var fid in _factionOrder)
+        foreach (var d in _seedDefs)
         {
-            var f = Factions[fid];
-            var bsl = CultureValueBaseline.GetValueOrDefault(f.Culture);
+            var f = Factions[d.Id];
             foreach (var axis in ValueAxes)
-                f.Values[axis] = bsl?.GetValueOrDefault(axis, 0.5) ?? 0.5;
+            {
+                double v = d.Axes?.GetValueOrDefault(axis, 0.5) ?? 0.5;
+                f.ValueBaseline[axis] = v;
+                f.Values[axis] = v;
+            }
         }
+    }
+
+    /// <summary>Create a founder exactly as authored — name, sex, age — drawing NO randomness, so an
+    /// authored lineage replays byte-identically from the journal. Names are still disambiguated
+    /// (a boolean check over living members, no RNG).</summary>
+    private Person CreateAuthoredPerson(string factionId, string name, string sex, int age)
+    {
+        var p = new Person(NewPid(), Disambiguate(name, factionId), factionId, birthYear: Year - age, sex: sex);
+        People[p.Id] = p;
+        _peopleOrder.Add(p);
+        Factions[factionId].Members.Add(p.Id);
+        return p;
+    }
+
+    /// <summary>Seed a player-authored founding generation: exact souls + kinship from the spec (zero
+    /// RNG), any shortfall to StartPop filled with generated members, and the authored leader (or the
+    /// eldest if none marked) installed. The player's people, by their own hand.</summary>
+    private void SeedAuthoredFounders(SeedDef d)
+    {
+        var fac = Factions[d.Id];
+        var founders = d.Founders!;
+        var made = new List<Person>(founders.Count);
+        foreach (var gf in founders)
+        {
+            string sex = gf.Sex == "f" ? "f" : "m";
+            string nm = string.IsNullOrWhiteSpace(gf.Name) ? "Nameless" : gf.Name.Trim();
+            made.Add(CreateAuthoredPerson(d.Id, nm, sex, Math.Clamp(gf.Age, 0, 120)));
+        }
+        // Kinship from refs (indices into the authored list): spouse symmetric, children both ways.
+        for (int i = 0; i < founders.Count; i++)
+        {
+            if (founders[i].SpouseRef is int sr && sr >= 0 && sr < made.Count && sr != i)
+            {
+                made[i].SpouseId = made[sr].Id;
+                made[sr].SpouseId = made[i].Id;
+            }
+            foreach (int cr in founders[i].ChildRefs)
+                if (cr >= 0 && cr < made.Count && cr != i)
+                {
+                    if (!made[i].Children.Contains(made[cr].Id)) made[i].Children.Add(made[cr].Id);
+                    if (!made[cr].Parents.Contains(made[i].Id)) made[cr].Parents.Add(made[i].Id);
+                }
+        }
+        for (int i = made.Count; i < d.StartPop; i++)
+            CreatePerson(d.Id, age: Rng.RandInt(1, 60));   // fill the rest of the founding population
+
+        int li = founders.FindIndex(f => f.Leader);
+        var leader = li >= 0 ? made[li] : Oldest(FactionMembers(d.Id), Year);
+        fac.LeaderId = leader.Id;
+        leader.IsLeader = true;
+        leader.EverLeader = true;
+        Chronicle.Record(Year, "leadership",
+            $"{leader.Name} of {fac.Name} leads them from {fac.Homeland}.",
+            participants: new() { leader.Id }, tags: new() { "leadership" });
     }
 
     // ---------- the island map ----------
@@ -400,26 +525,26 @@ public sealed class World
             }
         foreach (var r in Regions) r.AdjacentRegionIds.Sort();
 
-        // Hand each region to the people whose culture matches its terrain; plains stay wilderness.
+        // Hand each region to the people whose homeland terrain matches it; plains stay wilderness.
+        // Iterating _seedDefs (player first) means the authored people gets first pick of its terrain.
         foreach (var region in Regions)
         {
-            var owner = Config.Factions.FirstOrDefault(f =>
-                CultureTerrain.GetValueOrDefault(f.Culture) == region.TerrainType);
+            var owner = _seedDefs.FirstOrDefault(d => d.Terrain == region.TerrainType);
             if (owner is not null) Claim(region, Factions[owner.Id]);
         }
 
-        // Floor: no founding people starts landless — grant a wilderness region if shut out.
-        foreach (var f in Config.Factions)
+        // Floor: no terrain-homed people starts landless — grant a wilderness region if shut out.
+        foreach (var d in _seedDefs)
         {
-            if (!CultureTerrain.ContainsKey(f.Culture) || Factions[f.Id].ControlledRegions.Count > 0) continue;
+            if (d.Terrain is null || Factions[d.Id].ControlledRegions.Count > 0) continue;
             var free = Regions.FirstOrDefault(r => r.ControllingFactionId is null);
-            if (free is not null) Claim(free, Factions[f.Id]);
+            if (free is not null) Claim(free, Factions[d.Id]);
         }
 
         // Record each people's founding territory into the chronicle.
-        foreach (var f in Config.Factions)
+        foreach (var d in _seedDefs)
         {
-            var fac = Factions[f.Id];
+            var fac = Factions[d.Id];
             if (fac.ControlledRegions.Count == 0) continue;
             var owned = fac.ControlledRegions.Select(s => Regions[int.Parse(s)]).OrderBy(r => r.Id).ToList();
             var foundingTags = new List<string> { "territory", "founding" };
@@ -469,9 +594,12 @@ public sealed class World
         => Factions.TryGetValue(fid, out var fac) && fac.Members.Count > 0 ? fac
         : throw new ArgumentException($"no living faction: {fid}");
 
-    /// <summary>Lay a curse on one person and their bloodline. Plants a flag and records the
-    /// act. It deliberately consumes no randomness, so a cursed run stays perfectly in step
-    /// with a clean run until the curse actually changes an outcome. That's the butterfly.</summary>
+    /// <summary>Lay a curse on one person and their bloodline. Plants the bloodline flag, records
+    /// the act, and lands ONE immediate stroke of ill fortune (StrikeFortune) so the hand has a felt
+    /// bite at cast. Two consumption stories, kept distinct: the slow death lean is multiplier-only
+    /// and draws nothing in the tick (the butterfly — a cursed run stays in step with a clean run
+    /// until a roll actually flips); the immediate stroke is ONE act-time Rng draw, journaled and
+    /// replayed by this same verb (verify never casts, so its baseline cannot move).</summary>
     public Event PlantCurse(Person person)
     {
         if (person.Cursed) throw new ArgumentException($"{person.Name} is already cursed");
@@ -481,12 +609,15 @@ public sealed class World
             participants: new() { person.Id }, tags: new() { "divine", "curse" });
         CurseEvent = ev;
         AddPressure(DivinePressureKind.Curse, "person", person.Id.ToString(), ev, null);
+        StrikeFortune(person, ev, ill: true);
         return ev;
     }
 
     /// <summary>Bless one life: fate leans gently toward them (bless_death_multiplier on the
     /// existing death roll — the same draw, a kinder threshold; never a guarantee). Their
-    /// eventual natural death cause-links back to this act, honestly.</summary>
+    /// eventual natural death cause-links back to this act, honestly. Like the curse, it lands one
+    /// immediate stroke of good fortune (StrikeFortune) — the felt bite, one act-time journaled draw,
+    /// separate from the multiplier-only tick lean.</summary>
     public Event BlessPerson(Person person)
     {
         if (!person.Alive) throw new ArgumentException($"{person.Name} is dead — the dead are past blessing");
@@ -497,6 +628,62 @@ public sealed class World
             participants: new() { person.Id }, tags: new() { "divine", "blessing" });
         person.BlessEvent = ev;
         AddPressure(DivinePressureKind.Bless, "person", person.Id.ToString(), ev, null);
+        StrikeFortune(person, ev, ill: false);
+        return ev;
+    }
+
+    /// <summary>The hand's immediate bite. A curse/blessing lands NOW with one honest, recorded
+    /// stroke of fortune: exactly ONE Rng draw and exactly ONE recorded "fortune" event on every
+    /// branch (the determinism contract the divine gate proves). The outcome is real state — a
+    /// reputation shift — never VFX over nothing; it is weighted toward minor, and it never kills
+    /// (the slow-burn death lean stays the tick's multiplier story, so the butterfly is intact). A
+    /// life beat: home-anchored, never region/site-anchored, cause-linked to the act.</summary>
+    private Event StrikeFortune(Person p, Event root, bool ill)
+    {
+        int roll = Rng.RandInt(0, 99);                 // the ONE draw — fixed on every branch
+        bool notable = roll < 30;                      // ~30% notable, ~70% minor
+        int delta = ill ? (notable ? -2 : -1) : (notable ? 2 : 1);
+        p.Reputation = Math.Clamp(p.Reputation + delta, -5, 5);
+
+        string? bond = notable ? NamedBond(p) : null;  // deterministic read, no Rng
+        string text = ill
+            ? (bond is not null
+                ? $"The curse bites at once: ill fortune falls on {p.Name}, and {bond} feels the chill."
+                : $"The curse bites at once: ill fortune settles over {p.Name}.")
+            : (bond is not null
+                ? $"The blessing takes at once: fortune smiles on {p.Name}, and {bond} shares in it."
+                : $"The blessing takes at once: fortune smiles on {p.Name}.");
+
+        return Chronicle.Record(Year, "fortune", text,
+            participants: new() { p.Id }, causes: new() { root.Id },
+            tags: new() { "divine", ill ? "curse" : "blessing", "stroke" },
+            homeRegionId: p.HomeRegionId);
+    }
+
+    /// <summary>A living spouse, else the first living child, named for a notable stroke. Pure
+    /// deterministic read (spouse before list-ordered children) — draws no randomness.</summary>
+    private string? NamedBond(Person p)
+    {
+        if (p.SpouseId is int sid && People.TryGetValue(sid, out var sp) && sp.Alive)
+            return $"their spouse {sp.Name}";
+        foreach (var cid in p.Children)
+            if (People.TryGetValue(cid, out var c) && c.Alive)
+                return $"their child {c.Name}";
+        return null;
+    }
+
+    /// <summary>The hand falls: one soul struck dead on the instant. Draw-free — it records the
+    /// act, then Kill records the cause-linked death and removes them from life NOW. Unlike the
+    /// curse's slow lean this is immediate and total, the hand's most visceral verb; journaled and
+    /// replayed by the same path, and (like every act) never touched by the verify run.</summary>
+    public Event Smite(Person person)
+    {
+        if (!person.Alive) throw new ArgumentException($"{person.Name} is dead — beyond the hand's reach");
+        var ev = Chronicle.Record(Year, "divine",
+            $"The hand falls upon {person.Name} of {Factions[person.FactionId].Name}.",
+            participants: new() { person.Id }, tags: new() { "divine", "smite" });
+        AddPressure(DivinePressureKind.Smite, "person", person.Id.ToString(), ev, null);
+        Kill(person, reason: "struck down by a god's hand", cause: ev);
         return ev;
     }
 
@@ -615,12 +802,12 @@ public sealed class World
 
     private void SeedReligions(int foundingEventId)
     {
-        foreach (var f in Config.Factions)
+        foreach (var d in _seedDefs)
         {
-            var data = Names.Religions[f.Culture];
-            var rel = NewReligion(data.Name, data.Deity);
+            if (d.FaithName is null) continue;   // a people with no seeded faith starts faithless
+            var rel = NewReligion(d.FaithName, d.FaithDeity ?? "their god");
             rel.OriginEventId = foundingEventId;   // primordial faiths trace back to the world's founding
-            foreach (var p in FactionMembers(f.Id))
+            foreach (var p in FactionMembers(d.Id))
                 SetReligion(p, rel);
         }
     }
@@ -1291,14 +1478,14 @@ public sealed class World
         {
             var f = Factions[fid];
             if (f.Members.Count == 0) continue;
-            var baseline = CultureValueBaseline.GetValueOrDefault(f.Culture);
+            var baseline = f.ValueBaseline;   // per-faction now: the culture default OR an authored ethos
             bool atWar = _activeWars.Any(w => w.Pair.Item1 == fid || w.Pair.Item2 == fid);
             double step = Params["culture_drift_step"];
 
             foreach (var axis in ValueAxes)
             {
                 double v = f.Values.GetValueOrDefault(axis, 0.5);
-                double bsl = baseline?.GetValueOrDefault(axis, 0.5) ?? 0.5;
+                double bsl = baseline.GetValueOrDefault(axis, 0.5);
                 v += Rng.RandInt(-1, 1) * step;
                 v += (bsl - v) * Params["culture_revert"];
                 if (atWar && axis == "valor") v += step;          // war hardens martial temper

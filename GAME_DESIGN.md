@@ -233,6 +233,12 @@ explicit recorded state with a subtle mechanical lean — never a guarantee, nev
 - Mechanics are multipliers and biases on rolls the sim already makes — a pressure-free
   world stays byte-identical to one where the system doesn't exist. Effects stay subtle
   enough that the world's own causality remains the star.
+- Two consumption stories, deliberately distinct: the **tick lean** (a pressure's ongoing
+  influence) is multiplier-only and draws no extra randomness in the tick — that is what
+  keeps the verify baseline unmoved. The **act-time stroke** (the hand's immediate bite when
+  you cast curse/bless — `World.StrikeFortune`) draws once at cast, records one honest
+  "fortune" beat (a real reputation shift, weighted toward minor, never a kill), and is
+  journaled + replayed by the same verb. Verify never casts, so its baseline still holds.
 - Every act records a chronicle event; later events the pressure honestly influenced
   cause-link back to it, so "why did this happen" can answer "because of your hand" only
   when that is mechanical fact. Authored connector copy only.

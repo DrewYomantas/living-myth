@@ -305,8 +305,15 @@ public static class StoryGrammar
         // reversal is mechanical fact, not mood. Curse deaths stay the plain therefore.
         if (effect.Type == "death" && cause.Type == "divine" && cause.Tags.Contains("blessing"))
             return (ConnectorKind.But, "death-despite-blessing");
+        if (effect.Type == "death" && cause.Type == "divine" && cause.Tags.Contains("smite"))
+            return (ConnectorKind.Therefore, "smitten");
         if (effect.Type == "death" && cause.Type == "divine")
             return (ConnectorKind.Therefore, "curse-death");
+        // The hand's immediate bite: a stroke of fortune the instant the act lands.
+        if (effect.Type == "fortune" && cause.Type == "divine" && cause.Tags.Contains("blessing"))
+            return (ConnectorKind.Therefore, "stroke-of-good-fortune");
+        if (effect.Type == "fortune" && cause.Type == "divine")
+            return (ConnectorKind.Therefore, "stroke-of-ill-fortune");
         if (effect.Type == "death" && cause.Type == "murder")
             return (ConnectorKind.Therefore, "executed");   // Kill(killer, "executed…", cause: murder)
 

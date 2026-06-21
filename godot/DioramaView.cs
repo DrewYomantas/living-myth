@@ -94,12 +94,7 @@ public partial class DioramaView : Control
         else GetTree().ChangeSceneToFile("res://Main.tscn");     // standalone mode: swap back
     }
 
-    private static Font LoadFont(string path)
-    {
-        var f = new FontFile();
-        f.LoadDynamicFont(ProjectSettings.GlobalizePath(path));
-        return f;
-    }
+    private static Font LoadFont(string path) => ResourceLoader.Load<Font>(path);
 
     private void LoadTextures()
     {

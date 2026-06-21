@@ -30,10 +30,11 @@ switch (cmd)
     case "migration": MigrationCmd(Years(120)); break;
     case "prejudice": PrejudiceCmd(Years(120)); break;
     case "creeping": CreepingDeathCmd(Years(1000)); break;
+    case "genesis": GenesisCmd(Seed(42), Years(120)); break;
     case "paint": PaintCmd(Seed(7), Years(120)); break;
     case "unreal-snapshot": UnrealSnapshotCmd(Seed(1), Years(250)); break;
     default:
-        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine | save | sites | replay | harvest | plague | migration | prejudice | creeping | paint | unreal-snapshot");
+        Console.WriteLine("commands: run | divergence | surface | verify | homes | story | canon | divine | save | sites | replay | harvest | plague | migration | prejudice | creeping | genesis | paint | unreal-snapshot");
         break;
 }
 return;
@@ -70,6 +71,72 @@ void RunCmd(int seed, int years, int trace)
         if (juicy is not null) Console.WriteLine(TraceBlock(world, juicy.Id));
     }
     Console.WriteLine($"\nFull chronicle written to {outPath}\n");
+}
+
+// --------------------------------------------------------------------------- genesis
+// Peoples Builder V1 gate: an AUTHORED people boots deterministically, carries the ethos/faith/
+// lineage the player set, and the default (unauthored) world stays byte-identical beside it.
+void GenesisCmd(int seed, int years)
+{
+    Console.WriteLine($"Genesis gate ({years} yrs): an authored people boots deterministically and lives.");
+    var bad = new List<string>();
+
+    GenesisSpec Spec() => new()
+    {
+        PeopleName = "the Emberkin", Homeland = "the ashen vale", HomelandTerrain = "plains",
+        NamingStyle = "highland", StartPop = 16,
+        Axes = new() { ["valor"] = 0.85, ["piety"] = 0.30, ["cunning"] = 0.70, ["harmony"] = 0.20 },
+        FaithName = "the Ember Pact", FaithDeity = "the Kindler",
+        Founders =
+        {
+            new() { Name = "Varra", Sex = "f", Age = 40, Leader = true, SpouseRef = 1, ChildRefs = { 2 } },
+            new() { Name = "Tomas", Sex = "m", Age = 42, SpouseRef = 0 },
+            new() { Name = "Esk",   Sex = "m", Age = 12 },
+        },
+    };
+
+    World RunAuthored()
+    {
+        var (c, n) = Load();
+        var w = new World(seed, c, n);
+        w.SeedWorld(Spec());
+        for (int i = 0; i < years; i++) w.Tick();
+        return w;
+    }
+
+    var a = RunAuthored();
+    var b = RunAuthored();
+    if (a.Chronicle.Render() != b.Chronicle.Render()) bad.Add("authored world not deterministic across runs");
+
+    var fac = a.Factions.GetValueOrDefault("player");
+    if (fac is null) bad.Add("authored people 'player' absent");
+    else
+    {
+        if (fac.Name != "the Emberkin") bad.Add($"authored name wrong: '{fac.Name}'");
+        if (Math.Abs(fac.ValueBaseline.GetValueOrDefault("valor") - 0.85) > 1e-9)
+            bad.Add("authored valor baseline not applied to the people");
+        if (fac.ControlledRegions.Count == 0) bad.Add("authored people seeded landless");
+        bool leaderOk = a.Chronicle.Events.Any(e => e.Type == "leadership" && e.Text.Contains("the Emberkin"));
+        if (!leaderOk) bad.Add("no leadership event for the authored people");
+        // The authored lineage took: a soul named Varra exists with a spouse and a child.
+        var varra = a.People.Values.FirstOrDefault(p => p.Name.StartsWith("Varra"));
+        if (varra is null) bad.Add("authored founder Varra absent");
+        else if (varra.SpouseId is null && varra.Children.Count == 0)
+            bad.Add("authored lineage (spouse/children) did not bind");
+    }
+
+    // The default world (no spec) is untouched — re-prove its determinism beside the authored path.
+    {
+        var (c, n) = Load();  var w = new World(seed, c, n);  w.Run(years);
+        var (c2, n2) = Load(); var w2 = new World(seed, c2, n2); w2.Run(years);
+        if (w.Chronicle.Render() != w2.Chronicle.Render()) bad.Add("default (unauthored) world determinism broke");
+    }
+
+    Console.WriteLine($"  authored: {(bad.Count == 0 ? "OK" : "FAIL")}  "
+        + $"{a.Factions.Count} peoples, {a.LivingCount} living @ yr {a.Year}");
+    foreach (var x in bad) Console.WriteLine($"    {x}");
+    Console.WriteLine(bad.Count == 0 ? "\nGENESIS HOLDS." : $"\n{bad.Count} CHECK(S) FAILED.");
+    Environment.Exit(bad.Count == 0 ? 0 : 1);
 }
 
 // ----------------------------------------------------------------------------- paint
@@ -742,7 +809,7 @@ void DivineCmd(int years)
         if (!ok) bad.Add("validation");
     }
 
-    int blessLinkedDeaths = 0, doomLinkedFamines = 0, curseFallout = 0;
+    int blessLinkedDeaths = 0, doomLinkedFamines = 0, curseFallout = 0, strokeCount = 0;
     foreach (int seed in new[] { 7, 42 })
     {
         var w = RunScript(seed);
@@ -778,11 +845,17 @@ void DivineCmd(int years)
         foreach (var e in w.Chronicle.Events.Where(e => e.Type == "divine"))
         {
             if (e.HomeRegionId is not null) seedBad.Add($"divine event #{e.Id} carries a home anchor");
-            bool personAct = e.Tags.Contains("curse") || e.Tags.Contains("blessing");
+            bool personAct = e.Tags.Contains("curse") || e.Tags.Contains("blessing") || e.Tags.Contains("smite");
             bool regionAct = e.Tags.Contains("omen") || e.Tags.Contains("terrain");
             if (personAct && e.RegionId is not null) seedBad.Add($"person-target act #{e.Id} claims a place");
             if (regionAct && e.RegionId is null) seedBad.Add($"region-target act #{e.Id} lost its anchor");
         }
+
+        // The hand's immediate stroke is a life beat: home-anchored at most, never a place; and
+        // exactly one fires per person-act (2 bless + 1 curse = 3 strokes), proving one draw +
+        // one record per cast on every outcome tier.
+        int strokesThisSeed = w.Chronicle.Events.Count(e => e.Type == "fortune");
+        if (strokesThisSeed != 3) seedBad.Add($"expected 3 strokes (2 bless + 1 curse), got {strokesThisSeed}");
 
         // Cause-link honesty: every pressure-influenced edge points at the recorded act,
         // and the grammar classifies it with the authored rule.
@@ -815,6 +888,18 @@ void DivineCmd(int years)
                     && (link.RuleId != "famine-despite-protection" || link.Kind != ConnectorKind.But))
                     seedBad.Add($"famine under protection #{e.Id} classified '{link.RuleId}' ({link.Kind})");
             }
+            if (e.Type == "fortune")
+            {
+                strokeCount++;
+                if (e.RegionId is not null || e.SiteId is not null) seedBad.Add($"stroke #{e.Id} claims a place");
+                if (e.Causes.Count == 0) seedBad.Add($"stroke #{e.Id} is rootless");
+                else
+                {
+                    var link = StoryGrammar.ProximateLink(w, e)!;
+                    string want = e.Tags.Contains("blessing") ? "stroke-of-good-fortune" : "stroke-of-ill-fortune";
+                    if (link.RuleId != want) seedBad.Add($"stroke #{e.Id} classified '{link.RuleId}', want '{want}'");
+                }
+            }
             // Grammar safety net on the scripted world: But stays authored-only.
             if (e.Causes.Count > 0)
             {
@@ -832,10 +917,11 @@ void DivineCmd(int years)
 
     // The influences must actually have happened somewhere across the suite — a gate that
     // only checks vacuous conditionals proves nothing.
-    Console.WriteLine($"  influence: {curseFallout} curse-fallout, {blessLinkedDeaths} blessed deaths, {doomLinkedFamines} doomed famines");
+    Console.WriteLine($"  influence: {curseFallout} curse-fallout, {blessLinkedDeaths} blessed deaths, {doomLinkedFamines} doomed famines, {strokeCount} strokes");
     if (curseFallout == 0) bad.Add("curse never traced to any fallout");
     if (blessLinkedDeaths == 0) bad.Add("no blessed death ever cause-linked (suite too quiet?)");
     if (doomLinkedFamines == 0) bad.Add("no doomed famine ever cause-linked (suite too quiet?)");
+    if (strokeCount == 0) bad.Add("the hand's immediate stroke never fired (cast path broken?)");
 
     // The sim stays canon-blind (reflection re-assert; the canon gate proves it behaviorally).
     {

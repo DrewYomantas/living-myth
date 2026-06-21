@@ -87,7 +87,9 @@ public sealed class Faction
 {
     public string Id { get; }
     public string Name { get; }                // e.g. "the Highland Clans"
-    public string Culture { get; }             // used for name flavor, customs later
+    public string Culture { get; }             // stock identity (prejudice keys on it); name-flavor key by default
+    public string NameCulture { get; set; }    // names.json given-names key — defaults to Culture, but an
+                                               // authored people can borrow a naming style while keeping its own stock
     public string Homeland { get; }
     public int? LeaderId { get; set; }
     public HashSet<int> Members { get; } = new();   // living member ids
@@ -121,7 +123,9 @@ public sealed class Faction
 
     // culture (M7): per-faction value axes (valor/piety/cunning/harmony) drift over time and
     // harden into named customs at threshold; customs drive clash (tension) and diffusion (peace).
-    public Dictionary<string, double> Values { get; } = new();          // axis -> 0..1, seeded from culture baseline
+    public Dictionary<string, double> Values { get; } = new();          // axis -> 0..1, seeded from the baseline below
+    public Dictionary<string, double> ValueBaseline { get; } = new();   // axis -> 0..1, what drift mean-reverts toward;
+                                                                        // seeded from culture default OR an authored ethos
     public Dictionary<string, int> CustomOriginEvent { get; } = new();  // held custom -> event that birthed it (cause-link + Vanished Way span)
 
     // god-hand V1: protection/doom windows. Self-expiring by year comparison (UntilYear > Year),
@@ -137,6 +141,7 @@ public sealed class Faction
         Id = id;
         Name = name;
         Culture = culture;
+        NameCulture = culture;   // by default a people names its children in its own culture's style
         Homeland = homeland;
     }
 }
@@ -145,11 +150,14 @@ public sealed class Faction
 /// The fate ledger's unit: one act of the god's hand, as explicit state. Every pressure
 /// names its kind, target, start year, and the chronicle event that recorded the act —
 /// so the viewer's ledger, the catch-up chains, and the `divine` gate all read the same
-/// truth. Mechanics stay subtle multipliers on existing rolls; a pressure never adds RNG
-/// draws, so a world with no pressures is byte-identical to one where the type doesn't
-/// exist (the verify baseline cannot move).
+/// truth. The pressure's ONGOING mechanic is a subtle multiplier on an existing tick roll —
+/// the tick draws nothing extra, so a world with no acts is byte-identical to one where the
+/// type doesn't exist (the verify baseline cannot move). Separate from that tick lean, the
+/// act of casting may land one immediate, journaled stroke (World.StrikeFortune) that DOES
+/// draw once at act-time — replayed deterministically by the same verb, and never seen by
+/// verify (which casts nothing).
 /// </summary>
-public enum DivinePressureKind { Bless, Curse, Protect, Doom, Omen, ForestSeeded, SpringCalled }
+public enum DivinePressureKind { Bless, Curse, Protect, Doom, Omen, ForestSeeded, SpringCalled, Smite }
 
 public sealed class DivinePressure
 {
