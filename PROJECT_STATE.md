@@ -666,6 +666,26 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       x/y + role, place `memoryMarkers` switching on `markerKind` (cairns at the HOME region, never
       in-place), and prove one honest region renders before any new hand-built art.
 - [ ] Later — **viewer payoff for migration** (← NEXT: surface movement on the atlas — a migration
+- [2026-06-20] Session: UE V5.2 Living-Diorama Pass (separate `/Game/LivingMyth/V5_2/` proof path; built
+  on Drew's machine — authored here, render+judge PENDING). A SOURCE-SHAPE pass over the V5.1 island toward
+  the three GPT North-Star reference sheets (`LM_V5_*_ref01.png`), analyzed as ART DIRECTION ONLY (never
+  imported/copied as textures). Doc `Docs/UE58_V5_2_LIVING_DIORAMA.md` opens with the binding reference
+  analysis (terrain-brush / memory-mark / path-road vocabularies) then the achievable subset. Scripts
+  `tools/ue_v5_2_living_diorama.py` (builder) + `ue_v5_2_capture.py`. Five moves, each a form/zone upgrade,
+  no new plumbing: (1) **material zones** — `LandPatch_C` gains a 4-strata cutaway side (grass cap · warm-soil
+  band · cool-stone cliff · pale **shore lip** at waterline; V5.1 had 3, no shore); (2) **clump/decal detail**
+  — baked rock clusters + flat moss-patch decals + pebbles/tufts/flowers, sparse & clustered; (3) **varied
+  tree silhouettes** — three species assets `Broadleaf_B` (asymmetric round crown) / `Conifer_B` (ragged fir
+  spire) / `Shrub_B` (low cluster) scattered as a mixed grove w/ yaw+scale jitter (no more uniform cones);
+  (4) **memory readability** — `HomeCairn_C` (contained amber heart, tamed glow) PLUS a NEW `StandingStone_B`
+  menhir motif (rune glow + offering stones) extending the mark vocabulary; (5) **path edge breakup** —
+  `Path_DirtBranch_B` worn-dirt lumps w/ irregular grass-fringed edges AND a Y-branch toward the standing
+  stone. Plus `Water_Disc_C` w/ a pale shore-foam halo ring. 8 SM + ~19 `MI_LM_V5_2_*` on the REUSED `M_LMV5`
+  (master + V5/V5.1 baselines byte-untouched), map `GeneratedAtlasV5_2_LivingDiorama`, 2 clearly-labeled
+  proof-only point lights (cairn heart + menhir rune). Both scripts syntax-clean (py_compile). Presentation-
+  only: reads/writes no sim state, no third-party packs, no runtime generative AI. **NEXT (Drew's machine):**
+  run builder headless → capture from open editor → judge `V5_2_*.png` vs the refs + V5.1, fill the doc's
+  pending verdict. Reuses the V5.1 perlin-freq-squared gotcha (freq≈sqrt(target), 0.06–0.13).
 - [2026-06-20] Session: UE V5.1 Asset Integration Polish (commit `16343b4`, separate proof path; lead
   dev + Explore recon + a leashed read-only visual verifier). Took the V5 proof trio (which read as test
   props on a flat carpet) to a coherent handcrafted-atlas island: `/Game/LivingMyth/V5_1/` (5 SM —
