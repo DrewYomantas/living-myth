@@ -666,6 +666,11 @@ Architecture rule: `src/LivingMyth.Sim/` is a standalone class library with ZERO
       x/y + role, place `memoryMarkers` switching on `markerKind` (cairns at the HOME region, never
       in-place), and prove one honest region renders before any new hand-built art.
 - [ ] Later — **viewer payoff for migration** (← NEXT: surface movement on the atlas — a migration
+- [2026-06-21] Checkpoint: V5.2 RENDERED + JUDGED + COMMITTED `42804da` + PUSHED (origin/main synced;
+  the earlier client `timeout` killed the connection AFTER the transfer landed). Honest verdict PASS —
+  modest win over V5.1 (trees/2nd-mark/shore); leashed verifier PARTIAL PASS 5.5 vs 5.0, cairn = weakest.
+  Next: fix the cairn snowman read — relight (drop/relocate `LM_V52_CairnLight_PROOFONLY` so the cool
+  stones stay dark) and/or sculpt angular slab stones, then re-render + re-judge the 3 cameras.
 - [2026-06-20] Session: UE V5.2 Living-Diorama Pass (separate `/Game/LivingMyth/V5_2/` proof path; built
   on Drew's machine — authored here, render+judge PENDING). A SOURCE-SHAPE pass over the V5.1 island toward
   the three GPT North-Star reference sheets (`LM_V5_*_ref01.png`), analyzed as ART DIRECTION ONLY (never

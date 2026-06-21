@@ -1,3 +1,17 @@
+# ===== NEXT SESSION STARTS HERE (2026-06-21 checkpoint) =====
+# V5.2 is rendered, judged PASS (modest), committed 42804da, PUSHED (origin/main synced).
+# THE ONE NEXT ACTION: fix the CAIRN snowman read — it is the single weakest element (lead + leashed
+#   verifier both flagged it). Two levers, try relight FIRST (cheaper):
+#   (1) RELIGHT: drop or relocate LM_V52_CairnLight_PROOFONLY (the proof point light washes the lower
+#       stones pale white). Try removing it entirely and leaning on the emissive heart + bloom, OR move it
+#       INSIDE/below the heart gap so only the heart pools, stones stay cool-dark.
+#   (2) SCULPT: if relight isn't enough, replace the stacked faceted balls in build_cairn() with flatter
+#       ANGULAR SLAB stones (wider-than-tall boxes, slight random yaw) — reads as hewn cairn, not a snowman.
+#   Then re-render (UnrealEditor-Cmd ... -run=pythonscript -script=tools/ue_v5_2_living_diorama.py) +
+#   re-capture (GUI editor -ExecCmds, copy this->space-free path) + re-judge V5_2_inspect.png vs V5.1.
+#   Build/capture gotchas: dirty-only save is now correct; snapshot UnrealEditor PIDs before launching a
+#   capture editor and kill ONLY the new one; a timeout-killed push may have still landed (verify ls-remote).
+# ============================================================
 """Living Myth — V5.2 Living-Diorama Pass (pure Python + Geometry Script, no C++).
 
 A SOURCE-SHAPE pass over the V5.1 island. V5.1 proved an earthy land patch; V5.2 pushes the form
