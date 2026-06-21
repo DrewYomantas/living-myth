@@ -1558,3 +1558,20 @@ Then the next implementation pass: surface culture + gossip in the viewer, or ti
   ordered, or `verify` will break.
 - Echo packs: more archetypes in `Echoes.cs` beyond the current 10.
 - Gossip distortion layer: a stretch goal — events get retold/mutated as they spread.
+
+## Session log
+
+[2026-06-21] Session: three feel-test-driven passes + the vertical-slice triage, committed+pushed
+`b54eb5a`. Feel-tests revealed the game was a "reader, not a toy" then "spectator on a wall-clock";
+pivoted to (1) "hand is the game" (quiet world, calm tempo, prominent unclippable hand palette,
+Smite verb + stroke-of-fortune on curse/bless, per-verb strikes/blooms, dot motion), then (2) the
+**Peoples Builder + Genesis V1** — author your own people's ethos/faith/homeland/leader-lineage; the
+authored ethos drives the emergent customs/clash/war. Sim default path byte-identical (verify
+598/751/809/1065, all 13 gates + new `genesis` gate green); Godot builder scene wired through New
+World; `LM_FRESH`/`DevAlwaysFresh` dev toggle. Docs: STEAM_VERTICAL_SLICE_ROADMAP.md. North Star
+confirmed = the **Era Arc** (watch your people climb Tribe→Nation; CK3/RimWorld/WorldBox/Vic3/Civ
+synthesis). **Next: Era Arc V1 — emergent stages SHOWN at a glance (show don't tell): a tribe LOOKS
+like an encampment, a settled people huts/fields, a chiefdom a palisade, a kingdom a keep, a nation
+a walled city; text/cards are the opt-in deeper layer. Build baseline-safe first (derived Faction
+stage + stage-driven settlement rendering + label), then deepen each rung. Ship-blocker to clear:
+flip DevAlwaysFresh=false + wire genesis-spec persistence (PlayerWorld Part C) before any build.**
